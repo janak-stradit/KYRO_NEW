@@ -1,11 +1,3 @@
-"""
-Core data generator module.
-Mirrors the exact schema from CUST-ML-TEST-001_ml_dataset.xlsx:
-  - Customer  (16 columns)
-  - Accounts  (8 columns)
-  - Transactions (17 columns)
-"""
-
 import random
 import uuid
 import time
@@ -14,9 +6,7 @@ from faker import Faker
 
 fake = Faker()
 
-# ─────────────────────────────────────────────
-# ENUM / LOOKUP CONSTANTS (derived from the sample file)
-# ─────────────────────────────────────────────
+# ISO alpha-2 codes we care about; skewed toward major banking jurisdictions
 COUNTRIES = [
     "US", "GB", "DE", "FR", "IN", "CN", "JP", "AU", "CA", "BR",
     "TO", "KP", "RU", "IR", "PK", "NG", "MX", "ZA", "AE", "SG",
@@ -24,48 +14,47 @@ COUNTRIES = [
     "CZ", "HU", "RO", "BG", "HR", "GR", "TR", "KR", "TH", "MY",
     "ID", "PH", "VN", "BD", "LK", "NP", "MM", "KZ", "UZ", "UA",
 ]
+
+# FATF high-risk / monitored jurisdictions (updated periodically in prod)
 HIGH_RISK_COUNTRIES = ["KP", "IR", "SY", "CU", "VE", "MM", "BY", "RU", "SO", "YE"]
+
 CURRENCIES = ["USD", "EUR", "GBP", "CHF", "AUD", "CAD", "JPY", "INR", "SGD"]
 KYC_STATUSES = ["COMPLETE", "PENDING", "EXPIRED", "PARTIAL"]
-RISK_LEVELS = ["LOW", "MEDIUM", "HIGH", "CRITICAL"]
 CUSTOMER_TYPES = ["INDIVIDUAL", "CORPORATE", "PARTNERSHIP", "TRUST", "NGO"]
 ACCOUNT_TYPES = ["SAVINGS", "CHECKING", "CREDIT", "INVESTMENT", "CRYPTO", "FX"]
 ACCOUNT_STATUSES = ["ACTIVE", "CLOSED", "FROZEN", "SUSPENDED"]
+
 TRANSACTION_TYPES = [
     "DEPOSIT", "WITHDRAWAL", "TRANSFER_IN", "TRANSFER_OUT",
     "BUY", "SELL", "PAYMENT", "FEE", "REFUND",
 ]
+
 SOURCE_SYSTEMS = ["bank_mcp", "card_mcp", "crypto_mcp", "swift_mcp", "internal"]
+
+# None included deliberately — some txns have unknown counterparty type
 COUNTERPARTY_TYPES = ["INDIVIDUAL", "BANK", "CORPORATE", "EXCHANGE", "UNKNOWN", None]
-RISK_FLAG_POOL = [
-    "HIGH_VALUE", "CROSS_BORDER", "HIGH_RISK_COUNTRY",
-    "SUSPICIOUS_COUNTERPARTY", "UNUSUAL_TIME", "UNUSUAL_PATTERN",
-    "STRUCTURING", "RAPID_MOVEMENT", "SANCTIONED_ENTITY",
-]
 
 
-# ─────────────────────────────────────────────
-# HELPERS
-# ─────────────────────────────────────────────
-def _random_date(start_year=2015, end_year=2025) -> datetime:
+def _rand_date(start_year=2015, end_year=2025):
     start = datetime(start_year, 1, 1)
-    end = datetime(end_year, 12, 31)
-    delta = end - start
-    return start + timedelta(days=random.randint(0, delta.days))
+    span = (datetime(end_year, 12, 31) - start).days
+    return start + timedelta(days=random.randint(0, span))
 
 
-def _risk_flags(amount: float, country: str, txn_type: str) -> str | None:
-    """Generate realistic AML risk flags based on transaction attributes."""
+def _build_risk_flags(amount, country, txn_type):
     flags = []
+
     if amount > 10000:
         flags.append("HIGH_VALUE")
     if country in HIGH_RISK_COUNTRIES:
         flags.append("HIGH_RISK_COUNTRY")
     if txn_type in ("TRANSFER_IN", "TRANSFER_OUT") and random.random() < 0.2:
         flags.append("CROSS_BORDER")
-    hour = random.randint(0, 23)
-    if hour < 6 or hour > 22:
+
+    # rough time-of-day proxy — late night / early morning
+    if random.randint(0, 23) < 6 or random.randint(0, 23) > 22:
         flags.append("UNUSUAL_TIME")
+
     if random.random() < 0.05:
         flags.append("SUSPICIOUS_COUNTERPARTY")
     if random.random() < 0.03:
@@ -74,63 +63,64 @@ def _risk_flags(amount: float, country: str, txn_type: str) -> str | None:
         flags.append("STRUCTURING")
     if random.random() < 0.02:
         flags.append("RAPID_MOVEMENT")
+
     return ", ".join(flags) if flags else None
 
 
-# ─────────────────────────────────────────────
-# GENERATORS
-# ─────────────────────────────────────────────
-def generate_customer(index: int) -> dict:
-    """Generate one customer record."""
-    cid = f"CUST-{str(index).zfill(6)}"
-    country = random.choice(COUNTRIES)
-    residency = random.choice(COUNTRIES)
-    risk_score = round(random.uniform(0, 100), 4)
-
-    if risk_score >= 75:
-        risk_level = "CRITICAL"
-    elif risk_score >= 50:
-        risk_level = "HIGH"
-    elif risk_score >= 25:
-        risk_level = "MEDIUM"
+def _txn_amount():
+    # log-normal-ish tiered distribution; keeps HIGH_VALUE rate around 20%
+    # rather than the flat uniform which gave ~90% HIGH_VALUE hits
+    r = random.random()
+    if r < 0.55:
+        return round(random.uniform(5.0, 500.0), 2)
+    elif r < 0.80:
+        return round(random.uniform(500.0, 5000.0), 2)
+    elif r < 0.93:
+        return round(random.uniform(5000.0, 50000.0), 2)
     else:
-        risk_level = "LOW"
+        return round(random.uniform(50000.0, 250000.0), 2)
 
-    kyc_review = _random_date(2020, 2025)
-    pep = random.random() < 0.05
-    sanctions = random.random() < 0.02
-    adverse = random.random() < 0.08
 
+def generate_customer(index):
+    cid = f"CUST-{str(index).zfill(6)}"
+    score = round(random.uniform(0, 100), 4)
+
+    if score >= 75:
+        level = "CRITICAL"
+    elif score >= 50:
+        level = "HIGH"
+    elif score >= 25:
+        level = "MEDIUM"
+    else:
+        level = "LOW"
+
+    ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     return {
         "customer_id": cid,
         "full_name": fake.name(),
         "email": fake.email(),
         "phone": fake.phone_number(),
         "date_of_birth": fake.date_of_birth(minimum_age=18, maximum_age=80).strftime("%Y-%m-%d"),
-        "country": country,
-        "residency_country": residency,
+        "country": random.choice(COUNTRIES),
+        "residency_country": random.choice(COUNTRIES),
         "kyc_status": random.choice(KYC_STATUSES),
-        "kyc_last_review": kyc_review.strftime("%Y-%m-%d"),
-        "pep_flag": pep,
-        "sanctions_flag": sanctions,
-        "adverse_media_flag": adverse,
-        "risk_level": risk_level,
-        "risk_score": risk_score,
+        "kyc_last_review": _rand_date(2020, 2025).strftime("%Y-%m-%d"),
+        "pep_flag": random.random() < 0.05,
+        "sanctions_flag": random.random() < 0.02,
+        "adverse_media_flag": random.random() < 0.08,
+        "risk_level": level,
+        "risk_score": score,
         "customer_type": random.choice(CUSTOMER_TYPES),
-        "customer_metadata": str({
-            "source": "mock_data_service",
-            "generated_at": datetime.now(timezone.utc).isoformat(),
-        }),
+        "customer_metadata": f"{{'source': 'mock_data_service', 'generated_at': '{ts}'}}",
     }
 
 
-def generate_accounts(customer_id: str, num_accounts: int | None = None) -> list[dict]:
-    """Generate 1-5 accounts for a customer."""
-    num = num_accounts or random.randint(1, 5)
+def generate_accounts(customer_id, num_accounts=None):
+    count = num_accounts or random.randint(1, 5)
     accounts = []
-    for i in range(1, num + 1):
+    ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    for i in range(1, count + 1):
         acc_id = f"ACC-{customer_id}-{str(i).zfill(2)}"
-        opened = _random_date(2010, 2024)
         accounts.append({
             "account_id": acc_id,
             "customer_id": customer_id,
@@ -138,90 +128,70 @@ def generate_accounts(customer_id: str, num_accounts: int | None = None) -> list
             "account_status": random.choice(ACCOUNT_STATUSES),
             "currency": random.choice(CURRENCIES),
             "balance": round(random.uniform(-5000, 500000), 2),
-            "opened_date": opened.strftime("%Y-%m-%d"),
-            "account_metadata": str({
-                "source": "mock_data_service",
-                "generated_at": datetime.now(timezone.utc).isoformat(),
-            }),
+            "opened_date": _rand_date(2010, 2024).strftime("%Y-%m-%d"),
+            "account_metadata": f"{{'source': 'mock_data_service', 'generated_at': '{ts}'}}",
         })
     return accounts
 
 
-def generate_transactions(
-    customer_id: str,
-    account_id: str,
-    num_transactions: int | None = None,
-) -> list[dict]:
-    """Generate transactions for one account (default 50-200)."""
-    num = num_transactions or random.randint(50, 200)
-    transactions = []
-    for _ in range(num):
-        txn_date = _random_date(2020, 2025)
+def generate_transactions(customer_id, account_id, num_transactions=None):
+    count = num_transactions or random.randint(50, 200)
+    txns = []
+    for _ in range(count):
         txn_type = random.choice(TRANSACTION_TYPES)
-        amount = round(random.uniform(1, 100000), 2)
-        currency = random.choice(CURRENCIES)
-        meta_country_code = random.choice(COUNTRIES)
-        meta_destination = random.choice(COUNTRIES) if txn_type in ("TRANSFER_OUT", "TRANSFER_IN") else None
-        meta_origin = random.choice(COUNTRIES) if txn_type == "TRANSFER_IN" else None
-        cp_type = random.choice(COUNTERPARTY_TYPES)
-        cp_name = fake.company() if cp_type in ("BANK", "CORPORATE", "EXCHANGE") else (
-            fake.name() if cp_type == "INDIVIDUAL" else None
-        )
-        unique_suffix = int(time.time() * 1000) + random.randint(0, 999999)
-        txn_id = f"TXN-{account_id}-{unique_suffix}"
+        amount = _txn_amount()
+        country_code = random.choice(COUNTRIES)
 
-        transactions.append({
+        cp_type = random.choice(COUNTERPARTY_TYPES)
+        if cp_type in ("BANK", "CORPORATE", "EXCHANGE"):
+            cp_name = fake.company()
+        elif cp_type == "INDIVIDUAL":
+            cp_name = fake.name()
+        else:
+            cp_name = None
+
+        dest = random.choice(COUNTRIES) if txn_type in ("TRANSFER_OUT", "TRANSFER_IN") else None
+        origin = random.choice(COUNTRIES) if txn_type == "TRANSFER_IN" else None
+
+        # time-based suffix to avoid collisions under parallel runs
+        suffix = int(time.time() * 1000) + random.randint(0, 999999)
+        txn_id = f"TXN-{account_id}-{suffix}"
+
+        txns.append({
             "transaction_id": txn_id,
             "customer_id": customer_id,
             "account_id": account_id,
-            "transaction_date": txn_date.isoformat(),
+            "transaction_date": _rand_date(2020, 2025).isoformat(),
             "transaction_type": txn_type,
             "amount": amount,
-            "currency": currency,
-            "risk_flags": _risk_flags(amount, meta_country_code, txn_type),
+            "currency": random.choice(CURRENCIES),
+            "risk_flags": _build_risk_flags(amount, country_code, txn_type),
             "source_system": random.choice(SOURCE_SYSTEMS),
             "meta_counterparty": cp_name,
             "meta_counterparty_type": cp_type,
             "meta_location": fake.city() if random.random() < 0.7 else None,
             "meta_country": fake.country() if random.random() < 0.7 else None,
-            "meta_country_code": meta_country_code,
-            "meta_destination_country": meta_destination,
-            "meta_origin_country": meta_origin,
+            "meta_country_code": country_code,
+            "meta_destination_country": dest,
+            "meta_origin_country": origin,
             "meta_source": "mock_data_service",
         })
-    return transactions
+    return txns
 
 
-# ─────────────────────────────────────────────
-# MAIN BATCH GENERATOR
-# ─────────────────────────────────────────────
-def generate_dataset(num_customers: int = 5000) -> dict:
-    """
-    Generate a full dataset for `num_customers` customers.
-    Returns:
-        {
-            "customers": [...],
-            "accounts": [...],
-            "transactions": [...],
-        }
-    """
-    all_customers = []
-    all_accounts = []
-    all_transactions = []
+def generate_dataset(num_customers=5000):
+    customers, accounts, transactions = [], [], []
 
     for i in range(1, num_customers + 1):
-        customer = generate_customer(i)
-        all_customers.append(customer)
+        c = generate_customer(i)
+        customers.append(c)
 
-        accounts = generate_accounts(customer["customer_id"])
-        all_accounts.extend(accounts)
+        accs = generate_accounts(c["customer_id"])
+        accounts.extend(accs)
 
-        for acc in accounts:
-            txns = generate_transactions(customer["customer_id"], acc["account_id"])
-            all_transactions.extend(txns)
+        for acc in accs:
+            transactions.extend(
+                generate_transactions(c["customer_id"], acc["account_id"])
+            )
 
-    return {
-        "customers": all_customers,
-        "accounts": all_accounts,
-        "transactions": all_transactions,
-    }
+    return {"customers": customers, "accounts": accounts, "transactions": transactions}

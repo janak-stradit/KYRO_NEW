@@ -1,154 +1,90 @@
 """
-Flask API for AML synthetic data generation.
+Flask API — AML synthetic data generation service.
 
-Endpoints:
-  POST /api/generate          - Generate dataset (JSON response)
-  POST /api/generate/download  - Generate dataset and return XLSX file
-  GET  /api/health            - Health check
-  GET  /api/stats             - Returns expected stats for N customers
+Endpoints
+---------
+GET  /api/health                  liveness probe
+GET  /api/stats?customers=N       estimated row counts
+POST /api/generate                JSON dataset
+POST /api/generate/single-customer  single customer preview
+POST /api/generate/download       XLSX file download
 """
 
+import io
 import os
-import json
 import logging
 from datetime import datetime, timezone
-from flask import Flask, request, jsonify, send_file, Response
-from flask_cors import CORS
-import io
 
-from generator.data_generator import generate_dataset, generate_customer, generate_accounts, generate_transactions
+from flask import Flask, jsonify, request, send_file
+from flask_cors import CORS
+
+from generator.data_generator import (
+    generate_customer,
+    generate_accounts,
+    generate_transactions,
+    generate_dataset,
+)
 from generator.excel_writer import build_workbook, workbook_to_bytes
 
-# ─────────────────────────────────────────────
-# App setup
-# ─────────────────────────────────────────────
 app = Flask(__name__)
 CORS(app)
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-)
-logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+log = logging.getLogger(__name__)
 
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "output")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 
-# ─────────────────────────────────────────────
-# ROUTES
-# ─────────────────────────────────────────────
-
-@app.route("/api/health", methods=["GET"])
+@app.route("/api/health")
 def health():
     return jsonify({
         "status": "ok",
-        "service": "KYRO AML Data Generator",
-        "timestamp": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
-    }), 200
+        "service": "AML Data Generator",
+        "ts": datetime.now(timezone.utc).isoformat(),
+    })
 
 
-@app.route("/api/stats", methods=["GET"])
+@app.route("/api/stats")
 def stats():
-    """Return estimated row counts for a given number of customers."""
     n = int(request.args.get("customers", 5000))
-    avg_accounts_per_customer = 3       # random 1-5
-    avg_txns_per_account = 125          # random 50-200
+    # rough averages: 3 accounts/customer, 125 txns/account
     return jsonify({
         "requested_customers": n,
-        "estimated_accounts": n * avg_accounts_per_customer,
-        "estimated_transactions": n * avg_accounts_per_customer * avg_txns_per_account,
-    }), 200
+        "estimated_accounts": n * 3,
+        "estimated_transactions": n * 3 * 125,
+    })
 
 
 @app.route("/api/generate", methods=["POST"])
 def generate():
-    """
-    Generate a dataset and return it as JSON.
-
-    Body (optional JSON):
-        { "num_customers": 5000 }
-    """
     body = request.get_json(silent=True) or {}
-    num_customers = int(body.get("num_customers", 5000))
+    n = int(body.get("num_customers", 5000))
 
-    if num_customers < 1 or num_customers > 10000:
+    if not 1 <= n <= 10000:
         return jsonify({"error": "num_customers must be between 1 and 10000"}), 400
 
-    logger.info(f"Generating dataset for {num_customers} customers ...")
-    start = datetime.now(timezone.utc).replace(tzinfo=None)
-    dataset = generate_dataset(num_customers)
-    elapsed = (datetime.now(timezone.utc).replace(tzinfo=None) - start).total_seconds()
-
-    logger.info(
-        f"Done in {elapsed:.1f}s — "
-        f"customers={len(dataset['customers'])}, "
-        f"accounts={len(dataset['accounts'])}, "
-        f"transactions={len(dataset['transactions'])}"
-    )
+    log.info("generating dataset: n=%d", n)
+    t0 = datetime.now(timezone.utc)
+    data = generate_dataset(n)
+    elapsed = (datetime.now(timezone.utc) - t0).total_seconds()
+    log.info("done in %.1fs — customers=%d accounts=%d transactions=%d",
+             elapsed, len(data["customers"]), len(data["accounts"]), len(data["transactions"]))
 
     return jsonify({
         "meta": {
-            "num_customers": len(dataset["customers"]),
-            "num_accounts": len(dataset["accounts"]),
-            "num_transactions": len(dataset["transactions"]),
+            "num_customers": len(data["customers"]),
+            "num_accounts": len(data["accounts"]),
+            "num_transactions": len(data["transactions"]),
             "generation_time_seconds": round(elapsed, 2),
-            "generated_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
+            "generated_at": datetime.now(timezone.utc).isoformat(),
         },
-        "data": dataset,
-    }), 200
-
-
-@app.route("/api/generate/download", methods=["POST"])
-def generate_and_download():
-    """
-    Generate a dataset and return it as a downloadable XLSX file.
-
-    Body (optional JSON):
-        { "num_customers": 5000, "save_to_disk": false }
-    """
-    body = request.get_json(silent=True) or {}
-    num_customers = int(body.get("num_customers", 5000))
-    save_to_disk = bool(body.get("save_to_disk", True))
-
-    if num_customers < 1 or num_customers > 10000:
-        return jsonify({"error": "num_customers must be between 1 and 10000"}), 400
-
-    logger.info(f"Generating XLSX for {num_customers} customers ...")
-    start = datetime.now(timezone.utc).replace(tzinfo=None)
-    dataset = generate_dataset(num_customers)
-    elapsed = (datetime.now(timezone.utc).replace(tzinfo=None) - start).total_seconds()
-    logger.info(f"Dataset built in {elapsed:.1f}s, writing Excel ...")
-
-    wb = build_workbook(dataset)
-    file_bytes = workbook_to_bytes(wb)
-
-    timestamp = datetime.now(timezone.utc).replace(tzinfo=None).strftime("%Y%m%d_%H%M%S")
-    filename = f"aml_dataset_{num_customers}_customers_{timestamp}.xlsx"
-
-    if save_to_disk:
-        path = os.path.join(OUTPUT_DIR, filename)
-        with open(path, "wb") as f:
-            f.write(file_bytes)
-        logger.info(f"Saved to {path}")
-
-    return send_file(
-        io.BytesIO(file_bytes),
-        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        as_attachment=True,
-        download_name=filename,
-    )
+        "data": data,
+    })
 
 
 @app.route("/api/generate/single-customer", methods=["POST"])
-def generate_single_customer():
-    """
-    Generate a single customer with their accounts and transactions.
-    Useful for quick testing.
-
-    Body (optional JSON):
-        { "customer_index": 1 }
-    """
+def single_customer():
     body = request.get_json(silent=True) or {}
     idx = int(body.get("customer_index", 1))
 
@@ -156,8 +92,7 @@ def generate_single_customer():
     accounts = generate_accounts(customer["customer_id"])
     transactions = []
     for acc in accounts:
-        txns = generate_transactions(customer["customer_id"], acc["account_id"])
-        transactions.extend(txns)
+        transactions.extend(generate_transactions(customer["customer_id"], acc["account_id"]))
 
     return jsonify({
         "customer": customer,
@@ -167,13 +102,40 @@ def generate_single_customer():
             "num_accounts": len(accounts),
             "num_transactions": len(transactions),
         },
-    }), 200
+    })
 
 
-# ─────────────────────────────────────────────
-# Entry point
-# ─────────────────────────────────────────────
+@app.route("/api/generate/download", methods=["POST"])
+def download():
+    body = request.get_json(silent=True) or {}
+    n = int(body.get("num_customers", 5000))
+    save = bool(body.get("save_to_disk", True))
+
+    if not 1 <= n <= 10000:
+        return jsonify({"error": "num_customers must be between 1 and 10000"}), 400
+
+    log.info("generating XLSX: n=%d", n)
+    data = generate_dataset(n)
+    wb = build_workbook(data)
+    file_bytes = workbook_to_bytes(wb)
+
+    ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    fname = f"aml_dataset_{n}c_{ts}.xlsx"
+
+    if save:
+        path = os.path.join(OUTPUT_DIR, fname)
+        with open(path, "wb") as f:
+            f.write(file_bytes)
+        log.info("saved to %s", path)
+
+    return send_file(
+        io.BytesIO(file_bytes),
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        as_attachment=True,
+        download_name=fname,
+    )
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5050))
-    logger.info(f"Starting KYRO AML Data Generator API on port {port}")
     app.run(host="0.0.0.0", port=port, debug=True)

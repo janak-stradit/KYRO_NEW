@@ -1,15 +1,9 @@
-"""
-Excel export utility.
-Writes customers / accounts / transactions to a multi-sheet XLSX file
-matching the exact layout of CUST-ML-TEST-001_ml_dataset.xlsx.
-"""
-
 import io
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 
-# Column order exactly as in the reference file
+# Column order matches the reference dataset (CUST-ML-TEST-001_ml_dataset.xlsx)
 CUSTOMER_COLS = [
     "customer_id", "full_name", "email", "phone", "date_of_birth",
     "country", "residency_country", "kyc_status", "kyc_last_review",
@@ -30,112 +24,111 @@ TRANSACTION_COLS = [
     "meta_destination_country", "meta_origin_country", "meta_source",
 ]
 
+# Shown in Data_Dictionary tab: (sheet, column, type label, pandas dtype)
 DATA_DICT = [
-    ("Customer", "customer_id", "String (Categorical/Text)", "object"),
-    ("Customer", "full_name", "String (Categorical/Text)", "object"),
-    ("Customer", "email", "String (Categorical/Text)", "object"),
-    ("Customer", "phone", "String (Categorical/Text)", "object"),
-    ("Customer", "date_of_birth", "String (Categorical/Text)", "object"),
-    ("Customer", "country", "String (Categorical/Text)", "object"),
-    ("Customer", "residency_country", "String (Categorical/Text)", "object"),
-    ("Customer", "kyc_status", "String (Categorical/Text)", "object"),
-    ("Customer", "kyc_last_review", "String (Categorical/Text)", "object"),
+    ("Customer", "customer_id", "String", "object"),
+    ("Customer", "full_name", "String", "object"),
+    ("Customer", "email", "String", "object"),
+    ("Customer", "phone", "String", "object"),
+    ("Customer", "date_of_birth", "String", "object"),
+    ("Customer", "country", "String", "object"),
+    ("Customer", "residency_country", "String", "object"),
+    ("Customer", "kyc_status", "String", "object"),
+    ("Customer", "kyc_last_review", "String", "object"),
     ("Customer", "pep_flag", "Boolean", "bool"),
     ("Customer", "sanctions_flag", "Boolean", "bool"),
     ("Customer", "adverse_media_flag", "Boolean", "bool"),
-    ("Customer", "risk_level", "String (Categorical/Text)", "object"),
+    ("Customer", "risk_level", "String", "object"),
     ("Customer", "risk_score", "Float", "float64"),
-    ("Customer", "customer_type", "String (Categorical/Text)", "object"),
-    ("Customer", "customer_metadata", "String (Categorical/Text)", "object"),
-    ("Accounts", "account_id", "String (Categorical/Text)", "object"),
-    ("Accounts", "customer_id", "String (Categorical/Text)", "object"),
-    ("Accounts", "account_type", "String (Categorical/Text)", "object"),
-    ("Accounts", "account_status", "String (Categorical/Text)", "object"),
-    ("Accounts", "currency", "String (Categorical/Text)", "object"),
+    ("Customer", "customer_type", "String", "object"),
+    ("Customer", "customer_metadata", "String", "object"),
+    ("Accounts", "account_id", "String", "object"),
+    ("Accounts", "customer_id", "String", "object"),
+    ("Accounts", "account_type", "String", "object"),
+    ("Accounts", "account_status", "String", "object"),
+    ("Accounts", "currency", "String", "object"),
     ("Accounts", "balance", "Float", "float64"),
-    ("Accounts", "opened_date", "String (Categorical/Text)", "object"),
-    ("Accounts", "account_metadata", "String (Categorical/Text)", "object"),
-    ("Transactions", "transaction_id", "String (Categorical/Text)", "object"),
-    ("Transactions", "customer_id", "String (Categorical/Text)", "object"),
-    ("Transactions", "account_id", "String (Categorical/Text)", "object"),
-    ("Transactions", "transaction_date", "String (Categorical/Text)", "object"),
-    ("Transactions", "transaction_type", "String (Categorical/Text)", "object"),
+    ("Accounts", "opened_date", "String", "object"),
+    ("Accounts", "account_metadata", "String", "object"),
+    ("Transactions", "transaction_id", "String", "object"),
+    ("Transactions", "customer_id", "String", "object"),
+    ("Transactions", "account_id", "String", "object"),
+    ("Transactions", "transaction_date", "String", "object"),
+    ("Transactions", "transaction_type", "String", "object"),
     ("Transactions", "amount", "Float", "float64"),
-    ("Transactions", "currency", "String (Categorical/Text)", "object"),
-    ("Transactions", "risk_flags", "String (Categorical/Text)", "object"),
-    ("Transactions", "source_system", "String (Categorical/Text)", "object"),
-    ("Transactions", "meta_counterparty", "String (Categorical/Text)", "object"),
-    ("Transactions", "meta_counterparty_type", "String (Categorical/Text)", "object"),
-    ("Transactions", "meta_location", "String (Categorical/Text)", "object"),
-    ("Transactions", "meta_country", "String (Categorical/Text)", "object"),
-    ("Transactions", "meta_country_code", "String (Categorical/Text)", "object"),
-    ("Transactions", "meta_destination_country", "String (Categorical/Text)", "object"),
-    ("Transactions", "meta_origin_country", "String (Categorical/Text)", "object"),
-    ("Transactions", "meta_source", "String (Categorical/Text)", "object"),
+    ("Transactions", "currency", "String", "object"),
+    ("Transactions", "risk_flags", "String", "object"),
+    ("Transactions", "source_system", "String", "object"),
+    ("Transactions", "meta_counterparty", "String", "object"),
+    ("Transactions", "meta_counterparty_type", "String", "object"),
+    ("Transactions", "meta_location", "String", "object"),
+    ("Transactions", "meta_country", "String", "object"),
+    ("Transactions", "meta_country_code", "String", "object"),
+    ("Transactions", "meta_destination_country", "String", "object"),
+    ("Transactions", "meta_origin_country", "String", "object"),
+    ("Transactions", "meta_source", "String", "object"),
 ]
 
+_HDR_FILL = PatternFill("solid", fgColor="1F3864")
+_HDR_FONT = Font(bold=True, color="FFFFFF", size=10)
+_HDR_ALIGN = Alignment(horizontal="center", vertical="center", wrap_text=True)
+_HDR_BORDER = Border(
+    left=Side(style="thin", color="B0B0B0"),
+    right=Side(style="thin", color="B0B0B0"),
+    top=Side(style="thin", color="B0B0B0"),
+    bottom=Side(style="thin", color="B0B0B0"),
+)
 
-def _style_header(ws, num_cols: int):
-    """Apply header styling: bold white text on dark blue background."""
-    header_fill = PatternFill("solid", fgColor="1F3864")
-    header_font = Font(bold=True, color="FFFFFF", size=10)
-    thin = Side(style="thin", color="B0B0B0")
-    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+
+def _apply_header(ws, num_cols):
     for col in range(1, num_cols + 1):
         cell = ws.cell(row=1, column=col)
-        cell.fill = header_fill
-        cell.font = header_font
-        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-        cell.border = border
+        cell.fill = _HDR_FILL
+        cell.font = _HDR_FONT
+        cell.alignment = _HDR_ALIGN
+        cell.border = _HDR_BORDER
 
 
-def _auto_width(ws):
-    """Auto-fit column widths (capped at 60)."""
+def _fit_columns(ws, cap=60):
     for col in ws.columns:
-        max_len = 0
-        col_letter = get_column_letter(col[0].column)
-        for cell in col:
-            try:
-                if cell.value:
-                    max_len = max(max_len, len(str(cell.value)))
-            except Exception:
-                pass
-        ws.column_dimensions[col_letter].width = min(max_len + 4, 60)
+        letter = get_column_letter(col[0].column)
+        best = max(
+            (len(str(c.value)) for c in col if c.value is not None),
+            default=10,
+        )
+        ws.column_dimensions[letter].width = min(best + 4, cap)
 
 
-def _write_sheet(wb: Workbook, sheet_name: str, columns: list, rows: list):
-    ws = wb.create_sheet(sheet_name)
+def _add_sheet(wb, name, columns, rows):
+    ws = wb.create_sheet(name)
     ws.append(columns)
-    _style_header(ws, len(columns))
+    _apply_header(ws, len(columns))
     for row in rows:
-        ws.append([row.get(col) for col in columns])
-    _auto_width(ws)
+        ws.append([row.get(c) for c in columns])
+    _fit_columns(ws)
     ws.freeze_panes = "A2"
 
 
-def build_workbook(dataset: dict) -> Workbook:
-    """Build an openpyxl Workbook from a dataset dict."""
+def build_workbook(dataset):
     wb = Workbook()
-    wb.remove(wb.active)  # remove default sheet
+    wb.remove(wb.active)
 
-    _write_sheet(wb, "Customer", CUSTOMER_COLS, dataset["customers"])
-    _write_sheet(wb, "Accounts", ACCOUNT_COLS, dataset["accounts"])
-    _write_sheet(wb, "Transactions", TRANSACTION_COLS, dataset["transactions"])
+    _add_sheet(wb, "Customer", CUSTOMER_COLS, dataset["customers"])
+    _add_sheet(wb, "Accounts", ACCOUNT_COLS, dataset["accounts"])
+    _add_sheet(wb, "Transactions", TRANSACTION_COLS, dataset["transactions"])
 
-    # Data Dictionary sheet
-    ws_dict = wb.create_sheet("Data_Dictionary")
-    ws_dict.append(["Table Name", "Column Name", "Required Data Type", "Pandas Dtype"])
-    _style_header(ws_dict, 4)
+    ws_dd = wb.create_sheet("Data_Dictionary")
+    ws_dd.append(["Table Name", "Column Name", "Required Data Type", "Pandas Dtype"])
+    _apply_header(ws_dd, 4)
     for row in DATA_DICT:
-        ws_dict.append(list(row))
-    _auto_width(ws_dict)
-    ws_dict.freeze_panes = "A2"
+        ws_dd.append(list(row))
+    _fit_columns(ws_dd, cap=40)
+    ws_dd.freeze_panes = "A2"
 
     return wb
 
 
-def workbook_to_bytes(wb: Workbook) -> bytes:
-    """Serialize workbook to bytes for HTTP response."""
+def workbook_to_bytes(wb):
     buf = io.BytesIO()
     wb.save(buf)
     buf.seek(0)
