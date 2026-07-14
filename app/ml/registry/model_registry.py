@@ -10,6 +10,7 @@ semantics are simple enough that a JSON pointer file covers it.
 from __future__ import annotations
 
 import json
+import os
 import pickle
 import random
 from datetime import datetime, timezone
@@ -19,6 +20,17 @@ from typing import Any
 from app.config import get_settings
 
 POINTERS_FILE = "registry.json"
+
+
+def _make_world_writable(path: Path) -> None:
+    """models/ is typically a host bind-mount, and the container's non-root
+    user's UID rarely matches the host user's — whichever side writes a file
+    first otherwise locks the other side out of ever updating it. Chmod'ing
+    to 666 right after a write we own keeps it writable from both sides."""
+    try:
+        os.chmod(path, 0o666)
+    except OSError:
+        pass
 
 
 class ModelNotFoundError(RuntimeError):
@@ -41,6 +53,7 @@ class ModelRegistry:
     def _write_pointers(self, pointers: dict[str, Any]) -> None:
         with self._pointers_path.open("w") as f:
             json.dump(pointers, f, indent=2)
+        _make_world_writable(self._pointers_path)
 
     # ── Save / load model artifacts ──────────────────────────────
     def save_model(self, model: Any, name: str, version: int, metrics: dict) -> str:
@@ -55,6 +68,7 @@ class ModelRegistry:
         }
         with path.open("wb") as f:
             pickle.dump(artifact, f)
+        _make_world_writable(path)
         return str(path)
 
     def list_versions(self, name: str) -> list[int]:
