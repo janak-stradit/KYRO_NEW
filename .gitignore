@@ -1,8 +1,22 @@
+# ── Python ────────────────────────────────────────────────────
 venv/
+.venv-api/
 __pycache__/
 *.pyc
 *.pyo
+.pytest_cache/
+.coverage
+htmlcov/
+
+# ── ML model artifacts (regenerated via training) ──────────────
+models/*.pkl
+models/registry.json
+
+# ── App output / secrets ────────────────────────────────────────
 output/
 *.xlsx
 .env
 pyrightconfig.json
+
+# ── IDE ───────────────────────────────────────────────────────
+.idea/

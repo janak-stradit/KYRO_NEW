@@ -262,7 +262,7 @@ class TestFlaskAPI(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """Start Flask in a background thread."""
-        import app as flask_app
+        import generator_service as flask_app
         flask_app.app.config["TESTING"] = True
         cls.client = flask_app.app.test_client()
 

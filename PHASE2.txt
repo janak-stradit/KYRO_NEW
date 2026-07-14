@@ -1,0 +1,681 @@
+# Phase 2: AI/ML Engine & Anomaly Detection
+
+## Overview
+Build the machine learning models, real-time scoring pipeline, alert generation engine, and explainability layer for the KYRO Risk Assessment Specialist system.
+
+**Duration:** 4-5 weeks  
+**Goal:** ML models, real-time scoring, alert generation, explainability
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| ML Framework | scikit-learn 1.4+ |
+| Anomaly Detection | scikit-learn (IsolationForest), PyOD |
+| Explainability | SHAP, LIME |
+| Feature Engineering | pandas, numpy, feature-engine |
+| Model Tracking | MLflow (or simple pickle + versioning) |
+| Background Tasks | Celery + Redis |
+| Data Processing | Polars (for large datasets) |
+
+---
+
+## ML Architecture
+
+### System Diagram
+```
++-------------------------------------------------------------+
+|                      ML_Engine                               |
+|  +------------------+         +----------------------+      |
+|  |  Feature Store   |         |   Model Registry     |      |
+|  |  (Redis/Parquet) |         |   (MLflow/Pickle)    |      |
+|  +--------+---------+         +----------+-----------+      |
+|           |                              |                  |
+|  +--------v---------+         +----------v-----------+      |
+|  | Feature Pipeline   |         |  Random Forest     |      |
+|  | (Engineering)      |-------->|  Risk Scorer       |      |
+|  +--------------------+         |  (Regressor)       |      |
+|                                 +--------+-----------+      |
+|                                          | Predict          |
+|  +--------------------+         +--------v-----------+      |
+|  | Behavioral Baseline|         |  Isolation Forest  |      |
+|  | (Per Customer)     |-------->|  Anomaly Detector  |      |
+|  +--------------------+         |  (Classifier)      |      |
+|                                 +--------+-----------+      |
+|                                          | Classify         |
+|  +---------------------------------------v----------------+  |
+|  |              Risk Assessment Score                    |  |
+|  |  (0-100 continuous score + binary anomaly flag)       |  |
+|  +---------------------------------------+----------------+  |
+|                                         |                   |
+|  +--------------------------------------v------------------+ |
+|  |              Alert Generation Engine                   | |
+|  |  - Threshold-based routing                             | |
+|  |  - Case creation                                         | |
+|  |  - Human-readable explanation (SHAP)                     | |
+|  +--------------------------------------------------------+ |
++-------------------------------------------------------------+
+```
+
+---
+
+## Feature Engineering Pipeline
+
+### Feature Categories
+
+#### 1. Transaction-Level Features
+```python
+FEATURES = {
+    # Raw transaction attributes
+    "amount": "Transaction amount",
+    "currency": "Transaction currency (encoded)",
+    "transaction_type": "Type of transaction (encoded)",
+    "hour_of_day": "Hour extracted from transaction_date",
+    "day_of_week": "Day of week (0=Monday)",
+    "is_weekend": "Boolean for weekend transactions",
+    "is_night": "Boolean for transactions 00:00-06:00",
+
+    # Rolling window features (per customer)
+    "rolling_avg_7d": "7-day rolling average amount",
+    "rolling_avg_30d": "30-day rolling average amount",
+    "rolling_avg_90d": "90-day rolling average amount",
+    "rolling_std_7d": "7-day rolling standard deviation",
+    "rolling_std_30d": "30-day rolling standard deviation",
+
+    # Velocity features
+    "txn_count_1h": "Transaction count in last 1 hour",
+    "txn_count_24h": "Transaction count in last 24 hours",
+    "txn_count_7d": "Transaction count in last 7 days",
+    "txn_count_30d": "Transaction count in last 30 days",
+    "amount_sum_24h": "Total amount in last 24 hours",
+    "amount_sum_7d": "Total amount in last 7 days",
+
+    # Percentile features
+    "amount_percentile_customer": "Amount percentile within customer history",
+    "amount_percentile_global": "Amount percentile globally",
+    "amount_zscore": "Z-score of amount vs customer mean",
+
+    # Time-based features
+    "time_since_last_txn": "Minutes since previous transaction",
+    "time_since_last_txn_same_counterparty": "Minutes since last txn to same counterparty",
+    "avg_time_between_txns": "Average time between transactions (30d)",
+}
+```
+
+#### 2. Customer-Level Features
+```python
+CUSTOMER_FEATURES = {
+    "customer_age_days": "Days since customer onboarding",
+    "account_count": "Number of active accounts",
+    "total_balance": "Sum of all account balances",
+    "kyc_days_since_review": "Days since last KYC review",
+    "pep_flag": "Politically Exposed Person flag",
+    "sanctions_flag": "Sanctions list flag",
+    "adverse_media_flag": "Adverse media flag",
+    "current_risk_level": "Current risk level (encoded)",
+    "current_risk_score": "Current risk score (0-100)",
+    "customer_type": "Individual, Corporate, Fund (encoded)",
+    "country_risk_score": "Risk score of customer country",
+    "residency_risk_score": "Risk score of residency country",
+}
+```
+
+#### 3. Counterparty & Geographic Features
+```python
+COUNTERPARTY_FEATURES = {
+    "geo_diversity_score": "Number of unique countries (30d)",
+    "unique_counterparties_7d": "Unique counterparties in 7 days",
+    "unique_counterparties_30d": "Unique counterparties in 30 days",
+    "new_counterparty_flag": "First-time counterparty",
+    "counterparty_country_risk": "Risk score of counterparty country",
+    "destination_country_risk": "Risk score of destination country",
+    "origin_country_risk": "Risk score of origin country",
+    "high_risk_country_flag": "Transaction involves high-risk country",
+    "cross_border_flag": "Cross-border transaction flag",
+    "same_country_flag": "Domestic transaction flag",
+}
+```
+
+#### 4. Behavioral Baseline Features
+```python
+BEHAVIORAL_FEATURES = {
+    "deviation_from_avg_amount": "Current amount / customer avg amount",
+    "deviation_from_avg_frequency": "Current frequency / customer avg frequency",
+    "deviation_from_typical_time": "Deviation from typical transaction time",
+    "deviation_from_typical_geo": "Deviation from typical geography",
+    "pattern_break_score": "Composite score of behavioral deviations",
+    "days_since_pattern_change": "Days since last significant pattern change",
+}
+```
+
+---
+
+## Model Specifications
+
+### Model 1: Random Forest Risk Scorer (Regressor)
+**Purpose:** Predict continuous risk score (0-100) for each transaction
+
+```python
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.preprocessing import StandardScaler
+import numpy as np
+
+class RiskScorerModel:
+    def __init__(self):
+        self.model = RandomForestRegressor(
+            n_estimators=200,
+            max_depth=15,
+            min_samples_split=10,
+            min_samples_leaf=5,
+            max_features="sqrt",
+            bootstrap=True,
+            random_state=42,
+            n_jobs=-1
+        )
+        self.scaler = StandardScaler()
+        self.feature_names = None
+
+    def train(self, X, y):
+        X_scaled = self.scaler.fit_transform(X)
+        self.model.fit(X_scaled, y)
+        self.feature_names = X.columns.tolist()
+
+    def predict(self, X):
+        X_scaled = self.scaler.transform(X)
+        scores = self.model.predict(X_scaled)
+        return np.clip(scores, 0, 100)
+
+    def feature_importance(self):
+        return dict(zip(self.feature_names, self.model.feature_importances_))
+```
+
+### Model 2: Random Forest Anomaly Classifier
+**Purpose:** Binary classification - is this transaction anomalous?
+
+```python
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.preprocessing import StandardScaler
+
+class AnomalyClassifier:
+    def __init__(self):
+        self.model = RandomForestClassifier(
+            n_estimators=200,
+            max_depth=12,
+            min_samples_split=20,
+            class_weight="balanced",
+            random_state=42
+        )
+        self.scaler = StandardScaler()
+
+    def train(self, X, y):
+        X_scaled = self.scaler.fit_transform(X)
+        self.model.fit(X_scaled, y)
+
+    def predict(self, X):
+        X_scaled = self.scaler.transform(X)
+        return self.model.predict(X_scaled)
+
+    def predict_proba(self, X):
+        X_scaled = self.scaler.transform(X)
+        return self.model.predict_proba(X_scaled)[:, 1]
+```
+
+### Model 3: Isolation Forest (Unsupervised)
+**Purpose:** Detect anomalies when labeled data is scarce
+
+```python
+from sklearn.ensemble import IsolationForest
+from sklearn.preprocessing import StandardScaler
+
+class UnsupervisedAnomalyDetector:
+    def __init__(self):
+        self.model = IsolationForest(
+            n_estimators=150,
+            contamination=0.05,
+            max_samples="auto",
+            random_state=42,
+            n_jobs=-1
+        )
+        self.scaler = StandardScaler()
+
+    def train(self, X):
+        X_scaled = self.scaler.fit_transform(X)
+        self.model.fit(X_scaled)
+
+    def predict(self, X):
+        X_scaled = self.scaler.transform(X)
+        return self.model.predict(X_scaled)
+
+    def anomaly_score(self, X):
+        X_scaled = self.scaler.transform(X)
+        return self.model.decision_function(X_scaled)
+```
+
+---
+
+## Behavioral Baseline System
+
+### Per-Customer Profile
+```python
+class CustomerBehavioralProfile:
+    def __init__(self, customer_id):
+        self.customer_id = customer_id
+        self.baseline = {
+            "typical_amount_mean": None,
+            "typical_amount_std": None,
+            "typical_frequency_per_day": None,
+            "typical_frequency_per_week": None,
+            "typical_hours": [],
+            "typical_days": [],
+            "typical_countries": set(),
+            "typical_counterparties": set(),
+            "typical_transaction_types": set(),
+            "last_updated": None
+        }
+
+    def update(self, transactions_df):
+        recent = transactions_df[
+            transactions_df["transaction_date"] >= (now - 90 days)
+        ]
+        self.baseline["typical_amount_mean"] = recent["amount"].mean()
+        self.baseline["typical_amount_std"] = recent["amount"].std()
+        self.baseline["typical_frequency_per_day"] = len(recent) / 90
+        self.baseline["typical_hours"] = recent["hour"].mode().tolist()
+        self.baseline["typical_countries"] = set(recent["meta_country"].unique())
+        self.baseline["last_updated"] = datetime.now()
+
+    def calculate_deviation(self, transaction):
+        deviations = {}
+        if self.baseline["typical_amount_mean"]:
+            deviations["amount_zscore"] = (
+                (transaction["amount"] - self.baseline["typical_amount_mean"]) /
+                (self.baseline["typical_amount_std"] or 1)
+            )
+        deviations["hour_deviation"] = (
+            transaction["hour"] not in self.baseline["typical_hours"]
+        )
+        deviations["geo_deviation"] = (
+            transaction["meta_country"] not in self.baseline["typical_countries"]
+        )
+        return deviations
+```
+
+---
+
+## Alert Generation Engine
+
+### Risk Score Routing
+```python
+class AlertRouter:
+    THRESHOLDS = {
+        "LOW": (0, 30),
+        "MEDIUM": (31, 70),
+        "HIGH": (71, 100)
+    }
+
+    def route(self, transaction_id, risk_score, anomaly_flag, confidence, explanation):
+        if risk_score <= 30:
+            return self._log_only(transaction_id, risk_score)
+        elif risk_score <= 70:
+            return self._create_alert(transaction_id, risk_score, "MEDIUM", 
+                                     confidence, explanation, "BATCH_REVIEW")
+        else:
+            return self._create_alert(transaction_id, risk_score, "HIGH",
+                                     confidence, explanation, "IMMEDIATE_REVIEW")
+
+    def _create_alert(self, transaction_id, risk_score, severity, 
+                     confidence, explanation, action):
+        alert = {
+            "alert_id": str(uuid.uuid4()),
+            "transaction_id": transaction_id,
+            "risk_score": risk_score,
+            "severity": severity,
+            "confidence": confidence,
+            "ml_explanation": explanation,
+            "recommended_action": action,
+            "status": "OPEN",
+            "created_at": datetime.now()
+        }
+        return alert
+```
+
+### Alert Types
+| Alert Type | Trigger | Action |
+|-----------|---------|--------|
+| BEHAVIORAL_ANOMALY | Deviation from customer baseline | Enhanced monitoring |
+| VELOCITY | Unusual transaction frequency | Review pattern |
+| GEOGRAPHY | High-risk or new country | Verify legitimacy |
+| COUNTERPARTY | New/suspicious counterparty | Counterparty due diligence |
+| AMOUNT | Unusual amount | Verify source of funds |
+| PEP | PEP-related activity | Enhanced due diligence |
+| SANCTIONS | Sanctions match | Freeze and report |
+| STRUCTURING | Potential structuring | SAR filing |
+
+---
+
+## Explainability Layer (SHAP)
+
+### SHAP Integration
+```python
+import shap
+
+class ExplainabilityEngine:
+    def __init__(self, model, feature_names):
+        self.explainer = shap.TreeExplainer(model)
+        self.feature_names = feature_names
+
+    def explain(self, transaction_features):
+        shap_values = self.explainer.shap_values(transaction_features)
+
+        feature_importance = list(zip(
+            self.feature_names, 
+            shap_values[0] if isinstance(shap_values, list) else shap_values
+        ))
+        feature_importance.sort(key=lambda x: abs(x[1]), reverse=True)
+
+        top_features = feature_importance[:5]
+
+        explanation = {
+            "top_features": [
+                {
+                    "feature": name,
+                    "impact": round(value, 4),
+                    "direction": "INCREASES_RISK" if value > 0 else "DECREASES_RISK",
+                    "description": self._get_feature_description(name, value)
+                }
+                for name, value in top_features
+            ],
+            "base_value": round(self.explainer.expected_value, 2),
+            "prediction": round(self.explainer.expected_value + sum([v for _, v in feature_importance]), 2),
+            "summary": self._generate_summary(top_features)
+        }
+        return explanation
+
+    def _get_feature_description(self, feature, value):
+        descriptions = {
+            "amount": f"Transaction amount is {'unusually high' if value > 0 else 'within normal range'}",
+            "rolling_avg_7d": f"7-day average is {'elevated' if value > 0 else 'normal'}",
+            "txn_count_24h": f"Transaction frequency is {'unusually high' if value > 0 else 'normal'}",
+            "geo_diversity_score": f"Geographic diversity is {'unusual' if value > 0 else 'typical'}",
+            "new_counterparty_flag": "Counterparty is new to this customer",
+            "high_risk_country_flag": "Transaction involves a high-risk jurisdiction",
+            "amount_zscore": f"Amount deviates {'significantly' if abs(value) > 2 else 'moderately'} from customer baseline",
+        }
+        return descriptions.get(feature, f"Feature '{feature}' contributes to risk assessment")
+
+    def _generate_summary(self, top_features):
+        increasing = [f for f in top_features if f[1] > 0]
+        if not increasing:
+            return "No significant risk factors identified."
+        reasons = [self._get_feature_description(f[0], f[1]) for f in increasing[:3]]
+        return "; ".join(reasons)
+```
+
+---
+
+## Real-Time Scoring API
+
+### Endpoints
+```python
+# routers/ml.py
+
+@router.post("/score-transaction")
+async def score_transaction(transaction: TransactionInput):
+    # 1. Fetch customer behavioral profile
+    profile = await get_customer_profile(transaction.customer_id)
+
+    # 2. Engineer features
+    features = feature_engineer.transform(transaction, profile)
+
+    # 3. Run models
+    risk_score = risk_scorer.predict(features)
+    anomaly_prob = anomaly_classifier.predict_proba(features)
+    isolation_score = unsupervised_detector.anomaly_score(features)
+
+    # 4. Combine scores
+    combined_score = combine_scores(risk_score, anomaly_prob, isolation_score)
+
+    # 5. Generate explanation
+    explanation = explainability_engine.explain(features)
+
+    # 6. Route to appropriate action
+    alert = alert_router.route(
+        transaction.transaction_id,
+        combined_score,
+        anomaly_prob > 0.5,
+        confidence=anomaly_prob,
+        explanation=explanation
+    )
+
+    return {
+        "transaction_id": transaction.transaction_id,
+        "risk_score": round(combined_score, 2),
+        "anomaly_flag": anomaly_prob > 0.5,
+        "confidence": round(anomaly_prob, 4),
+        "ml_explanation": explanation,
+        "alert_created": alert is not None,
+        "alert_id": alert["alert_id"] if alert else None,
+        "recommended_action": alert["recommended_action"] if alert else "NONE"
+    }
+
+@router.post("/score-customer/{customer_id}")
+async def score_customer(customer_id: UUID):
+    recent_txns = await get_recent_transactions(customer_id, days=30)
+
+    if not recent_txns:
+        return {
+            "customer_id": customer_id,
+            "overall_risk": customer.current_risk_score,
+            "behavioral_anomalies": [],
+            "trend_summary": "No recent transaction activity"
+        }
+
+    risk_trend = calculate_risk_trend(recent_txns)
+    behavioral_anomalies = detect_behavioral_anomalies(recent_txns)
+    new_risk_score = calculate_overall_risk(customer, recent_txns)
+    await update_customer_risk(customer_id, new_risk_score)
+
+    return {
+        "customer_id": customer_id,
+        "overall_risk": new_risk_score,
+        "risk_level": get_risk_level(new_risk_score),
+        "behavioral_anomalies": behavioral_anomalies,
+        "trend_summary": risk_trend,
+        "recommendation": get_recommendation(new_risk_score, behavioral_anomalies)
+    }
+```
+
+---
+
+## Feedback Loop
+
+### Model Retraining Pipeline
+```python
+class ModelRetrainingPipeline:
+    def __init__(self):
+        self.retrain_threshold = 1000
+        self.performance_threshold = 0.85
+
+    async def collect_feedback(self):
+        feedback = await db.query("""
+            SELECT a.alert_id, a.risk_score, a.ml_explanation,
+                   ar.resolution, ar.is_false_positive, ar.resolved_at
+            FROM alerts a
+            JOIN alert_resolutions ar ON a.alert_id = ar.alert_id
+            WHERE ar.resolved_at > (NOW() - INTERVAL '30 days')
+            AND a.ml_version = :current_version
+        """)
+        return feedback
+
+    async def evaluate_performance(self, feedback):
+        true_positives = len([f for f in feedback if not f.is_false_positive])
+        false_positives = len([f for f in feedback if f.is_false_positive])
+        precision = true_positives / (true_positives + false_positives)
+        false_positive_rate = false_positives / len(feedback)
+        return {
+            "precision": precision,
+            "false_positive_rate": false_positive_rate,
+            "total_reviewed": len(feedback)
+        }
+
+    async def retrain_if_needed(self):
+        feedback = await self.collect_feedback()
+        if len(feedback) < self.retrain_threshold:
+            return {"status": "INSUFFICIENT_DATA", "needed": self.retrain_threshold, "have": len(feedback)}
+
+        performance = await self.evaluate_performance(feedback)
+        if performance["precision"] < self.performance_threshold:
+            new_model = await self.retrain_model(feedback)
+            await self.deploy_ab_test(new_model)
+            return {
+                "status": "RETRAINING_TRIGGERED",
+                "old_precision": performance["precision"],
+                "new_model_version": new_model.version
+            }
+        return {"status": "PERFORMANCE_OK", "precision": performance["precision"]}
+```
+
+---
+
+## Model Registry and Versioning
+
+```python
+import pickle
+from datetime import datetime
+
+class ModelRegistry:
+    MODELS_DIR = "models/"
+
+    def save_model(self, model, name, version, metrics):
+        path = f"{self.MODELS_DIR}/{name}_v{version}.pkl"
+        artifact = {
+            "model": model,
+            "version": version,
+            "created_at": datetime.now(),
+            "metrics": metrics,
+            "feature_names": model.feature_names if hasattr(model, "feature_names") else None
+        }
+        with open(path, "wb") as f:
+            pickle.dump(artifact, f)
+        return path
+
+    def load_model(self, name, version=None):
+        if version is None:
+            versions = self.list_versions(name)
+            version = max(versions)
+        path = f"{self.MODELS_DIR}/{name}_v{version}.pkl"
+        with open(path, "rb") as f:
+            artifact = pickle.load(f)
+        return artifact
+```
+
+---
+
+## Project Structure
+```
+kyro-phase2/
+|-- app/
+|   |-- ml/
+|   |   |-- __init__.py
+|   |   |-- models/
+|   |   |   |-- __init__.py
+|   |   |   |-- risk_scorer.py
+|   |   |   |-- anomaly_classifier.py
+|   |   |   |-- isolation_detector.py
+|   |   |-- features/
+|   |   |   |-- __init__.py
+|   |   |   |-- engineer.py
+|   |   |   |-- customer_profile.py
+|   |   |   |-- feature_store.py
+|   |   |-- explainability/
+|   |   |   |-- __init__.py
+|   |   |   |-- shap_explainer.py
+|   |   |-- training/
+|   |   |   |-- __init__.py
+|   |   |   |-- trainer.py
+|   |   |   |-- pipeline.py
+|   |   |-- scoring/
+|   |   |   |-- __init__.py
+|   |   |   |-- real_time_scorer.py
+|   |   |   |-- batch_scorer.py
+|   |   |-- registry/
+|   |   |   |-- __init__.py
+|   |   |   |-- model_registry.py
+|   |-- services/
+|   |   |-- alert_service.py
+|   |   |-- feedback_service.py
+|   |   |-- retraining_service.py
+|   |-- routers/
+|   |   |-- ml.py
+|-- models/
+|   |-- risk_scorer_v1.pkl
+|   |-- anomaly_classifier_v1.pkl
+|-- notebooks/
+|   |-- feature_analysis.ipynb
+|   |-- model_training.ipynb
+|   |-- explainability_demo.ipynb
+|-- tests/
+|   |-- test_feature_engineering.py
+|   |-- test_models.py
+|   |-- test_explainability.py
+|-- requirements-ml.txt
+```
+
+---
+
+## Environment Variables
+```env
+# ML
+MODEL_REGISTRY_PATH=./models
+DEFAULT_RISK_MODEL_VERSION=1
+DEFAULT_ANOMALY_MODEL_VERSION=1
+FEATURE_STORE_TYPE=redis
+FEATURE_STORE_REDIS_URL=redis://localhost:6379/1
+
+# Training
+RETRAIN_THRESHOLD=1000
+PERFORMANCE_THRESHOLD=0.85
+TRAINING_DATA_DAYS=365
+
+# SHAP
+SHAP_EXPLANATION_TOP_K=5
+```
+
+---
+
+## Deliverables Checklist
+
+- [ ] Feature engineering pipeline (30+ features)
+- [ ] Customer behavioral baseline system
+- [ ] Random Forest Risk Scorer (Regressor)
+- [ ] Random Forest Anomaly Classifier
+- [ ] Isolation Forest unsupervised detector
+- [ ] Real-time scoring API (/score-transaction, /score-customer)
+- [ ] Alert generation engine with routing logic
+- [ ] SHAP explainability for all predictions
+- [ ] Feedback loop with automated retraining
+- [ ] Model registry and versioning
+- [ ] A/B testing framework for model deployment
+- [ ] Performance monitoring dashboard
+- [ ] Unit tests for all ML components
+
+---
+
+## Performance Targets
+
+| Metric | Target |
+|--------|--------|
+| Scoring latency (single txn) | < 100ms |
+| Batch scoring throughput | > 5,000 txns/second |
+| Model training time | < 2 hours |
+| False Positive Rate | < 15% |
+| Precision | > 85% |
+| Recall | > 80% |
+| Explainability generation | < 50ms |
+
+---
+
+## Next Phase
+Phase 3: Frontend Dashboard and Compliance Interface -> See PHASE3_README.md

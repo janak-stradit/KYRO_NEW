@@ -1,6 +1,7 @@
 # ============================================================
 # KYRO AML Pipeline — Docker Compose
-# Services: PostgreSQL 16, pgAdmin 4, Pipeline (ETL runner)
+# Services: PostgreSQL 16, pgAdmin 4, Pipeline (ETL runner),
+#           Redis, Risk Assessment API, Celery worker/beat
 # ============================================================
 
 services:
@@ -88,10 +89,114 @@ services:
     networks:
       - kyro_net
 
+  # ── Redis (Celery broker/result backend) ───────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: kyro_redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_HOST_PORT:-6380}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - kyro_net
+
+  # ── Risk Assessment API (FastAPI) ──────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+    container_name: kyro_api
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+psycopg://${DB_USER:-kyro_user}:${DB_PASSWORD:-kyro_pass}@postgres:5432/${DB_NAME:-kyro_aml}
+      REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-30}
+      REFRESH_TOKEN_EXPIRE_DAYS: ${REFRESH_TOKEN_EXPIRE_DAYS:-7}
+      APP_NAME: ${APP_NAME:-KYRO Risk Assessment}
+      DEBUG: ${DEBUG:-false}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      MODEL_REGISTRY_PATH: /app/models
+    ports:
+      - "${API_HOST_PORT:-8000}:8000"
+    volumes:
+      - ./models:/app/models
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - kyro_net
+
+  # ── Celery worker (async rules-engine backstop + ML training) ──
+  celery_worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+    container_name: kyro_celery_worker
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+psycopg://${DB_USER:-kyro_user}:${DB_PASSWORD:-kyro_pass}@postgres:5432/${DB_NAME:-kyro_aml}
+      REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
+      MODEL_REGISTRY_PATH: /app/models
+    volumes:
+      - ./models:/app/models
+    command: celery -A app.tasks.celery_app worker --loglevel=info
+    # Overrides the API image's HTTP healthcheck (there's no uvicorn here).
+    healthcheck:
+      test: [ "CMD-SHELL", "celery -A app.tasks.celery_app inspect ping -d celery@$$HOSTNAME" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - kyro_net
+
+  # ── Celery beat (schedules the daily ETL/rescoring job) ────
+  celery_beat:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+    container_name: kyro_celery_beat
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+psycopg://${DB_USER:-kyro_user}:${DB_PASSWORD:-kyro_pass}@postgres:5432/${DB_NAME:-kyro_aml}
+      REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
+      MODEL_REGISTRY_PATH: /app/models
+    volumes:
+      - ./models:/app/models
+    command: celery -A app.tasks.celery_app beat --loglevel=info
+    # beat doesn't answer broker pings like a worker does, and the API
+    # image's inherited HTTP healthcheck doesn't apply here either.
+    healthcheck:
+      disable: true
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - kyro_net
+
 volumes:
   postgres_data:
     driver: local
   pgadmin_data:
+    driver: local
+  redis_data:
     driver: local
 
 networks:
