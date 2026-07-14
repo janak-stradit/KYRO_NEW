@@ -1,0 +1,99 @@
+# ============================================================
+# KYRO AML Pipeline — Docker Compose
+# Services: PostgreSQL 16, pgAdmin 4, Pipeline (ETL runner)
+# ============================================================
+
+services:
+
+  # ── PostgreSQL 16 ──────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: kyro_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-kyro_aml}
+      POSTGRES_USER: ${DB_USER:-kyro_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-kyro_pass}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # Run DDL scripts on first start
+      - ./pipeline/migrations/001_create_schemas_tables.sql:/docker-entrypoint-initdb.d/01_tables.sql
+      - ./pipeline/migrations/002_create_indexes.sql:/docker-entrypoint-initdb.d/02_indexes.sql
+      - ./pipeline/migrations/003_triggers_procedures_views.sql:/docker-entrypoint-initdb.d/03_triggers.sql
+      - ./pipeline/migrations/004_security_roles.sql:/docker-entrypoint-initdb.d/04_security.sql
+      # Custom postgresql.conf tuning
+      - ./docker/postgresql.conf:/etc/postgresql/postgresql.conf
+    command: >
+      postgres
+        -c config_file=/etc/postgresql/postgresql.conf
+        -c log_statement=ddl
+        -c log_min_duration_statement=500
+        -c shared_preload_libraries=pg_stat_statements
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${DB_USER:-kyro_user} -d ${DB_NAME:-kyro_aml}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - kyro_net
+
+  # ── pgAdmin 4 (Database UI) ────────────────────────────────
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: kyro_pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@kyro.com
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin123}
+    ports:
+      - "5050:80"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - kyro_net
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+
+  # ── Pipeline runner (ETL) ──────────────────────────────────
+  pipeline:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.pipeline
+    container_name: kyro_pipeline
+    restart: "no"
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-kyro_aml}
+      DB_USER: ${DB_USER:-kyro_user}
+      DB_PASSWORD: ${DB_PASSWORD:-kyro_pass}
+      DB_SSL_MODE: ${DB_SSL_MODE:-disable}
+      PIPELINE_ENV: ${PIPELINE_ENV:-production}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      NUM_CUSTOMERS: ${NUM_CUSTOMERS:-200}
+      PYTHONPATH: /app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./pipeline:/app/pipeline
+      - ./output:/app/output
+      - ./logs:/app/logs
+      - ./artifacts:/app/artifacts
+    command: python -m pipeline.run_pipeline
+    networks:
+      - kyro_net
+
+volumes:
+  postgres_data:
+    driver: local
+  pgadmin_data:
+    driver: local
+
+networks:
+  kyro_net:
+    driver: bridge

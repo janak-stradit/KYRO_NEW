@@ -1,0 +1,63 @@
+# ============================================================
+# KYRO Pipeline Docker Image
+# Multi-stage build for lean production image
+# ============================================================
+
+# ── Stage 1: Builder ──────────────────────────────────────────
+FROM python:3.12-slim AS builder
+
+WORKDIR /build
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc g++ libpq-dev curl git && \
+    rm -rf /var/lib/apt/lists/*
+
+# Create virtual environment
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+COPY requirements-pipeline.txt .
+RUN pip install --no-cache-dir -r requirements-pipeline.txt
+
+# ── Stage 2: Production image ─────────────────────────────────
+FROM python:3.12-slim
+
+LABEL maintainer="kyro-data-engineering"
+LABEL version="1.0.0"
+
+WORKDIR /app
+
+# Runtime dependencies only
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq5 && \
+    rm -rf /var/lib/apt/lists/*
+
+# Copy virtual environment from builder
+COPY --from=builder /opt/venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Copy application code
+COPY generator/    ./generator/
+COPY pipeline/     ./pipeline/
+COPY alembic.ini   .
+
+# Create non-root user for security
+RUN useradd --create-home --shell /bin/bash kyro && \
+    chown -R kyro:kyro /app
+
+# Directories for logs/outputs
+RUN mkdir -p /app/logs /app/output /app/artifacts && \
+    chown -R kyro:kyro /app/logs /app/output /app/artifacts
+
+USER kyro
+
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONPATH=/app
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
+    CMD python -c "from pipeline.core.config import load_config; load_config()" || exit 1
+
+CMD ["python", "-m", "pipeline.run_pipeline"]

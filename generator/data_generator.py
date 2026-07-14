@@ -31,8 +31,8 @@ TRANSACTION_TYPES = [
 
 SOURCE_SYSTEMS = ["bank_mcp", "card_mcp", "crypto_mcp", "swift_mcp", "internal"]
 
-# None included deliberately — some txns have unknown counterparty type
-COUNTERPARTY_TYPES = ["INDIVIDUAL", "BANK", "CORPORATE", "EXCHANGE", "UNKNOWN", None]
+# Replaced None with just "UNKNOWN" to avoid nulls
+COUNTERPARTY_TYPES = ["INDIVIDUAL", "BANK", "CORPORATE", "EXCHANGE", "UNKNOWN"]
 
 
 def _rand_date(start_year=2015, end_year=2025):
@@ -64,7 +64,7 @@ def _build_risk_flags(amount, country, txn_type):
     if random.random() < 0.02:
         flags.append("RAPID_MOVEMENT")
 
-    return ", ".join(flags) if flags else None
+    return ", ".join(flags) if flags else "NONE"
 
 
 def _txn_amount():
@@ -85,11 +85,9 @@ def generate_customer(index):
     cid = f"CUST-{str(index).zfill(6)}"
     score = round(random.uniform(0, 100), 4)
 
-    if score >= 75:
-        level = "CRITICAL"
-    elif score >= 50:
+    if score >= 66:
         level = "HIGH"
-    elif score >= 25:
+    elif score >= 33:
         level = "MEDIUM"
     else:
         level = "LOW"
@@ -148,13 +146,13 @@ def generate_transactions(customer_id, account_id, num_transactions=None):
         elif cp_type == "INDIVIDUAL":
             cp_name = fake.name()
         else:
-            cp_name = None
+            cp_name = "UNKNOWN"
 
-        dest = random.choice(COUNTRIES) if txn_type in ("TRANSFER_OUT", "TRANSFER_IN") else None
-        origin = random.choice(COUNTRIES) if txn_type == "TRANSFER_IN" else None
+        dest = random.choice(COUNTRIES) if txn_type in ("TRANSFER_OUT", "TRANSFER_IN") else country_code
+        origin = random.choice(COUNTRIES) if txn_type == "TRANSFER_IN" else country_code
 
-        # time-based suffix to avoid collisions under parallel runs
-        suffix = int(time.time() * 1000) + random.randint(0, 999999)
+        # Use a short uuid to guarantee no collisions
+        suffix = uuid.uuid4().hex[:8]
         txn_id = f"TXN-{account_id}-{suffix}"
 
         txns.append({
@@ -169,8 +167,8 @@ def generate_transactions(customer_id, account_id, num_transactions=None):
             "source_system": random.choice(SOURCE_SYSTEMS),
             "meta_counterparty": cp_name,
             "meta_counterparty_type": cp_type,
-            "meta_location": fake.city() if random.random() < 0.7 else None,
-            "meta_country": fake.country() if random.random() < 0.7 else None,
+            "meta_location": fake.city(),
+            "meta_country": fake.country(),
             "meta_country_code": country_code,
             "meta_destination_country": dest,
             "meta_origin_country": origin,
