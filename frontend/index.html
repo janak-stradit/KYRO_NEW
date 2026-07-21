@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KYRO - AML Data Generator Platform</title>
+    <meta name="description" content="AI-powered AML synthetic data generation with advanced behavioral pattern detection">
+    <link rel="stylesheet" href="styles/main.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🟠</text></svg>">
+</head>
+<body>
+    <div class="app">
+        <!-- Hero Landing Section -->
+        <section id="hero" class="hero-section">
+            <div class="hero-background">
+                <div class="hero-gradient"></div>
+                <div class="hero-pattern"></div>
+            </div>
+            
+            <div class="hero-content">
+                <div class="hero-text">
+                    <div class="hero-badge">
+                        <span class="badge-icon">🟠</span>
+                        <span>Next-Gen AML Data Platform</span>
+                    </div>
+                    
+                    <h1 class="hero-title">
+                        <span class="gradient-text">KYRO</span><br>
+                        AML Data Generator
+                    </h1>
+                    
+                    <p class="hero-description">
+                        AI-powered synthetic data generation platform for Anti-Money Laundering testing and compliance. 
+                        Create realistic, compliant datasets with advanced behavioral pattern detection.
+                    </p>
+                    
+                    <div class="hero-actions">
+                        <button id="launch-dashboard" class="btn btn-primary btn-large">
+                            <span class="btn-icon">🚀</span>
+                            Launch Dashboard
+                        </button>
+                        <button id="view-demo" class="btn btn-secondary btn-large">
+                            <span class="btn-icon">👀</span>
+                            View Demo
+                        </button>
+                    </div>
+                    
+                    <div class="hero-stats">
+                        <div class="stat-item">
+                            <div class="stat-number" id="hero-customers">1M+</div>
+                            <div class="stat-label">Synthetic Customers</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-number" id="hero-transactions">50M+</div>
+                            <div class="stat-label">Transactions Generated</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-number" id="hero-compliance">99.9%</div>
+                            <div class="stat-label">Compliance Rate</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="hero-visual">
+                    <div class="dashboard-preview">
+                        <div class="preview-window">
+                            <div class="window-header">
+                                <div class="window-controls">
+                                    <span class="control-dot red"></span>
+                                    <span class="control-dot yellow"></span>
+                                    <span class="control-dot green"></span>
+                                </div>
+                                <div class="window-title">KYRO Dashboard</div>
+                            </div>
+                            <div class="window-content">
+                                <div class="preview-stats">
+                                    <div class="preview-card">
+                                        <div class="card-icon orange">👥</div>
+                                        <div class="card-info">
+                                            <div class="card-number">5,247</div>
+                                            <div class="card-label">Customers</div>
+                                        </div>
+                                    </div>
+                                    <div class="preview-card">
+                                        <div class="card-icon blue">🏦</div>
+                                        <div class="card-info">
+                                            <div class="card-number">15,741</div>
+                                            <div class="card-label">Accounts</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="preview-chart">
+                                    <div class="chart-bars">
+                                        <div class="bar" style="height: 40%"></div>
+                                        <div class="bar" style="height: 70%"></div>
+                                        <div class="bar active" style="height: 90%"></div>
+                                        <div class="bar" style="height: 60%"></div>
+                                        <div class="bar" style="height: 80%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Navigation (appears after scroll) -->
+        <header class="header floating" id="main-header">
+            <div class="header-content">
+                <div class="logo">
+                    <span class="logo-icon">🟠</span>
+                    <div class="logo-text">
+                        <h1>KYRO</h1>
+                        <span>AML Data Platform</span>
+                    </div>
+                </div>
+                <nav class="nav">
+                    <button class="nav-item active" data-section="features">Features</button>
+                    <button class="nav-item" data-section="dashboard">Dashboard</button>
+                    <button class="nav-item" data-section="generator">Generator</button>
+                    <button class="nav-item" data-section="preview">Preview</button>
+                </nav>
+                <div class="header-actions">
+                    <button id="header-demo" class="btn btn-outline-small">Demo</button>
+                    <button id="header-launch" class="btn btn-primary-small">Launch</button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main">
+            <!-- Features Section -->
+            <section id="features" class="section features-section active">
+                <div class="section-container">
+                    <div class="section-header">
+                        <div class="section-badge">
+                            <span class="badge-icon">✨</span>
+                            <span>Platform Features</span>
+                        </div>
+                        <h2>Powerful AML Data Generation</h2>
+                        <p>Enterprise-grade synthetic data generation with advanced compliance features and real-time analytics</p>
+                    </div>
+                    
+                    <div class="features-grid">
+                        <div class="feature-card" data-delay="0">
+                            <div class="feature-icon gradient-orange">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                                    <path d="M12 2L15.09 8.26L22 9L17 14L18.18 21L12 17.77L5.82 21L7 14L2 9L8.91 8.26L12 2Z" fill="currentColor"/>
+                                </svg>
+                            </div>
+                            <h3>AI-Powered Generation</h3>
+                            <p>Advanced machine learning algorithms create realistic customer profiles, accounts, and transaction patterns that mirror real-world AML scenarios.</p>
+                        </div>
+                        
+                        <div class="feature-card" data-delay="100">
+                            <div class="feature-icon gradient-blue">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                                    <path d="M9 12L11 14L15 10M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z" stroke="currentColor" stroke-width="2"/>
+                                </svg>
+                            </div>
+                            <h3>Compliance Ready</h3>
+                            <p>Built-in regulatory compliance features ensure generated data meets FATF, BSA, and international AML standards for testing and training.</p>
+                        </div>
+                        
+                        <div class="feature-card" data-delay="200">
+                            <div class="feature-icon gradient-green">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                                    <path d="M13 7H7V5C7 3.89543 7.89543 3 9 3H11C12.1046 3 13 3.89543 13 5M13 7V9M13 7H17M13 9H17M13 9V11M17 7V11M17 11H19C20.1046 11 21 11.8954 21 13V17C21 19.2091 19.2091 21 17 21H7C4.79086 21 3 19.2091 3 17V13C3 11.8954 3.89543 11 5 11H17Z" stroke="currentColor" stroke-width="2"/>
+                                </svg>
+                            </div>
+                            <h3>Secure & Private</h3>
+                            <p>Zero real customer data used. All generated information is synthetic, ensuring complete privacy and security for your testing environments.</p>
+                        </div>
+                        
+                        <div class="feature-card" data-delay="300">
+                            <div class="feature-icon gradient-purple">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                                    <path d="M7 7H17M7 12H17M7 17H17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                                    <path d="M3 5C3 3.89543 3.89543 3 5 3H19C20.1046 3 21 3.89543 21 5V19C21 20.1046 20.1046 21 19 21H5C3.89543 21 3 20.1046 3 19V5Z" stroke="currentColor" stroke-width="2"/>
+                                </svg>
+                            </div>
+                            <h3>Multiple Export Formats</h3>
+                            <p>Generate data in JSON, Excel, CSV, and database-ready formats. Seamlessly integrate with your existing AML testing infrastructure.</p>
+                        </div>
+                        
+                        <div class="feature-card" data-delay="400">
+                            <div class="feature-icon gradient-pink">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                                    <path d="M13 10V3L4 14H11V21L20 10H13Z" fill="currentColor"/>
+                                </svg>
+                            </div>
+                            <h3>Real-time Analytics</h3>
+                            <p>Monitor generation progress, data quality metrics, and compliance indicators with live dashboard analytics and reporting.</p>
+                        </div>
+                        
+                        <div class="feature-card" data-delay="500">
+                            <div class="feature-icon gradient-cyan">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                                    <path d="M12 6V12L16 16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                                    <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/>
+                                </svg>
+                            </div>
+                            <h3>Scalable Performance</h3>
+                            <p>Generate from hundreds to millions of records efficiently. Optimized algorithms ensure fast processing for enterprise-scale testing needs.</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            <!-- Dashboard Section -->
+            <section id="dashboard" class="section dashboard-section">
+                <div class="section-container">
+                    <div class="section-header">
+                        <div class="section-badge">
+                            <span class="badge-icon">📊</span>
+                            <span>System Dashboard</span>
+                        </div>
+                        <h2>Monitor & Control</h2>
+                        <p>Real-time system monitoring and data generation control center</p>
+                    </div>
+                    
+                    <div class="dashboard-grid">
+                        <div class="dashboard-main">
+                            <div class="stats-grid">
+                                <div class="stat-card">
+                                    <div class="stat-icon">👥</div>
+                                    <div class="stat-info">
+                                        <h3 id="total-customers">0</h3>
+                                        <p>Total Customers</p>
+                                    </div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-icon">🏦</div>
+                                    <div class="stat-info">
+                                        <h3 id="total-accounts">0</h3>
+                                        <p>Total Accounts</p>
+                                    </div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-icon">💳</div>
+                                    <div class="stat-info">
+                                        <h3 id="total-transactions">0</h3>
+                                        <p>Total Transactions</p>
+                                    </div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-icon">⏱️</div>
+                                    <div class="stat-info">
+                                        <h3 id="generation-time">0s</h3>
+                                        <p>Last Generation Time</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="dashboard-sidebar">
+                            <div class="card">
+                                <h3>System Status</h3>
+                                <div class="status-indicator">
+                                    <span class="status-dot" id="status-dot"></span>
+                                    <span id="status-text">Checking...</span>
+                                </div>
+                                <button id="check-health" class="btn btn-secondary">Check Health</button>
+                            </div>
+                            
+                            <div class="card">
+                                <h3>Recent Activity</h3>
+                                <div id="activity-log" class="activity-log">
+                                    <p class="activity-item">System initialized</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Generator Section -->
+            <section id="generator" class="section generator-section">
+                <div class="section-container">
+                    <div class="section-header">
+                        <div class="section-badge">
+                            <span class="badge-icon">⚙️</span>
+                            <span>Data Generation</span>
+                        </div>
+                        <h2>Generate Synthetic Data</h2>
+                        <p>Create comprehensive AML datasets for testing and development</p>
+                    </div>
+
+                    <div class="generator-container">
+                        <div class="generator-form">
+                            <div class="form-group">
+                                <label for="customer-count">Number of Customers</label>
+                                <input type="number" id="customer-count" min="1" max="10000" value="100">
+                                <small>Generate between 1 and 10,000 customers</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Generation Options</label>
+                                <div class="checkbox-group">
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" id="save-to-disk" checked>
+                                        <span class="checkmark"></span>
+                                        Save to disk
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="button-group">
+                                <button id="generate-json" class="btn btn-primary">
+                                    Generate JSON Data
+                                </button>
+                                <button id="generate-excel" class="btn btn-secondary">
+                                    Download Excel File
+                                </button>
+                            </div>
+
+                            <div id="progress-container" class="progress-container hidden">
+                                <div class="progress-bar">
+                                    <div class="progress-fill" id="progress-fill"></div>
+                                </div>
+                                <p id="progress-text">Generating data...</p>
+                            </div>
+                        </div>
+
+                        <div class="generator-info">
+                            <h4>Estimation</h4>
+                            <div class="estimation-grid">
+                                <div class="estimation-item">
+                                    <span class="estimation-label">Customers:</span>
+                                    <span class="estimation-value" id="est-customers">100</span>
+                                </div>
+                                <div class="estimation-item">
+                                    <span class="estimation-label">Accounts:</span>
+                                    <span class="estimation-value" id="est-accounts">300</span>
+                                </div>
+                                <div class="estimation-item">
+                                    <span class="estimation-label">Transactions:</span>
+                                    <span class="estimation-value" id="est-transactions">37,500</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Preview Section -->
+            <section id="preview" class="section preview-section">
+                <div class="section-container">
+                    <div class="section-header">
+                        <div class="section-badge">
+                            <span class="badge-icon">👁️</span>
+                            <span>Data Preview</span>
+                        </div>
+                        <h2>Sample Data Preview</h2>
+                        <p>Preview generated customer data before downloading</p>
+                    </div>
+
+                    <div class="preview-container">
+                        <div class="preview-controls">
+                            <button id="preview-customer" class="btn btn-primary">
+                                Generate Sample Customer
+                            </button>
+                            <input type="number" id="customer-index" min="1" value="1" placeholder="Customer Index">
+                        </div>
+
+                        <div id="preview-content" class="preview-content">
+                            <p class="preview-placeholder">Click "Generate Sample Customer" to see a preview</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <div class="footer-logo">
+                        <span class="logo-icon">🟠</span>
+                        <div class="logo-text">
+                            <h3>KYRO</h3>
+                            <span>AML Data Platform</span>
+                        </div>
+                    </div>
+                    <p>Enterprise-grade synthetic AML data generation platform with AI-powered compliance features.</p>
+                </div>
+                
+                <div class="footer-section">
+                    <h4>Platform</h4>
+                    <ul>
+                        <li><a href="#features">Features</a></li>
+                        <li><a href="#dashboard">Dashboard</a></li>
+                        <li><a href="#generator">Generator</a></li>
+                        <li><a href="#preview">Preview</a></li>
+                    </ul>
+                </div>
+                
+                <div class="footer-section">
+                    <h4>Resources</h4>
+                    <ul>
+                        <li><a href="#">Documentation</a></li>
+                        <li><a href="#">API Reference</a></li>
+                        <li><a href="#">Support</a></li>
+                        <li><a href="#">Updates</a></li>
+                    </ul>
+                </div>
+                
+                <div class="footer-section">
+                    <h4>Compliance</h4>
+                    <ul>
+                        <li><a href="#">Privacy Policy</a></li>
+                        <li><a href="#">Terms of Service</a></li>
+                        <li><a href="#">Security</a></li>
+                        <li><a href="#">Certifications</a></li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="footer-bottom">
+                <div class="footer-bottom-content">
+                    <p>&copy; 2026 KYRO AML Data Platform. All rights reserved.</p>
+                    <div class="footer-badges">
+                        <span class="badge">SOC 2 Compliant</span>
+                        <span class="badge">GDPR Ready</span>
+                        <span class="badge">ISO 27001</span>
+                    </div>
+                </div>
+            </div>
+        </footer>
+
+        <!-- Loading Overlay -->
+        <div id="loading-overlay" class="loading-overlay hidden">
+            <div class="loading-spinner"></div>
+            <p>Processing...</p>
+        </div>
+
+        <!-- Toast Notifications -->
+        <div id="toast-container" class="toast-container"></div>
+    </div>
+
+    <script src="js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,384 @@
+nohup: ignoring input
+INFO:     Will watch for changes in these directories: ['/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/app']
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [715904] using WatchFiles
+🚀 Starting KYRO AML Backend Server...
+📊 API will be available at: http://localhost:8000
+📝 API Docs available at: http://localhost:8000/docs
+
+Press Ctrl+C to stop the server
+
+INFO:     Started server process [715906]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/jwt/api_jwt.py:368: InsecureKeyLengthWarning: The HMAC key is 23 bytes long, which is below the minimum recommended length of 32 bytes for SHA256. See RFC 7518 Section 3.2.
+  decoded = self.decode_complete(
+INFO:     127.0.0.1:49890 - "GET /api/v1/dashboard/kpis HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1969, in _exec_single_context
+    self.dialect.do_execute(
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/sqlalchemy/engine/default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+sqlite3.OperationalError: no such table: app.users
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/uvicorn/protocols/http/httptools_impl.py", line 422, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/uvicorn/middleware/proxy_headers.py", line 63, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/fastapi/applications.py", line 1163, in __call__
+    await super().__call__(scope, receive, send)
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/starlette/applications.py", line 90, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/starlette/middleware/errors.py", line 186, in __call__
+    raise exc
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/starlette/middleware/errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/starlette/middleware/cors.py", line 96, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/starlette/middleware/cors.py", line 154, in simple_response
+    await self.app(scope, receive, send)
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/starlette/routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/fastapi/routing.py", line 2672, in app
+    await route.handle(scope, receive, send)
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/fastapi/routing.py", line 1753, in handle
+    await self.original_router.handle(scope, receive, send)
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/fastapi/routing.py", line 2727, in handle
+    await included_router._handle_selected(scope, receive, send)
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/fastapi/routing.py", line 1773, in _handle_selected
+    await original_route.handle(scope, receive, send)
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/fastapi/routing.py", line 1264, in handle
+    await app(scope, receive, send)
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/fastapi/routing.py", line 150, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/fastapi/routing.py", line 136, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/fastapi/routing.py", line 473, in app
+    solved_result = await solve_dependencies(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/fastapi/dependencies/utils.py", line 680, in solve_dependencies
+    solved = await run_in_threadpool(call, **solved_result.values)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/starlette/concurrency.py", line 34, in run_in_threadpool
+    return await anyio.to_thread.run_sync(func)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/anyio/to_thread.py", line 65, in run_sync
+    return await get_async_backend().run_sync_in_worker_thread(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/anyio/_backends/_asyncio.py", line 2641, in run_sync_in_worker_thread
+    return await future
+           ^^^^^^^^^^^^
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/anyio/_backends/_asyncio.py", line 1033, in run
+    result = context.run(func, *args)
+             ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/app/deps.py", line 41, in get_current_user
+    user = db.get(User, uuid.UUID(user_id))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 3702, in get
+    return self._get_impl(
+           ^^^^^^^^^^^^^^^
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 3881, in _get_impl
+    return db_load_fn(
+           ^^^^^^^^^^^
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/sqlalchemy/orm/loading.py", line 695, in load_on_pk_identity
+    session.execute(
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 2373, in execute
+    return self._execute_internal(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 2271, in _execute_internal
+    result: Result[Any] = compile_state_cls.orm_execute_statement(
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/sqlalchemy/orm/context.py", line 306, in orm_execute_statement
+    result = conn.execute(
+             ^^^^^^^^^^^^^
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1421, in execute
+    return meth(
+           ^^^^^
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/sqlalchemy/sql/elements.py", line 526, in _execute_on_connection
+    return connection._execute_clauseelement(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1643, in _execute_clauseelement
+    ret = self._execute_context(
+          ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1848, in _execute_context
+    return self._exec_single_context(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1988, in _exec_single_context
+    self._handle_dbapi_exception(
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 2365, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1969, in _exec_single_context
+    self.dialect.do_execute(
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/sqlalchemy/engine/default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+sqlalchemy.exc.OperationalError: (sqlite3.OperationalError) no such table: app.users
+[SQL: SELECT app.users.username AS app_users_username, app.users.email AS app_users_email, app.users.full_name AS app_users_full_name, app.users.hashed_password AS app_users_hashed_password, app.users.role AS app_users_role, app.users.is_active AS app_users_is_active, app.users.last_login AS app_users_last_login, app.users.created_at AS app_users_created_at, app.users.id AS app_users_id 
+FROM app.users 
+WHERE app.users.id = ?]
+[parameters: ('2ec2a769506e4048b0888652ce2b65c5',)]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+INFO:     127.0.0.1:56630 - "GET /api/v1/dashboard/kpis HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1969, in _exec_single_context
+    self.dialect.do_execute(
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/sqlalchemy/engine/default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+sqlite3.OperationalError: no such table: app.users
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/uvicorn/protocols/http/httptools_impl.py", line 422, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/uvicorn/middleware/proxy_headers.py", line 63, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/fastapi/applications.py", line 1163, in __call__
+    await super().__call__(scope, receive, send)
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/starlette/applications.py", line 90, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/starlette/middleware/errors.py", line 186, in __call__
+    raise exc
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/starlette/middleware/errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/starlette/middleware/cors.py", line 96, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/starlette/middleware/cors.py", line 154, in simple_response
+    await self.app(scope, receive, send)
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/starlette/routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/fastapi/routing.py", line 2672, in app
+    await route.handle(scope, receive, send)
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/fastapi/routing.py", line 1753, in handle
+    await self.original_router.handle(scope, receive, send)
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/fastapi/routing.py", line 2727, in handle
+    await included_router._handle_selected(scope, receive, send)
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/fastapi/routing.py", line 1773, in _handle_selected
+    await original_route.handle(scope, receive, send)
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/fastapi/routing.py", line 1264, in handle
+    await app(scope, receive, send)
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/fastapi/routing.py", line 150, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/fastapi/routing.py", line 136, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/fastapi/routing.py", line 473, in app
+    solved_result = await solve_dependencies(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/fastapi/dependencies/utils.py", line 680, in solve_dependencies
+    solved = await run_in_threadpool(call, **solved_result.values)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/starlette/concurrency.py", line 34, in run_in_threadpool
+    return await anyio.to_thread.run_sync(func)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/anyio/to_thread.py", line 65, in run_sync
+    return await get_async_backend().run_sync_in_worker_thread(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/anyio/_backends/_asyncio.py", line 2641, in run_sync_in_worker_thread
+    return await future
+           ^^^^^^^^^^^^
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/anyio/_backends/_asyncio.py", line 1033, in run
+    result = context.run(func, *args)
+             ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/app/deps.py", line 41, in get_current_user
+    user = db.get(User, uuid.UUID(user_id))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 3702, in get
+    return self._get_impl(
+           ^^^^^^^^^^^^^^^
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 3881, in _get_impl
+    return db_load_fn(
+           ^^^^^^^^^^^
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/sqlalchemy/orm/loading.py", line 695, in load_on_pk_identity
+    session.execute(
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 2373, in execute
+    return self._execute_internal(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 2271, in _execute_internal
+    result: Result[Any] = compile_state_cls.orm_execute_statement(
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/sqlalchemy/orm/context.py", line 306, in orm_execute_statement
+    result = conn.execute(
+             ^^^^^^^^^^^^^
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1421, in execute
+    return meth(
+           ^^^^^
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/sqlalchemy/sql/elements.py", line 526, in _execute_on_connection
+    return connection._execute_clauseelement(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1643, in _execute_clauseelement
+    ret = self._execute_context(
+          ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1848, in _execute_context
+    return self._exec_single_context(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1988, in _exec_single_context
+    self._handle_dbapi_exception(
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 2365, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1969, in _exec_single_context
+    self.dialect.do_execute(
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/sqlalchemy/engine/default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+sqlalchemy.exc.OperationalError: (sqlite3.OperationalError) no such table: app.users
+[SQL: SELECT app.users.username AS app_users_username, app.users.email AS app_users_email, app.users.full_name AS app_users_full_name, app.users.hashed_password AS app_users_hashed_password, app.users.role AS app_users_role, app.users.is_active AS app_users_is_active, app.users.last_login AS app_users_last_login, app.users.created_at AS app_users_created_at, app.users.id AS app_users_id 
+FROM app.users 
+WHERE app.users.id = ?]
+[parameters: ('2ec2a769506e4048b0888652ce2b65c5',)]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+INFO:     127.0.0.1:57576 - "GET /api/v1/dashboard/kpis HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1969, in _exec_single_context
+    self.dialect.do_execute(
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/sqlalchemy/engine/default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+sqlite3.OperationalError: no such table: app.users
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/uvicorn/protocols/http/httptools_impl.py", line 422, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/uvicorn/middleware/proxy_headers.py", line 63, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/fastapi/applications.py", line 1163, in __call__
+    await super().__call__(scope, receive, send)
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/starlette/applications.py", line 90, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/starlette/middleware/errors.py", line 186, in __call__
+    raise exc
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/starlette/middleware/errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/starlette/middleware/cors.py", line 96, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/starlette/middleware/cors.py", line 154, in simple_response
+    await self.app(scope, receive, send)
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/starlette/routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/fastapi/routing.py", line 2672, in app
+    await route.handle(scope, receive, send)
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/fastapi/routing.py", line 1753, in handle
+    await self.original_router.handle(scope, receive, send)
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/fastapi/routing.py", line 2727, in handle
+    await included_router._handle_selected(scope, receive, send)
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/fastapi/routing.py", line 1773, in _handle_selected
+    await original_route.handle(scope, receive, send)
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/fastapi/routing.py", line 1264, in handle
+    await app(scope, receive, send)
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/fastapi/routing.py", line 150, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/fastapi/routing.py", line 136, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/fastapi/routing.py", line 473, in app
+    solved_result = await solve_dependencies(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/fastapi/dependencies/utils.py", line 680, in solve_dependencies
+    solved = await run_in_threadpool(call, **solved_result.values)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/starlette/concurrency.py", line 34, in run_in_threadpool
+    return await anyio.to_thread.run_sync(func)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/anyio/to_thread.py", line 65, in run_sync
+    return await get_async_backend().run_sync_in_worker_thread(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/anyio/_backends/_asyncio.py", line 2641, in run_sync_in_worker_thread
+    return await future
+           ^^^^^^^^^^^^
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/anyio/_backends/_asyncio.py", line 1033, in run
+    result = context.run(func, *args)
+             ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/app/deps.py", line 41, in get_current_user
+    user = db.get(User, uuid.UUID(user_id))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 3702, in get
+    return self._get_impl(
+           ^^^^^^^^^^^^^^^
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 3881, in _get_impl
+    return db_load_fn(
+           ^^^^^^^^^^^
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/sqlalchemy/orm/loading.py", line 695, in load_on_pk_identity
+    session.execute(
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 2373, in execute
+    return self._execute_internal(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 2271, in _execute_internal
+    result: Result[Any] = compile_state_cls.orm_execute_statement(
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/sqlalchemy/orm/context.py", line 306, in orm_execute_statement
+    result = conn.execute(
+             ^^^^^^^^^^^^^
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1421, in execute
+    return meth(
+           ^^^^^
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/sqlalchemy/sql/elements.py", line 526, in _execute_on_connection
+    return connection._execute_clauseelement(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1643, in _execute_clauseelement
+    ret = self._execute_context(
+          ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1848, in _execute_context
+    return self._exec_single_context(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1988, in _exec_single_context
+    self._handle_dbapi_exception(
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 2365, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1969, in _exec_single_context
+    self.dialect.do_execute(
+  File "/home/ubuntu/Desktop/KYRO_New/KYRO_NEW/venv/lib/python3.12/site-packages/sqlalchemy/engine/default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+sqlalchemy.exc.OperationalError: (sqlite3.OperationalError) no such table: app.users
+[SQL: SELECT app.users.username AS app_users_username, app.users.email AS app_users_email, app.users.full_name AS app_users_full_name, app.users.hashed_password AS app_users_hashed_password, app.users.role AS app_users_role, app.users.is_active AS app_users_is_active, app.users.last_login AS app_users_last_login, app.users.created_at AS app_users_created_at, app.users.id AS app_users_id 
+FROM app.users 
+WHERE app.users.id = ?]
+[parameters: ('2ec2a769506e4048b0888652ce2b65c5',)]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
