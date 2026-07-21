@@ -8,6 +8,7 @@ const KyroChat = {
     statusPollInterval: null,
     speechEnabled: true,
     currentUtterance: null,
+    currentCaseContext: null, // Track current case being discussed
     agentState: {
         autonomous_status: "STOPPED",
         intervention_needed: false,
@@ -411,10 +412,23 @@ const KyroChat = {
             $(`#${loadId}`).remove();
 
             let response = "";
+            let messageOptions = {};
             const q = input.toLowerCase();
             
-            // Use kyroScripts for responses
-            if (q.includes("case") || q.includes("alert") || q.includes("backlog")) {
+            // Check if user is asking about a specific case
+            const caseIdMatch = input.match(/CUST-(\d+)/i);
+            if (caseIdMatch) {
+                const caseId = `CUST-${caseIdMatch[1]}`;
+                // Store the case context for potential handoff
+                this.currentCaseContext = this.generateCustomerCaseDetail(caseId);
+                response = this.getCaseDetailsResponse(caseId, this.currentCaseContext);
+                messageOptions = {
+                    showViewDetails: true,
+                    caseDetails: this.formatCaseDetailsHTML(this.currentCaseContext)
+                };
+            }
+            // Use kyroScripts for other responses
+            else if (q.includes("case") || q.includes("alert") || q.includes("backlog")) {
                 response = kyroScripts.chat.caseInfo(20, 3);
             } else if (q.includes("transaction")) {
                 response = kyroScripts.chat.transactionInfo(5);
@@ -430,7 +444,7 @@ const KyroChat = {
                 response = kyroScripts.chat.defaultResponse;
             }
 
-            this.addMessage("assistant", response);
+            this.addMessage("assistant", response, messageOptions);
             this.speak(response);
         } catch (err) {
             $(`#${loadId}`).remove();
@@ -732,6 +746,73 @@ const KyroChat = {
         return html;
     },
 
+    generateCustomerCaseDetail(caseId) {
+        const riskTypes = ['MANUAL', 'BEHAVIOR_BASED', 'TIME_BASED'];
+        const riskLevels = ['MEDIUM', 'HIGH', 'LOW'];
+        const statuses = ['OPEN', 'UNDER_REVIEW', 'ESCALATED'];
+        
+        return {
+            caseId: caseId,
+            customerId: `ef${Math.random().toString(36).substr(2, 6)}f${Math.floor(Math.random() * 10)}`,
+            customerName: `Customer ${caseId.split('-')[1]}`,
+            riskType: riskTypes[Math.floor(Math.random() * riskTypes.length)],
+            riskLevel: riskLevels[Math.floor(Math.random() * riskLevels.length)],
+            riskScore: (Math.random() * 60 + 20).toFixed(1),
+            status: statuses[Math.floor(Math.random() * statuses.length)],
+            createdDate: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+            lastActivity: new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+            transactionCount: Math.floor(Math.random() * 50) + 5,
+            totalAmount: `$${(Math.random() * 500000 + 50000).toFixed(2)}`,
+            flags: [
+                'Unusual transaction velocity',
+                'Cross-border transfers to high-risk jurisdiction',
+                'Pattern deviation detected'
+            ].slice(0, Math.floor(Math.random() * 2) + 1),
+            assignee: Math.random() > 0.5 ? 'Unassigned' : 'Analyst Team',
+            priority: riskLevels[Math.floor(Math.random() * riskLevels.length)]
+        };
+    },
+
+    getCaseDetailsResponse(caseId, caseDetails) {
+        return `I found case ${caseId} for customer ${caseDetails.customerId}. This is a ${caseDetails.riskLevel} risk ${caseDetails.riskType} case with a risk score of ${caseDetails.riskScore}. Status: ${caseDetails.status}. The case involves ${caseDetails.transactionCount} transactions totaling ${caseDetails.totalAmount}. Would you like me to provide more details or initiate a handoff for human review?`;
+    },
+
+    formatCaseDetailsHTML(caseDetails) {
+        return `
+            <div class="kc-case-list">
+                <div class="kc-case-section">
+                    <div class="kc-case-label">Case Information:</div>
+                    - Case ID: ${caseDetails.caseId}<br>
+                    - Customer ID: ${caseDetails.customerId}<br>
+                    - Customer Name: ${caseDetails.customerName}<br>
+                    - Risk Type: ${caseDetails.riskType}<br>
+                    - Risk Level: ${caseDetails.riskLevel}<br>
+                    - Risk Score: ${caseDetails.riskScore}<br>
+                    - Status: ${caseDetails.status}
+                </div>
+                
+                <div class="kc-case-section">
+                    <div class="kc-case-label">Transaction Details:</div>
+                    - Transaction Count: ${caseDetails.transactionCount}<br>
+                    - Total Amount: ${caseDetails.totalAmount}<br>
+                    - Created Date: ${caseDetails.createdDate}<br>
+                    - Last Activity: ${caseDetails.lastActivity}
+                </div>
+                
+                <div class="kc-case-section">
+                    <div class="kc-case-label">Risk Flags:</div>
+                    ${caseDetails.flags.map(flag => `- ${flag}`).join('<br>')}
+                </div>
+                
+                <div class="kc-case-section">
+                    <div class="kc-case-label">Assignment:</div>
+                    - Assignee: ${caseDetails.assignee}<br>
+                    - Priority: ${caseDetails.priority}
+                </div>
+            </div>
+        `;
+    },
+
     async stopAgent() {
         try {
             showGlobalLoading("Stopping agent...");
@@ -804,12 +885,68 @@ const KyroChat = {
             this.updateStateUI();
             
             showToast("info", "Handoff requested - agent paused");
-            this.addMessage("assistant", kyroScripts.handoff.requested(reason));
-            this.speak("Handoff completed. Awaiting manual intervention.");
+            
+            // If we have case context, include detailed information in handoff
+            if (this.currentCaseContext) {
+                const handoffMsg = `Handoff requested: ${reason}\n\nI've packaged the case context for ${this.currentCaseContext.caseId}. A human analyst should review the flagged transactions and risk indicators.`;
+                this.addMessage("assistant", handoffMsg, {
+                    showViewDetails: true,
+                    caseDetails: this.formatHandoffCaseDetails(this.currentCaseContext)
+                });
+                this.speak(`Handoff completed for case ${this.currentCaseContext.caseId}. Awaiting manual intervention.`);
+            } else {
+                this.addMessage("assistant", kyroScripts.handoff.requested(reason));
+                this.speak("Handoff completed. Awaiting manual intervention.");
+            }
             
         } catch (error) {
             console.error(error);
         }
+    },
+
+    formatHandoffCaseDetails(caseDetails) {
+        return `
+            <div class="kc-case-list">
+                <div class="kc-case-section">
+                    <div class="kc-case-label">📋 Case Summary</div>
+                    <strong>Case ID:</strong> ${caseDetails.caseId}<br>
+                    <strong>Customer ID:</strong> ${caseDetails.customerId}<br>
+                    <strong>Customer Name:</strong> ${caseDetails.customerName}<br>
+                    <strong>Status:</strong> <span style="color: #f59e0b; font-weight: 600;">${caseDetails.status}</span>
+                </div>
+                
+                <div class="kc-case-section">
+                    <div class="kc-case-label">⚠️ Risk Assessment</div>
+                    <strong>Risk Type:</strong> ${caseDetails.riskType}<br>
+                    <strong>Risk Level:</strong> <span style="color: ${caseDetails.riskLevel === 'HIGH' ? '#ef4444' : caseDetails.riskLevel === 'MEDIUM' ? '#f59e0b' : '#10b981'}; font-weight: 600;">${caseDetails.riskLevel}</span><br>
+                    <strong>Risk Score:</strong> ${caseDetails.riskScore}/100<br>
+                    <strong>Priority:</strong> ${caseDetails.priority}
+                </div>
+                
+                <div class="kc-case-section">
+                    <div class="kc-case-label">💰 Transaction Activity</div>
+                    <strong>Transaction Count:</strong> ${caseDetails.transactionCount}<br>
+                    <strong>Total Amount:</strong> ${caseDetails.totalAmount}<br>
+                    <strong>Created Date:</strong> ${caseDetails.createdDate}<br>
+                    <strong>Last Activity:</strong> ${caseDetails.lastActivity}
+                </div>
+                
+                <div class="kc-case-section">
+                    <div class="kc-case-label">🚩 Risk Flags</div>
+                    ${caseDetails.flags.map(flag => `• ${flag}`).join('<br>')}
+                </div>
+                
+                <div class="kc-case-section">
+                    <div class="kc-case-label">👤 Assignment</div>
+                    <strong>Current Assignee:</strong> ${caseDetails.assignee}<br>
+                    <strong>Recommended Action:</strong> Human review required
+                </div>
+                
+                <div class="kc-audit-note">
+                    <strong>🔍 AI Analysis:</strong> I've performed automated risk scoring and pattern analysis. The case exhibits behavioral anomalies that exceed my autonomous decision threshold. Human expertise is needed to assess context-specific factors and make the final disposition decision.
+                </div>
+            </div>
+        `;
     },
 
     _setSpeakingState(speaking) {
