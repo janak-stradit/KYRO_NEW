@@ -25,7 +25,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/dropzone/5.9.3/dropzone.min.css">
     <!-- Custom KYRO Theme -->
     <link rel="stylesheet" href="css/figma-design.css?v=999999999999999">
-    <link rel="stylesheet" href="css/custom.css?v=99999999991">
+    <link rel="stylesheet" href="css/custom.css?v=999999999999999">
     <link rel="stylesheet" href="css/dashboard.css">
     <link rel="stylesheet" href="css/kyrochat.css">
     
@@ -77,35 +77,33 @@
                 </div>
                 
                 <!-- User Menu -->
-                <div class="dropdown" style="position: relative !important; display: flex !important; align-items: center !important; z-index: 1150 !important;">
-                    <button class="btn border-0 bg-transparent d-flex align-items-center gap-2 p-2" type="button" id="userMenuDropdown" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" style="cursor: pointer;">
+                <div class="dropdown">
+                    <button class="btn border-0 bg-transparent d-flex align-items-center gap-2 p-2" type="button" id="userMenuDropdown" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-expanded="false">
                         <div class="rounded-circle d-flex align-items-center justify-content-center text-white" style="width: 36px; height: 36px; background: linear-gradient(135deg, #FF8C42, #ff6b35); font-weight: 600; font-size: 0.875rem; box-shadow: 0 2px 8px rgba(255, 140, 66, 0.3);">
                             <span id="userInitials">A</span>
                         </div>
                         <i class="fas fa-chevron-down text-muted" style="font-size: 0.75rem;"></i>
                     </button>
-                    <ul class="dropdown-menu dropdown-menu-end shadow" style="position: absolute !important; right: 0 !important; left: auto !important; width: 240px !important; min-height: 220px !important; height: auto !important; overflow: visible !important; z-index: 1200 !important; margin-top: 8px !important; border-radius: 12px !important; padding: 12px !important; border: 1px solid #e5e7eb !important;">
-                        <li style="display: block !important; visibility: visible !important; opacity: 1 !important; height: auto !important; padding: 12px; border-bottom: 1px solid #e5e7eb; margin-bottom: 8px;">
-                            <div class="fw-bold" style="font-size: 14px; color: #1f2937; display: block !important;" id="userDropdownName">Analyst</div>
-                            <div class="text-muted" style="font-size: 12px; display: block !important; margin-top: 2px;" id="userDropdownEmail">analyst@kyro.com</div>
+                    <ul class="dropdown-menu dropdown-menu-end shadow">
+                        <li class="px-3 py-2 border-bottom">
+                            <div class="fw-bold" style="font-size: 14px; color: #1f2937;" id="userDropdownName">Analyst</div>
+                            <div class="text-muted" style="font-size: 12px;" id="userDropdownEmail">analyst@kyro.com</div>
                         </li>
-                        <li style="display: block !important; visibility: visible !important; opacity: 1 !important; height: auto !important;">
-                            <a class="dropdown-item" href="#" data-page="profile" style="padding: 10px 12px; font-size: 14px; display: flex !important; align-items: center; gap: 10px; border-radius: 6px; color: #374151; text-decoration: none; visibility: visible !important;">
-                                <i class="fas fa-user" style="width: 16px; color: #6b7280;"></i>
+                        <li>
+                            <a class="dropdown-item d-flex align-items-center gap-2" href="#" data-page="profile">
+                                <i class="fas fa-user" style="width: 16px;"></i>
                                 <span>Profile</span>
                             </a>
                         </li>
-                        <li style="display: block !important; visibility: visible !important; opacity: 1 !important; height: auto !important;">
-                            <a class="dropdown-item" href="#" data-page="settings" style="padding: 10px 12px; font-size: 14px; display: flex !important; align-items: center; gap: 10px; border-radius: 6px; color: #374151; text-decoration: none; visibility: visible !important;">
-                                <i class="fas fa-cog" style="width: 16px; color: #6b7280;"></i>
+                        <li>
+                            <a class="dropdown-item d-flex align-items-center gap-2" href="#" data-page="settings">
+                                <i class="fas fa-cog" style="width: 16px;"></i>
                                 <span>Settings</span>
                             </a>
                         </li>
-                        <li style="display: block !important; visibility: visible !important; opacity: 1 !important; height: auto !important; margin: 8px 0;">
-                            <hr class="dropdown-divider" style="display: block !important; visibility: visible !important; margin: 0; border-color: #e5e7eb;">
-                        </li>
-                        <li style="display: block !important; visibility: visible !important; opacity: 1 !important; height: auto !important;">
-                            <a id="logoutBtn" class="dropdown-item" href="#" style="padding: 10px 12px; font-size: 14px; display: flex !important; align-items: center; gap: 10px; border-radius: 6px; color: #dc2626; text-decoration: none; visibility: visible !important;">
+                        <li><hr class="dropdown-divider"></li>
+                        <li>
+                            <a id="logoutBtn" class="dropdown-item d-flex align-items-center gap-2 text-danger" href="#">
                                 <i class="fas fa-sign-out-alt" style="width: 16px;"></i>
                                 <span>Sign Out</span>
                             </a>
@@ -193,7 +191,7 @@
     <script src="js/kyrochat.js?v=5"></script>
     <script src="js/settings.js?v=2"></script>
     <script src="js/profile.js?v=2"></script>
-    <script src="js/app.js?v=2"></script>
+    <script src="js/app.js?v=99999999999"></script>
     
     <!-- Mobile Hamburger Offcanvas Drawer -->
     <div class="kyro-mobile-drawer" id="kyroMobileDrawer">

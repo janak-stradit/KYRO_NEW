@@ -739,8 +739,10 @@
 /* Toast Notifications */
 .toast-container {
     position: fixed !important;
-    z-index: 1100 !important;
-    pointer-events: none !important; /* Don't block clicks on other elements */
+    top: 0 !important;
+    right: 0 !important;
+    z-index: 1250 !important; /* Above dropdown (1200) */
+    pointer-events: none !important; /* Don't block clicks or layout */
 }
 
 .toast-container .toast {
@@ -1344,46 +1346,57 @@
     color: #FF8D28 !important;
 }
 
-/* Force dropdown menu visibility */
-.dropdown-menu {
-    max-height: none !important;
-    overflow: visible !important;
-    display: none;
-    z-index: 1200 !important; /* Higher than toast (1100) */
-    position: absolute !important;
-}
-
-.dropdown-menu.show {
-    display: block !important;
-    z-index: 1200 !important; /* Higher than toast (1100) */
-    height: auto !important;
-}
-
-#userMenuDropdown + .dropdown-menu {
-    margin-top: 8px !important;
-    z-index: 1200 !important; /* Higher than toast (1100) */
-    min-height: 200px !important;
-}
-
-#userMenuDropdown + .dropdown-menu li {
-    display: block !important;
-    visibility: visible !important;
-}
-
-/* Ensure dropdown parent has proper positioning */
+/* User Profile Dropdown - Clean & Working */
 .dropdown {
     position: relative !important;
-    z-index: 1150 !important; /* Between toast and dropdown menu */
+    z-index: 1150 !important;
 }
 
-/* Dropdown menu item hover effects */
-.dropdown-item:hover {
+.dropdown-menu {
+    position: fixed !important;
+    z-index: 9999 !important;
+    min-width: 240px !important;
+    padding: 0.5rem !important;
+    margin-top: 0.5rem !important;
+    border-radius: 12px !important;
+    border: 1px solid #e5e7eb !important;
+    background-color: #ffffff !important;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15) !important;
+}
+
+.dropdown-menu li {
+    list-style: none !important;
+}
+
+.dropdown-menu .dropdown-item {
+    display: flex !important;
+    align-items: center !important;
+    padding: 0.625rem 0.75rem !important;
+    border-radius: 6px !important;
+    font-size: 14px !important;
+    color: #374151 !important;
+    text-decoration: none !important;
+    transition: all 0.2s ease !important;
+    white-space: nowrap !important;
+    cursor: pointer !important;
+}
+
+.dropdown-menu .dropdown-item:hover {
     background-color: #f3f4f6 !important;
     color: #1f2937 !important;
 }
 
-.dropdown-item:hover i {
+.dropdown-menu .dropdown-item i {
+    color: #6b7280 !important;
+    transition: color 0.2s ease !important;
+}
+
+.dropdown-menu .dropdown-item:hover i {
     color: #FF8C42 !important;
+}
+
+#logoutBtn.text-danger {
+    color: #dc2626 !important;
 }
 
 #logoutBtn:hover {
@@ -1391,9 +1404,57 @@
     color: #dc2626 !important;
 }
 
+#logoutBtn:hover i {
+    color: #dc2626 !important;
+}
+
+.dropdown-divider {
+    margin: 0.5rem 0 !important;
+    border-top: 1px solid #e5e7eb !important;
+}
+
+/* Main content lower z-index */
+.main-layout-container {
+    position: relative !important;
+    z-index: 1 !important;
+}
+
 /* Prevent overflow hidden on parent containers */
 .kyro-navbar,
 .kyro-navbar > div {
+    overflow: visible !important;
+}
+
+/* Ensure header is not clipping dropdown */
+header.kyro-navbar {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    z-index: 1050 !important;
+    overflow: visible !important;
+}
+
+/* User info section in dropdown */
+.dropdown-menu li:first-child {
+    padding: 12px !important;
+    border-bottom: 1px solid #e5e7eb !important;
+    margin-bottom: 8px !important;
+}
+
+/* Prevent overflow hidden on parent containers */
+.kyro-navbar,
+.kyro-navbar > div {
+    overflow: visible !important;
+}
+
+/* Ensure header is not clipping dropdown */
+header.kyro-navbar {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    z-index: 1050 !important;
     overflow: visible !important;
 }
 
