@@ -19,7 +19,7 @@ const PeriodicReviews = {
             // Load customer lookup map to convert UUIDs to clean CUST-XXX format
             let customerMap = {};
             try {
-                const custResponse = await API.get("/customers", { page_size: 200 });
+                const custResponse = await API.get("/customers", { page_size: 1000 });
                 if (custResponse && custResponse.items) {
                     custResponse.items.forEach((c, idx) => {
                         const code = `CUST-${String(idx + 1).padStart(3, '0')}`;
@@ -49,7 +49,7 @@ const PeriodicReviews = {
                         if (typeof review.customer_id === 'string' && review.customer_id.startsWith('CUST-')) {
                             displayCode = review.customer_id;
                         } else {
-                            const num = (idx % 200) + 1;
+                            const num = (idx % 1000) + 1;
                             displayCode = `CUST-${String(num).padStart(3, '0')}`;
                         }
                     }
@@ -462,7 +462,7 @@ const PeriodicReviews = {
             // Format Customer ID (e.g. CUST-180) and prevent displaying raw UUIDs
             let displayCode = review.customerId || 'CUST-000';
             if (typeof displayCode === 'string' && displayCode.length > 20 && displayCode.includes('-')) {
-                const num = Math.abs(displayCode.split('-').reduce((acc, part) => acc + (parseInt(part, 16) || 0), 0)) % 200 + 1;
+                const num = Math.abs(displayCode.split('-').reduce((acc, part) => acc + (parseInt(part, 16) || 0), 0)) % 1000 + 1;
                 displayCode = `CUST-${String(num).padStart(3, '0')}`;
             }
             const custNumber = displayCode.startsWith('CUST-') ? (displayCode.split('-')[1] || '000') : '000';
@@ -529,7 +529,7 @@ const PeriodicReviews = {
     async showScheduleReviewModal() {
         try {
             // Fetch real customers from API
-            const customersResponse = await API.get("/customers", { page_size: 200 });
+            const customersResponse = await API.get("/customers", { page_size: 1000 });
             const customers = customersResponse.items || [];
             
             const customerOptions = customers.map((cust, idx) => {

@@ -23,10 +23,10 @@ const Patterns = {
         this.loadDashboard();
     },
     
-    generateCustomerPatternData() {
-        // Generate comprehensive customer pattern data for all 200 customers
+    generateCustomerPatternData(totalCustomers = 1000) {
+        // Generate comprehensive customer pattern data for all customers
         const allCustomers = [];
-        for (let i = 1; i <= 200; i++) {
+        for (let i = 1; i <= totalCustomers; i++) {
             allCustomers.push(`CUST-${String(i).padStart(3, '0')}`);
         }
         
@@ -155,7 +155,7 @@ const Patterns = {
                                 </div>
                                 <div class="flex-grow-1">
                                     <small class="text-muted d-block mb-1" style="font-size: 12px;">Customers</small>
-                                    <h2 class="mb-0" style="font-weight: 700; font-size: 2rem;" id="customersCount">200</h2>
+                                    <h2 class="mb-0" style="font-weight: 700; font-size: 2rem;" id="customersCount">1000</h2>
                                 </div>
                             </div>
                         </div>
@@ -484,20 +484,29 @@ const Patterns = {
         this.setupEventListeners();
     },
     
-    updateStats() {
+    async updateStats() {
         // Calculate real-time stats from customerPatternData
         const totalPatterns = this.customerPatternData.length;
         const uniqueCustomers = new Set(this.customerPatternData.map(d => d.customerId)).size;
         const patternTypes = 6; // Fixed: 6 canonical pattern types
         
         // For anomalies, we can use a multiplier (e.g., 500 total patterns across all time, with historical data)
-        // Current visible patterns are 50, so let's say total patterns detected = 500
         const totalPatternsAllTime = 500;
         const anomalies = Math.round(totalPatternsAllTime * 0.666); // ~66% are anomalies
         
+        let actualCustomerCount = 1000;
+        try {
+            const kpiData = await API.get(API.endpoints.kpis);
+            if (kpiData && kpiData.total_customers) {
+                actualCustomerCount = kpiData.total_customers;
+            }
+        } catch (e) {
+            console.error("Failed to fetch KPIs for customer count", e);
+        }
+
         // Update the DOM
         $("#totalPatternsCount").text(totalPatternsAllTime);
-        $("#customersCount").text(200); // Total customers in system
+        $("#customersCount").text(actualCustomerCount); // Dynamic total customers in system
         $("#patternTypesCount").text(patternTypes);
         $("#anomaliesCount").text(anomalies);
     },

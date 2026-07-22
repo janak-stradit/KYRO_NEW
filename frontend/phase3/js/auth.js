@@ -18,13 +18,11 @@ const Auth = {
     },
     
     getApiUrl(path) {
-        // Check if running on development port
-        const isDevelopment = window.location.port === '3000' || window.location.hostname === 'localhost';
-        
-        if (isDevelopment) {
-            return `http://localhost:8010${path}`;
-        }
-        return path;
+        // Always point to the API on port 8010 using whatever hostname
+        // the browser is currently using. This works for localhost AND
+        // external IPs / remote access without any hardcoding.
+        const apiHost = window.location.hostname;
+        return `http://${apiHost}:8010${path}`;
     },
     
     /**

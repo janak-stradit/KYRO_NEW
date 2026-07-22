@@ -75,7 +75,7 @@ services:
       DB_SSL_MODE: ${DB_SSL_MODE:-disable}
       PIPELINE_ENV: ${PIPELINE_ENV:-production}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
-      NUM_CUSTOMERS: ${NUM_CUSTOMERS:-200}
+      NUM_CUSTOMERS: ${NUM_CUSTOMERS:-1000}
       PYTHONPATH: /app
     depends_on:
       postgres:

@@ -60,6 +60,9 @@ def migrate_customers():
                 COALESCE(risk_score, 0) as risk_score,
                 CASE 
                     WHEN customer_type IS NULL THEN 'INDIVIDUAL'
+                    WHEN UPPER(customer_type) = 'TRUST' THEN 'FUND'
+                    WHEN UPPER(customer_type) = 'BUSINESS' THEN 'CORPORATE'
+                    WHEN UPPER(customer_type) NOT IN ('INDIVIDUAL', 'CORPORATE', 'FUND') THEN 'INDIVIDUAL'
                     ELSE UPPER(customer_type)
                 END as customer_type,
                 COALESCE(created_at, NOW()) as created_at,

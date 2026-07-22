@@ -132,31 +132,31 @@ const Dashboard = {
                             <div class="mt-4">
                                 <div class="d-flex justify-content-between align-items-center mb-2 pb-2" style="border-bottom: 1px solid #F0F0F0;">
                                     <div class="d-flex align-items-center gap-2">
-                                        <span style="width: 8px; height: 8px; background-color: #22c55e; border-radius: 50%;"></span>
+                                        <span style="width: 8px; height: 8px; background-color: #06B6D4; border-radius: 50%;"></span>
                                         <span style="font-size: 11px; font-family: 'Plus Jakarta Sans', sans-serif; color: #1a1a1a;">Open cases</span>
                                     </div>
-                                    <span class="fw-bold" style="font-size: 13px; color: #1a1a1a;">106</span>
+                                    <span class="fw-bold" style="font-size: 13px; color: #1a1a1a;" id="caseStatusOpen">0</span>
                                 </div>
                                 <div class="d-flex justify-content-between align-items-center mb-2 pb-2" style="border-bottom: 1px solid #F0F0F0;">
                                     <div class="d-flex align-items-center gap-2">
-                                        <span style="width: 8px; height: 8px; background-color: #f59e0b; border-radius: 50%;"></span>
+                                        <span style="width: 8px; height: 8px; background-color: #F59E0B; border-radius: 50%;"></span>
                                         <span style="font-size: 11px; font-family: 'Plus Jakarta Sans', sans-serif; color: #1a1a1a;">In Review</span>
                                     </div>
-                                    <span class="fw-bold" style="font-size: 13px; color: #1a1a1a;">4</span>
+                                    <span class="fw-bold" style="font-size: 13px; color: #1a1a1a;" id="caseStatusReview">0</span>
                                 </div>
                                 <div class="d-flex justify-content-between align-items-center mb-2 pb-2" style="border-bottom: 1px solid #F0F0F0;">
                                     <div class="d-flex align-items-center gap-2">
-                                        <span style="width: 8px; height: 8px; background-color: #3b82f6; border-radius: 50%;"></span>
+                                        <span style="width: 8px; height: 8px; background-color: #10B981; border-radius: 50%;"></span>
                                         <span style="font-size: 11px; font-family: 'Plus Jakarta Sans', sans-serif; color: #1a1a1a;">Resolved</span>
                                     </div>
-                                    <span class="fw-bold" style="font-size: 13px; color: #1a1a1a;">311</span>
+                                    <span class="fw-bold" style="font-size: 13px; color: #1a1a1a;" id="caseStatusResolved">0</span>
                                 </div>
                                 <div class="d-flex justify-content-between align-items-center">
                                     <div class="d-flex align-items-center gap-2">
-                                        <span style="width: 8px; height: 8px; background-color: #ef4444; border-radius: 50%;"></span>
+                                        <span style="width: 8px; height: 8px; background-color: #EF4444; border-radius: 50%;"></span>
                                         <span style="font-size: 11px; font-family: 'Plus Jakarta Sans', sans-serif; color: #1a1a1a;">Escalated</span>
                                     </div>
-                                    <span class="fw-bold" style="font-size: 13px; color: #1a1a1a;">70</span>
+                                    <span class="fw-bold" style="font-size: 13px; color: #1a1a1a;" id="caseStatusEscalated">0</span>
                                 </div>
                             </div>
                         </div>
@@ -169,7 +169,7 @@ const Dashboard = {
                                 <h5 class="fw-bold mb-1" style="font-family: 'Plus Jakarta Sans', sans-serif; font-size: 1rem; color: #1a1a1a;">Behavioral Flags by Pattern Type</h5>
                                 <p class="text-xs text-muted mb-0" style="font-size: 11px; font-family: 'Plus Jakarta Sans', sans-serif; color: #888888;">Transaction-wise</p>
                             </div>
-                            <div class="mt-3">
+                            <div class="mt-3" id="behavioralFlagsList">
                                 <div class="d-flex justify-content-between align-items-center py-2" style="border-bottom: 1px solid #F0F0F0;">
                                     <span style="font-size: 12px; font-family: 'Plus Jakarta Sans', sans-serif; color: #1a1a1a;">Velocity Spike</span>
                                     <span class="fw-bold" style="font-size: 13px; color: #1a1a1a;">119</span>
@@ -553,6 +553,11 @@ const Dashboard = {
                 const reviewVal = statusDist.IN_REVIEW || 0;
                 const resolvedVal = statusDist.RESOLVED || 0;
                 const escalatedVal = statusDist.ESCALATED || 0;
+
+                $("#caseStatusOpen").text(openVal);
+                $("#caseStatusReview").text(reviewVal);
+                $("#caseStatusResolved").text(resolvedVal);
+                $("#caseStatusEscalated").text(escalatedVal);
 
                 if (this.charts.caseStatus) {
                     this.charts.caseStatus.destroy();
