@@ -561,6 +561,9 @@ const KyroChat = {
 
     async startAgent() {
         try {
+            // Capture run start time
+            this.runStartTime = new Date();
+            
             // Full welcome message requested by user
             const welcomeMessage = kyroScripts.welcome.full;
             
@@ -817,6 +820,16 @@ const KyroChat = {
         try {
             showGlobalLoading("Stopping agent...");
             
+            // Capture run stats before resetting
+            const runSummary = {
+                totalActions: this.agentState.run_stats.actions || 0,
+                successfulActions: this.agentState.run_stats.success || 0,
+                failedActions: this.agentState.run_stats.failure || 0,
+                casesTouched: this.agentState.run_stats.casesTouched || 0,
+                startTime: this.runStartTime || new Date(),
+                endTime: new Date()
+            };
+            
             await new Promise(resolve => setTimeout(resolve, 1000));
             
             this.stopStatsSimulation();
@@ -826,8 +839,14 @@ const KyroChat = {
             this.updateStateUI();
             
             showToast("info", "Kyro agent stopped");
-            this.addMessage("assistant", kyroScripts.autonomous.stop.success);
-            this.speak("Compliance agent stopped.");
+            
+            // Generate and display run summary
+            const summaryMessage = this.generateRunSummary(runSummary);
+            this.addMessage("assistant", summaryMessage, {
+                showViewDetails: true,
+                caseDetails: this.formatRunSummaryDetails(runSummary)
+            });
+            this.speak("Autonomous monitoring stopped. Run summary generated.");
             
         } catch (error) {
             console.error(error);
@@ -944,6 +963,72 @@ const KyroChat = {
                 
                 <div class="kc-audit-note">
                     <strong>🔍 AI Analysis:</strong> I've performed automated risk scoring and pattern analysis. The case exhibits behavioral anomalies that exceed my autonomous decision threshold. Human expertise is needed to assess context-specific factors and make the final disposition decision.
+                </div>
+            </div>
+        `;
+    },
+
+    generateRunSummary(runSummary) {
+        const duration = Math.round((runSummary.endTime - runSummary.startTime) / 1000); // in seconds
+        const minutes = Math.floor(duration / 60);
+        const seconds = duration % 60;
+        const durationStr = minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
+        
+        const successRate = runSummary.totalActions > 0 
+            ? ((runSummary.successfulActions / runSummary.totalActions) * 100).toFixed(1)
+            : 0;
+        
+        return `Autonomous monitoring session completed. I executed ${runSummary.totalActions} action${runSummary.totalActions !== 1 ? 's' : ''} with ${successRate}% success rate, processing ${runSummary.casesTouched} case${runSummary.casesTouched !== 1 ? 's' : ''} over ${durationStr}. All actions have been logged to the audit trail.`;
+    },
+
+    formatRunSummaryDetails(runSummary) {
+        const duration = Math.round((runSummary.endTime - runSummary.startTime) / 1000);
+        const minutes = Math.floor(duration / 60);
+        const seconds = duration % 60;
+        const durationStr = minutes > 0 ? `${minutes} minute${minutes !== 1 ? 's' : ''} ${seconds} second${seconds !== 1 ? 's' : ''}` : `${seconds} second${seconds !== 1 ? 's' : ''}`;
+        
+        const successRate = runSummary.totalActions > 0 
+            ? ((runSummary.successfulActions / runSummary.totalActions) * 100).toFixed(1)
+            : 0;
+        
+        const startTimeStr = runSummary.startTime.toLocaleString();
+        const endTimeStr = runSummary.endTime.toLocaleString();
+        
+        return `
+            <div class="kc-case-list">
+                <div class="kc-case-section">
+                    <div class="kc-case-label">⏱️ Session Duration</div>
+                    <strong>Start Time:</strong> ${startTimeStr}<br>
+                    <strong>End Time:</strong> ${endTimeStr}<br>
+                    <strong>Total Duration:</strong> ${durationStr}
+                </div>
+                
+                <div class="kc-case-section">
+                    <div class="kc-case-label">📊 Performance Metrics</div>
+                    <strong>Total Actions:</strong> ${runSummary.totalActions}<br>
+                    <strong>Successful Actions:</strong> <span style="color: #10b981; font-weight: 600;">${runSummary.successfulActions}</span><br>
+                    <strong>Failed Actions:</strong> <span style="color: ${runSummary.failedActions > 0 ? '#ef4444' : '#94a3b8'}; font-weight: 600;">${runSummary.failedActions}</span><br>
+                    <strong>Success Rate:</strong> <span style="color: ${successRate >= 90 ? '#10b981' : successRate >= 70 ? '#f59e0b' : '#ef4444'}; font-weight: 600;">${successRate}%</span>
+                </div>
+                
+                <div class="kc-case-section">
+                    <div class="kc-case-label">📁 Cases Processed</div>
+                    <strong>Total Cases Touched:</strong> ${runSummary.casesTouched}<br>
+                    <strong>Average Actions per Case:</strong> ${runSummary.casesTouched > 0 ? (runSummary.totalActions / runSummary.casesTouched).toFixed(2) : 0}
+                </div>
+                
+                <div class="kc-case-section">
+                    <div class="kc-case-label">🎯 Actions Performed</div>
+                    • Backlog analysis and risk scoring<br>
+                    • Priority case assignment<br>
+                    • Low-risk case processing<br>
+                    • Escalated case review<br>
+                    • False-positive pattern analysis<br>
+                    • Behavioral anomaly detection
+                </div>
+                
+                <div class="kc-audit-note">
+                    <strong>✅ Audit Trail:</strong> All actions, decisions, and case dispositions have been logged to the compliance audit database. The session data is available for regulatory review and includes timestamps, risk scores, reasoning chains, and outcome classifications.
                 </div>
             </div>
         `;
