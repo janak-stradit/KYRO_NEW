@@ -337,8 +337,7 @@
     box-shadow: none !important;
     padding: 0 !important;
     height: auto !important;
-    z-index: 1050 !important;
-    position: relative !important;
+    z-index: 1050;
 }
 
 .kyro-navbar-row1 {
@@ -1351,17 +1350,30 @@
 .dropdown-menu.show {
     display: block !important;
     z-index: 10000 !important;
+    height: auto !important;
 }
 
 #userMenuDropdown + .dropdown-menu {
     margin-top: 8px !important;
     z-index: 10000 !important;
+    min-height: 200px !important;
+}
+
+#userMenuDropdown + .dropdown-menu li {
+    display: block !important;
+    visibility: visible !important;
 }
 
 /* Ensure dropdown parent has proper positioning */
 .dropdown {
-    position: relative;
+    position: relative !important;
     z-index: 1060 !important;
+}
+
+/* Prevent overflow hidden on parent containers */
+.kyro-navbar,
+.kyro-navbar > div {
+    overflow: visible !important;
 }
 
 /* Kyro Chat Container Styles - Chat App Layout */
