@@ -12,6 +12,16 @@ htmlcov/
 models/*.pkl
 models/registry.json
 
+# ── Database files (contain sensitive data) ────────────────────
+*.db
+*.sqlite
+*.sqlite3
+kyro_aml.db
+
+# ── Logs (runtime generated) ────────────────────────────────────
+logs/
+*.log
+
 # ── App output / secrets ────────────────────────────────────────
 output/
 *.xlsx
