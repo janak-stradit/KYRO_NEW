@@ -738,7 +738,13 @@
 
 /* Toast Notifications */
 .toast-container {
-    z-index: 9999;
+    position: fixed !important;
+    z-index: 1100 !important;
+    pointer-events: none !important; /* Don't block clicks on other elements */
+}
+
+.toast-container .toast {
+    pointer-events: auto !important; /* But toasts themselves should be clickable */
 }
 
 .toast {
@@ -1343,19 +1349,19 @@
     max-height: none !important;
     overflow: visible !important;
     display: none;
-    z-index: 10000 !important;
+    z-index: 1200 !important; /* Higher than toast (1100) */
     position: absolute !important;
 }
 
 .dropdown-menu.show {
     display: block !important;
-    z-index: 10000 !important;
+    z-index: 1200 !important; /* Higher than toast (1100) */
     height: auto !important;
 }
 
 #userMenuDropdown + .dropdown-menu {
     margin-top: 8px !important;
-    z-index: 10000 !important;
+    z-index: 1200 !important; /* Higher than toast (1100) */
     min-height: 200px !important;
 }
 
@@ -1367,7 +1373,22 @@
 /* Ensure dropdown parent has proper positioning */
 .dropdown {
     position: relative !important;
-    z-index: 1060 !important;
+    z-index: 1150 !important; /* Between toast and dropdown menu */
+}
+
+/* Dropdown menu item hover effects */
+.dropdown-item:hover {
+    background-color: #f3f4f6 !important;
+    color: #1f2937 !important;
+}
+
+.dropdown-item:hover i {
+    color: #FF8C42 !important;
+}
+
+#logoutBtn:hover {
+    background-color: #fee2e2 !important;
+    color: #dc2626 !important;
 }
 
 /* Prevent overflow hidden on parent containers */
