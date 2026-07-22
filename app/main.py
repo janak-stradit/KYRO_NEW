@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
-from app.routers import accounts, alerts, auth, customers, dashboard, kyc, ml, transactions, kyrochat, tts
+from app.routers import accounts, alerts, auth, customers, kyc, ml, transactions
 
 settings = get_settings()
 
@@ -23,15 +23,12 @@ app.add_middleware(
 )
 
 app.include_router(auth.router)
-app.include_router(dashboard.router)
 app.include_router(customers.router)
 app.include_router(accounts.router)
 app.include_router(transactions.router)
 app.include_router(alerts.router)
 app.include_router(kyc.router)
 app.include_router(ml.router)
-app.include_router(kyrochat.router)
-app.include_router(tts.router)
 
 
 @app.get("/api/v1/health", tags=["health"])

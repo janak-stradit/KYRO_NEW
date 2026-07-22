@@ -612,9 +612,6 @@ class AMLPipeline:
             ]
             cf = cf[[c for c in cust_feat_keep if c in cf.columns]]
             
-            for col in ["pep_flag", "sanctions_flag", "adverse_media_flag", "is_high_risk_country", "label_aml_risk"]:
-                if col in cf.columns:
-                    cf[col] = cf[col].fillna(0).astype(bool).astype(int)
 
             _safe_load(cf, "feature_store", "customer_features",
                        ["customer_id", "feature_set_version"], "customer_features")
@@ -661,9 +658,6 @@ class AMLPipeline:
             ]
             tf = tf[[c for c in txn_feat_keep if c in tf.columns]]
 
-            for col in ["txn_is_weekend", "is_high_value", "is_high_risk_country", "label_suspicious"]:
-                if col in tf.columns:
-                    tf[col] = tf[col].fillna(0).astype(bool).astype(int)
 
             if not tf.empty:
                 _safe_load(tf, "feature_store", "transaction_features",
