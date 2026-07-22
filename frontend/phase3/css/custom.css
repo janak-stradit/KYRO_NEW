@@ -1338,6 +1338,22 @@
     color: #FF8D28 !important;
 }
 
+/* Force dropdown menu visibility */
+.dropdown-menu {
+    max-height: none !important;
+    overflow: visible !important;
+    display: none;
+}
+
+.dropdown-menu.show {
+    display: block !important;
+    z-index: 9999 !important;
+}
+
+#userMenuDropdown + .dropdown-menu {
+    margin-top: 8px !important;
+}
+
 /* Kyro Chat Container Styles - Chat App Layout */
 .chat-container {
     display: flex;

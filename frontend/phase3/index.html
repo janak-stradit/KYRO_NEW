@@ -77,23 +77,22 @@
                 </div>
                 
                 <!-- User Menu -->
-                <div class="dropdown">
-                    <button class="btn border-0 bg-transparent d-flex align-items-center gap-2 p-0" type="button" id="userMenuDropdown" data-bs-toggle="dropdown" aria-expanded="false">
-                        <div class="rounded-circle d-flex align-items-center justify-content-center text-white" style="width: 32px; height: 32px; background: linear-gradient(135deg, #FF8C42, #ff6b35); font-weight: 600; font-size: 0.875rem;">
+                <div class="dropdown" style="display: flex !important; align-items: center !important;">
+                    <button class="btn border-0 bg-transparent d-flex align-items-center gap-2 p-2" type="button" id="userMenuDropdown" data-bs-toggle="dropdown" aria-expanded="false" style="cursor: pointer;">
+                        <div class="rounded-circle d-flex align-items-center justify-content-center text-white" style="width: 36px; height: 36px; background: linear-gradient(135deg, #FF8C42, #ff6b35); font-weight: 600; font-size: 0.875rem; box-shadow: 0 2px 8px rgba(255, 140, 66, 0.3);">
                             <span id="userInitials">A</span>
                         </div>
                         <i class="fas fa-chevron-down text-muted" style="font-size: 0.75rem;"></i>
                     </button>
-                    <ul class="dropdown-menu dropdown-menu-end p-2 shadow" style="min-width: 200px;">
-                        <li class="px-2 py-1">
-                            <div class="fw-bold small" id="userDropdownName">Analyst</div>
+                    <ul class="dropdown-menu dropdown-menu-end p-3 shadow" style="min-width: 220px; max-height: none !important; overflow: visible !important; z-index: 9999;">
+                        <li class="px-2 py-2" style="border-bottom: 1px solid #e5e7eb; margin-bottom: 8px;">
+                            <div class="fw-bold" style="font-size: 0.9rem; color: #1f2937;" id="userDropdownName">Analyst</div>
                             <div class="text-muted" style="font-size: 0.75rem;" id="userDropdownEmail">analyst@kyro.com</div>
                         </li>
-                        <li><hr class="dropdown-divider"></li>
-                        <li><a class="dropdown-item small" href="/profile"><i class="fas fa-user me-2"></i>Profile</a></li>
-                        <li><a class="dropdown-item small" href="/settings"><i class="fas fa-cog me-2"></i>Settings</a></li>
-                        <li><hr class="dropdown-divider"></li>
-                        <li><a id="logoutBtn" class="dropdown-item small text-danger" href="#"><i class="fas fa-sign-out-alt me-2"></i>Sign Out</a></li>
+                        <li><a class="dropdown-item py-2" href="#" data-page="profile" style="font-size: 0.875rem;"><i class="fas fa-user me-2" style="width: 16px;"></i>Profile</a></li>
+                        <li><a class="dropdown-item py-2" href="#" data-page="settings" style="font-size: 0.875rem;"><i class="fas fa-cog me-2" style="width: 16px;"></i>Settings</a></li>
+                        <li><hr class="dropdown-divider my-2"></li>
+                        <li><a id="logoutBtn" class="dropdown-item py-2 text-danger" href="#" style="font-size: 0.875rem;"><i class="fas fa-sign-out-alt me-2" style="width: 16px;"></i>Sign Out</a></li>
                     </ul>
                 </div>
             </div>
