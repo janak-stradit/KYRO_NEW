@@ -1,0 +1,23 @@
+{
+  "name": "kyro-aml-data-generator-frontend",
+  "version": "1.0.0",
+  "description": "Orange-themed UI for KYRO AML Data Generator Dashboard",
+  "main": "index.html",
+  "scripts": {
+    "dev": "python -m http.server 3000",
+    "serve": "python -m http.server 8080",
+    "build": "echo 'No build process needed for vanilla HTML/CSS/JS'",
+    "test": "echo 'Tests to be implemented'"
+  },
+  "keywords": [
+    "aml",
+    "data-generator",
+    "dashboard",
+    "kyro",
+    "orange-theme"
+  ],
+  "author": "KYRO Team",
+  "license": "MIT",
+  "devDependencies": {},
+  "dependencies": {}
+}
