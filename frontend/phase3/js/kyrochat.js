@@ -755,7 +755,7 @@ const KyroChat = {
         return {
             caseId: caseId,
             customerId: `ef${Math.random().toString(36).substr(2, 6)}f${Math.floor(Math.random() * 10)}`,
-            customerName: `Customer ${caseId.split('-')[1]}`,
+            customerName: `${['James', 'Maria', 'Robert', 'Jennifer', 'Michael', 'Linda', 'William', 'Patricia', 'David', 'Elizabeth'][Math.floor(Math.random() * 10)]} ${['Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia', 'Miller', 'Davis', 'Rodriguez', 'Martinez'][Math.floor(Math.random() * 10)]}`,
             riskType: riskTypes[Math.floor(Math.random() * riskTypes.length)],
             riskLevel: riskLevels[Math.floor(Math.random() * riskLevels.length)],
             riskScore: (Math.random() * 60 + 20).toFixed(1),
@@ -1136,11 +1136,22 @@ const KyroChat = {
             'API rate limit exceeded during scoring'
         ];
         
+        const customerFirstNames = ['James', 'Maria', 'Robert', 'Jennifer', 'Michael', 'Linda', 'William', 'Patricia', 'David', 'Elizabeth', 'Richard', 'Susan', 'Joseph', 'Jessica', 'Thomas', 'Sarah', 'Charles', 'Karen', 'Christopher', 'Nancy'];
+        const customerLastNames = ['Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia', 'Miller', 'Davis', 'Rodriguez', 'Martinez', 'Hernandez', 'Lopez', 'Gonzalez', 'Wilson', 'Anderson', 'Thomas', 'Taylor', 'Moore', 'Jackson', 'Martin'];
+        
         const failedCases = [];
         if (runSummary.failedActions > 0) {
+            // Generate case IDs from actual customer range (1 to total customers in system)
+            const maxCustomerId = Math.min(500, runSummary.casesTouched || 100); // Use actual customer count
+            
             for (let i = 0; i < runSummary.failedActions; i++) {
+                const firstName = customerFirstNames[Math.floor(Math.random() * customerFirstNames.length)];
+                const lastName = customerLastNames[Math.floor(Math.random() * customerLastNames.length)];
+                const randomCustNum = Math.floor(Math.random() * maxCustomerId) + 1;
+                
                 failedCases.push({
-                    caseId: `CUST-${String(Math.floor(Math.random() * 999) + 1).padStart(3, '0')}`,
+                    caseId: `CUST-${String(randomCustNum).padStart(3, '0')}`,
+                    customerName: `${firstName} ${lastName}`,
                     customerId: `ef${Math.random().toString(36).substr(2, 6)}f${Math.floor(Math.random() * 10)}`,
                     failureReason: failureReasons[Math.floor(Math.random() * failureReasons.length)],
                     attemptedAt: new Date(runSummary.startTime.getTime() + Math.random() * duration * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -1180,7 +1191,7 @@ const KyroChat = {
             failedCases.forEach((fc, idx) => {
                 html += `
                     <div style="margin-bottom: 12px; padding: 8px; background: #fef2f2; border-left: 3px solid #ef4444; border-radius: 4px;">
-                        <strong>${idx + 1}. ${fc.caseId}</strong><br>
+                        <strong>${idx + 1}. ${fc.caseId}</strong> - ${fc.customerName}<br>
                         <span style="font-size: 0.9em; color: #64748b;">Customer ID: ${fc.customerId}</span><br>
                         <span style="font-size: 0.9em; color: #64748b;">Attempted: ${fc.attemptedAt}</span><br>
                         <span style="font-size: 0.9em; color: #dc2626;"><strong>Reason:</strong> ${fc.failureReason}</span>
