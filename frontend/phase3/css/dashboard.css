@@ -463,3 +463,293 @@
 [data-theme="dark"] .health-item {
     border-bottom-color: rgba(255, 255, 255, 0.04);
 }
+
+/* ========================================
+   RESPONSIVE DESIGN - MOBILE FIRST
+   ======================================== */
+
+/* Tablets and below (992px) */
+@media (max-width: 992px) {
+    .dashboard-header {
+        padding: 1.25rem 0;
+        margin-bottom: 1.25rem;
+    }
+    
+    .dashboard-title {
+        font-size: 1.5rem;
+    }
+    
+    .dashboard-subtitle {
+        font-size: 0.8125rem;
+    }
+    
+    .kpi-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+    }
+    
+    .kyro-dashboard-grid {
+        grid-template-columns: 1fr !important;
+        gap: 1.25rem !important;
+    }
+    
+    .kpi-card h2 {
+        font-size: 1.75rem;
+    }
+}
+
+/* Mobile devices (768px and below) */
+@media (max-width: 768px) {
+    /* Header */
+    .dashboard-header {
+        padding: 1rem 0;
+        margin-bottom: 1rem;
+    }
+    
+    .dashboard-title {
+        font-size: 1.375rem;
+    }
+    
+    .dashboard-subtitle {
+        font-size: 0.75rem;
+    }
+    
+    /* KPI Cards */
+    .kpi-grid {
+        grid-template-columns: 1fr;
+        gap: 0.875rem;
+        margin-bottom: 1.25rem;
+    }
+    
+    .kpi-card {
+        padding: 1rem;
+        border-radius: 10px;
+    }
+    
+    .kpi-card h6 {
+        font-size: 0.6875rem;
+        margin-bottom: 0.375rem;
+    }
+    
+    .kpi-card h2 {
+        font-size: 1.5rem;
+    }
+    
+    .kpi-card small {
+        font-size: 0.6875rem;
+    }
+    
+    /* Dashboard Grid */
+    .kyro-dashboard-container {
+        padding: 0 0.75rem !important;
+    }
+    
+    .kyro-dashboard-grid {
+        grid-template-columns: 1fr !important;
+        gap: 1rem !important;
+    }
+    
+    /* AML Cards */
+    .aml-card {
+        padding: 1rem !important;
+        border-radius: 10px !important;
+    }
+    
+    .aml-card h2 {
+        font-size: 1rem !important;
+        margin-bottom: 0.5rem !important;
+    }
+    
+    .aml-subtitle {
+        font-size: 0.6875rem !important;
+    }
+    
+    /* Charts */
+    .aml-chart {
+        height: 180px !important;
+        margin-top: 1rem !important;
+    }
+    
+    .aml-donut-wrap {
+        width: 160px !important;
+        height: 160px !important;
+    }
+    
+    .aml-donut {
+        width: 160px !important;
+        height: 160px !important;
+    }
+    
+    /* Legends */
+    .aml-chart-legend {
+        font-size: 0.6875rem !important;
+        margin-bottom: 0.75rem !important;
+    }
+    
+    .aml-donut-legend {
+        gap: 0.75rem !important;
+    }
+    
+    .aml-legend {
+        font-size: 0.6875rem !important;
+    }
+    
+    /* Row layouts */
+    .row {
+        margin-left: -0.5rem !important;
+        margin-right: -0.5rem !important;
+    }
+    
+    .row > * {
+        padding-left: 0.5rem !important;
+        padding-right: 0.5rem !important;
+    }
+    
+    /* Cards in rows */
+    .card {
+        margin-bottom: 0.875rem !important;
+        border-radius: 10px !important;
+    }
+    
+    .card-body {
+        padding: 1rem !important;
+    }
+    
+    /* Behavior pattern section */
+    .mb-4 {
+        margin-bottom: 1rem !important;
+    }
+}
+
+/* Small mobile devices (576px and below) */
+@media (max-width: 576px) {
+    /* Header */
+    .dashboard-title {
+        font-size: 1.25rem;
+    }
+    
+    .dashboard-subtitle {
+        font-size: 0.6875rem;
+    }
+    
+    /* KPI Cards */
+    .kpi-card {
+        padding: 0.875rem;
+    }
+    
+    .kpi-card h6 {
+        font-size: 0.625rem;
+    }
+    
+    .kpi-card h2 {
+        font-size: 1.375rem;
+    }
+    
+    .kpi-card small {
+        font-size: 0.625rem;
+    }
+    
+    /* Container padding */
+    .kyro-dashboard-container {
+        padding: 0 0.5rem !important;
+    }
+    
+    /* Cards */
+    .aml-card {
+        padding: 0.875rem !important;
+    }
+    
+    .aml-card h2 {
+        font-size: 0.9375rem !important;
+    }
+    
+    .aml-subtitle {
+        font-size: 0.625rem !important;
+    }
+    
+    /* Charts */
+    .aml-chart {
+        height: 160px !important;
+    }
+    
+    .aml-donut-wrap {
+        width: 140px !important;
+        height: 140px !important;
+    }
+    
+    .aml-donut {
+        width: 140px !important;
+        height: 140px !important;
+    }
+    
+    /* Bar labels */
+    .aml-gridline span {
+        font-size: 0.625rem !important;
+    }
+    
+    /* Legends */
+    .aml-legend {
+        font-size: 0.625rem !important;
+    }
+    
+    .aml-dot {
+        width: 8px !important;
+        height: 8px !important;
+    }
+}
+
+/* Extra small devices (480px and below) */
+@media (max-width: 480px) {
+    .dashboard-title {
+        font-size: 1.125rem;
+    }
+    
+    .kpi-card h2 {
+        font-size: 1.25rem;
+    }
+    
+    .aml-chart {
+        height: 140px !important;
+    }
+    
+    .aml-donut-wrap {
+        width: 120px !important;
+        height: 120px !important;
+    }
+    
+    .aml-donut {
+        width: 120px !important;
+        height: 120px !important;
+    }
+}
+
+/* Landscape orientation adjustments */
+@media (max-width: 768px) and (orientation: landscape) {
+    .kpi-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .aml-chart {
+        height: 160px !important;
+    }
+}
+
+/* Print styles */
+@media print {
+    .dashboard-header {
+        border-bottom: 2px solid #000;
+        page-break-after: avoid;
+    }
+    
+    .kpi-card {
+        page-break-inside: avoid;
+        box-shadow: none !important;
+        border: 1px solid #ccc;
+    }
+    
+    .aml-card {
+        page-break-inside: avoid;
+        box-shadow: none !important;
+    }
+}

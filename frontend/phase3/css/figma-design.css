@@ -268,3 +268,186 @@ body {
     width: 200px !important;
   }
 }
+
+/* ========================================
+   ENHANCED RESPONSIVE FOR ACTION CARDS
+   ======================================== */
+
+/* Take Action Section Wrapper */
+@media (max-width: 991.98px) {
+  .take-action-wrapper {
+    padding: 0 12px !important;
+  }
+  
+  .take-action-wrapper h2 {
+    font-size: 1.5rem !important;
+  }
+  
+  .take-action-wrapper p {
+    font-size: 0.875rem !important;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .take-action-wrapper {
+    padding: 0 8px !important;
+  }
+  
+  .take-action-wrapper .text-center {
+    padding: 0 12px !important;
+    margin: 2rem 0 !important;
+  }
+  
+  .take-action-wrapper h2 {
+    font-size: 1.375rem !important;
+    margin-bottom: 0.5rem !important;
+  }
+  
+  .take-action-wrapper p {
+    font-size: 0.8125rem !important;
+  }
+  
+  /* Action Cards - Full width on mobile */
+  .figma-action-card,
+  .figma-action-card-dark {
+    min-height: 180px !important;
+    padding: 1.25rem !important;
+    margin-bottom: 1rem !important;
+  }
+  
+  .figma-action-card h3,
+  .figma-action-card-dark h3 {
+    font-size: 1.125rem !important;
+    margin-bottom: 0.75rem !important;
+  }
+  
+  .figma-action-card p,
+  .figma-action-card-dark p {
+    font-size: 0.875rem !important;
+    margin-bottom: 1rem !important;
+    line-height: 1.5;
+  }
+  
+  /* Button */
+  .figma-action-card .figma-button,
+  .figma-action-card-dark .figma-button {
+    padding: 0.625rem 1.25rem !important;
+    font-size: 0.875rem !important;
+  }
+  
+  /* Grid adjustments */
+  .take-action-wrapper .row {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+  
+  .take-action-wrapper .row > div {
+    padding-left: 0.5rem !important;
+    padding-right: 0.5rem !important;
+    margin-bottom: 1rem !important;
+  }
+  
+  /* Stats in cards */
+  .figma-action-card .figma-text-orange,
+  .figma-action-card-dark .figma-text-orange {
+    font-size: 1rem !important;
+  }
+}
+
+/* Small mobile - 576px */
+@media (max-width: 575.98px) {
+  .take-action-wrapper h2 {
+    font-size: 1.25rem !important;
+  }
+  
+  .figma-action-card,
+  .figma-action-card-dark {
+    min-height: 160px !important;
+    padding: 1rem !important;
+    border-radius: 12px !important;
+  }
+  
+  .figma-action-card h3,
+  .figma-action-card-dark h3 {
+    font-size: 1rem !important;
+    margin-bottom: 0.5rem !important;
+  }
+  
+  .figma-action-card p,
+  .figma-action-card-dark p {
+    font-size: 0.8125rem !important;
+    margin-bottom: 0.875rem !important;
+  }
+  
+  .figma-action-card .figma-button,
+  .figma-action-card-dark .figma-button {
+    padding: 0.5rem 1rem !important;
+    font-size: 0.8125rem !important;
+  }
+}
+
+/* Extra small - 480px */
+@media (max-width: 480px) {
+  .take-action-wrapper {
+    padding: 0 4px !important;
+  }
+  
+  .take-action-wrapper .container {
+    padding: 0 8px !important;
+  }
+  
+  .take-action-wrapper h2 {
+    font-size: 1.125rem !important;
+  }
+  
+  .figma-action-card,
+  .figma-action-card-dark {
+    min-height: 140px !important;
+    padding: 0.875rem !important;
+  }
+  
+  .figma-action-card h3,
+  .figma-action-card-dark h3 {
+    font-size: 0.9375rem !important;
+  }
+  
+  .figma-action-card p,
+  .figma-action-card-dark p {
+    font-size: 0.75rem !important;
+  }
+}
+
+/* Tablet landscape - 2 columns */
+@media (min-width: 768px) and (max-width: 991.98px) {
+  .take-action-wrapper .row > div {
+    flex: 0 0 50%;
+    max-width: 50%;
+  }
+  
+  .figma-action-card,
+  .figma-action-card-dark {
+    min-height: 200px !important;
+  }
+}
+
+/* Ensure cards stack properly on mobile */
+@media (max-width: 767.98px) {
+  .take-action-wrapper .row > div {
+    flex: 0 0 100%;
+    max-width: 100%;
+  }
+}
+
+/* Touch-friendly on mobile */
+@media (max-width: 767.98px) {
+  .figma-action-card,
+  .figma-action-card-dark {
+    cursor: pointer;
+    -webkit-tap-highlight-color: rgba(255, 140, 66, 0.2);
+  }
+  
+  .figma-action-card:active,
+  .figma-action-card-dark:active {
+    transform: scale(0.98);
+  }
+}

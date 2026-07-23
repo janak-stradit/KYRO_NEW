@@ -785,9 +785,119 @@
 }
 
 /* Responsive design */
-@media (max-width: 768px) {
+@media (max-width: 1200px) {
     .kc-layout {
-        padding: 0 1rem;
+        grid-template-columns: 65% 35% !important;
+    }
+}
+
+@media (max-width: 992px) {
+    .kc-layout {
+        grid-template-columns: 1fr !important;
+        gap: 16px !important;
+    }
+    
+    .kc-right-panel {
+        display: none !important;
+    }
+    
+    .kc-left-panel,
+    .kc-main-card {
+        height: auto !important;
+        min-height: 500px !important;
+        max-height: none !important;
+    }
+}
+
+@media (max-width: 768px) {
+    .kc-wrapper {
+        padding: 16px 12px 24px !important;
+    }
+    
+    .kc-layout {
+        padding: 0 0.75rem 1.5rem !important;
+    }
+    
+    .kc-page-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 1.5rem 0 0.75rem;
+    }
+    
+    .kc-page-icon {
+        width: 40px;
+        height: 40px;
+        font-size: 18px;
+    }
+    
+    .kc-page-title {
+        font-size: 1.5rem !important;
+    }
+    
+    .kc-page-subtitle {
+        font-size: 0.875rem !important;
+    }
+    
+    .kc-main-card {
+        padding: 16px !important;
+        border-radius: 10px !important;
+    }
+    
+    .kc-agent-card {
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+    }
+    
+    .kc-agent-avatar {
+        width: 48px !important;
+        height: 48px !important;
+    }
+    
+    .kc-stats-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 12px !important;
+    }
+    
+    .kc-controls {
+        flex-direction: column;
+        width: 100%;
+    }
+    
+    .kc-btn {
+        width: 100%;
+        justify-content: center;
+        padding: 10px 16px;
+        font-size: 13px;
+    }
+    
+    .kc-bubble {
+        max-width: 85%;
+        font-size: 14px;
+        padding: 10px 14px;
+    }
+    
+    .kc-messages {
+        padding: 12px !important;
+        gap: 12px !important;
+    }
+    
+    .kc-input-row {
+        flex-direction: column;
+        gap: 8px;
+    }
+    
+    .kc-input {
+        width: 100%;
+        font-size: 15px;
+        padding: 12px;
+    }
+    
+    .kc-send-btn {
+        width: 100%;
+        padding: 12px;
+        font-size: 14px;
     }
     
     .px-6 {
@@ -798,6 +908,67 @@
     .py-8 {
         padding-top: 1.5rem;
         padding-bottom: 1.5rem;
+    }
+    
+    .kc-status-card,
+    .kc-stats-card {
+        padding: 12px !important;
+    }
+    
+    .kc-instruction {
+        font-size: 13px !important;
+        padding: 12px !important;
+    }
+}
+
+@media (max-width: 480px) {
+    .kc-wrapper {
+        padding: 12px 8px 20px !important;
+    }
+    
+    .kc-page-title {
+        font-size: 1.25rem !important;
+    }
+    
+    .kc-main-card {
+        padding: 12px !important;
+    }
+    
+    .kc-agent-avatar {
+        width: 40px !important;
+        height: 40px !important;
+    }
+    
+    .kc-agent-name {
+        font-size: 12px;
+    }
+    
+    .kc-agent-desc,
+    .kc-neural {
+        font-size: 10px;
+    }
+    
+    .kc-bubble {
+        max-width: 90%;
+        font-size: 13px;
+    }
+    
+    .kc-msg-avatar {
+        width: 28px;
+        height: 28px;
+    }
+    
+    .kc-stats-grid {
+        grid-template-columns: 1fr !important;
+    }
+    
+    .kc-sv {
+        font-size: 18px;
+    }
+    
+    .kc-btn {
+        font-size: 12px;
+        padding: 8px 12px;
     }
 }
 
