@@ -705,18 +705,63 @@ class AMLPipeline:
 
 if __name__ == "__main__":
     import sys
+    import gc
+    import os
 
-    # Pull data from the existing generator
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     from generator.data_generator import generate_dataset
 
-    num = int(os.environ.get("NUM_CUSTOMERS", "200"))
-    logger.info("Generating %d customers via generator...", num)
-    dataset = generate_dataset(num_customers=num)
+    num_total   = int(os.environ.get("NUM_CUSTOMERS", "200"))
+    batch_size  = int(os.environ.get("PIPELINE_BATCH_SIZE", "500"))
 
-    pipeline = AMLPipeline()
-    stats = pipeline.run(dataset=dataset)
+    logger.info("=" * 60)
+    logger.info("Batch pipeline START: %d customers in batches of %d", num_total, batch_size)
+
+    all_stats = []
+    processed = 0
+
+    while processed < num_total:
+        current_batch = min(batch_size, num_total - processed)
+        logger.info("--- Batch %d/%d: generating %d customers (offset %d) ---",
+                    (processed // batch_size) + 1,
+                    -(-num_total // batch_size),  # ceiling division
+                    current_batch, processed)
+
+        dataset = generate_dataset(num_customers=current_batch)
+
+        pipeline = AMLPipeline()
+        stats = pipeline.run(dataset=dataset)
+        all_stats.append(stats)
+
+        processed += current_batch
+
+        # Free memory explicitly between batches
+        del dataset, pipeline
+        gc.collect()
+
+        logger.info("Progress: %d / %d customers processed", processed, num_total)
+
+    logger.info("=" * 60)
+    logger.info("Batch pipeline COMPLETE: %d total customers loaded", processed)
+
+    # ── Auto-migrate raw_data → app schema so API serves live data ──
+    logger.info("Running raw_data → app schema migration...")
+    try:
+        migrate_script = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "migrate_data.py")
+        if os.path.exists(migrate_script):
+            import subprocess
+            result = subprocess.run(
+                [sys.executable, migrate_script],
+                capture_output=True, text=True, timeout=300
+            )
+            if result.returncode == 0:
+                logger.info("✔ Migration complete:\n%s", result.stdout[-2000:])
+            else:
+                logger.error("✖ Migration failed (exit %d):\n%s", result.returncode, result.stderr[-2000:])
+        else:
+            logger.warning("migrate_data.py not found at %s — skipping app schema sync", migrate_script)
+    except Exception as mig_exc:
+        logger.error("✖ Migration exception: %s", mig_exc)
+
     print("\n" + "=" * 60)
-    print("Pipeline Execution Stats:")
-    import json
-    print(json.dumps(stats, indent=2, default=str))
+    print(f"Pipeline COMPLETE: {processed} customers loaded in {len(all_stats)} batches")

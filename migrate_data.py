@@ -21,15 +21,12 @@ def migrate_customers():
     
     with psycopg.connect(DATABASE_URL) as conn:
         with conn.cursor() as cur:
-            # First, count existing data
             cur.execute("SELECT COUNT(*) FROM raw_data.customers")
             raw_count = cur.fetchone()[0]
             print(f"📊 Raw data: {raw_count} customers")
             
-            # Clear existing app data
             cur.execute("TRUNCATE TABLE app.customers CASCADE")
             
-            # Migrate customers with proper UUID and schema mapping
             migrate_query = """
             INSERT INTO app.customers (
                 id, full_name, email, phone, date_of_birth, 
@@ -38,26 +35,32 @@ def migrate_customers():
                 risk_score, customer_type, created_at, updated_at
             )
             SELECT 
-                gen_random_uuid() as id,
+                id,
                 full_name,
                 email,
-                phone_number as phone,
+                phone,
                 date_of_birth::date,
                 country,
                 residency_country,
                 CASE 
-                    WHEN kyc_status IS NULL THEN 'PENDING'
-                    ELSE UPPER(kyc_status)
+                    WHEN kyc_status IS NULL         THEN 'PENDING'
+                    WHEN UPPER(kyc_status) = 'VERIFIED'    THEN 'VERIFIED'
+                    WHEN UPPER(kyc_status) = 'REJECTED'    THEN 'REJECTED'
+                    WHEN UPPER(kyc_status) = 'UNDER_REVIEW' THEN 'UNDER_REVIEW'
+                    WHEN UPPER(kyc_status) = 'COMPLETE'    THEN 'VERIFIED'
+                    WHEN UPPER(kyc_status) = 'PARTIAL'     THEN 'UNDER_REVIEW'
+                    WHEN UPPER(kyc_status) = 'EXPIRED'     THEN 'REJECTED'
+                    ELSE 'PENDING'
                 END as kyc_status,
                 COALESCE(pep_flag, false) as pep_flag,
                 COALESCE(sanctions_flag, false) as sanctions_flag,
                 COALESCE(adverse_media_flag, false) as adverse_media_flag,
                 CASE 
-                    WHEN risk_score >= 70 THEN 'HIGH'
-                    WHEN risk_score >= 40 THEN 'MEDIUM'
+                    WHEN COALESCE(risk_score::numeric, 0) >= 70 THEN 'HIGH'
+                    WHEN COALESCE(risk_score::numeric, 0) >= 40 THEN 'MEDIUM'
                     ELSE 'LOW'
                 END as risk_level,
-                COALESCE(risk_score, 0) as risk_score,
+                LEAST(100, GREATEST(0, COALESCE(risk_score::integer, 0))) as risk_score,
                 CASE 
                     WHEN customer_type IS NULL THEN 'INDIVIDUAL'
                     WHEN UPPER(customer_type) = 'TRUST' THEN 'FUND'
@@ -82,38 +85,41 @@ def migrate_accounts():
     
     with psycopg.connect(DATABASE_URL) as conn:
         with conn.cursor() as cur:
-            # Count raw accounts
             cur.execute("SELECT COUNT(*) FROM raw_data.accounts")
             raw_count = cur.fetchone()[0]
             print(f"📊 Raw data: {raw_count} accounts")
             
-            # Clear existing app accounts
             cur.execute("TRUNCATE TABLE app.accounts CASCADE")
             
-            # Migrate accounts
             migrate_query = """
             INSERT INTO app.accounts (
-                id, customer_id, account_number, account_type, 
-                currency, balance, status, opened_date, 
+                id, customer_id, account_type, 
+                currency, balance, account_status, opened_date, 
+                account_metadata,
                 created_at, updated_at
             )
             SELECT 
-                gen_random_uuid() as id,
+                a.id,
                 c.id as customer_id,
-                a.account_number,
-                UPPER(a.account_type) as account_type,
-                UPPER(a.currency) as currency,
-                a.current_balance as balance,
                 CASE 
-                    WHEN a.status IS NULL THEN 'ACTIVE'
-                    ELSE UPPER(a.status)
-                END as status,
+                    WHEN UPPER(a.account_type) IN ('CHECKING', 'SAVINGS', 'INVESTMENT', 'TRADING') THEN UPPER(a.account_type)
+                    WHEN UPPER(a.account_type) = 'CREDIT' THEN 'CHECKING'
+                    WHEN UPPER(a.account_type) = 'LOAN' THEN 'SAVINGS'
+                    ELSE 'CHECKING'
+                END as account_type,
+                UPPER(a.currency) as currency,
+                a.balance,
+                CASE 
+                    WHEN a.account_status IS NULL THEN 'ACTIVE'
+                    ELSE UPPER(a.account_status)
+                END as account_status,
                 a.opened_date::date,
+                jsonb_build_object('raw_account_id', a.account_id) as account_metadata,
                 COALESCE(a.created_at, NOW()) as created_at,
                 COALESCE(a.updated_at, NOW()) as updated_at
             FROM raw_data.accounts a
             JOIN raw_data.customers rc ON rc.customer_id = a.customer_id
-            JOIN app.customers c ON c.email = rc.email
+            JOIN app.customers c ON c.id = rc.id
             """
             
             cur.execute(migrate_query)
@@ -128,59 +134,57 @@ def migrate_transactions():
     
     with psycopg.connect(DATABASE_URL) as conn:
         with conn.cursor() as cur:
-            # Count raw transactions
             cur.execute("SELECT COUNT(*) FROM raw_data.transactions")
             raw_count = cur.fetchone()[0]
             print(f"📊 Raw data: {raw_count} transactions")
             
-            # Clear existing app transactions
             cur.execute("TRUNCATE TABLE app.transactions CASCADE")
             
-            # Migrate transactions (batch by batch to avoid memory issues)
-            batch_size = 10000
-            offset = 0
-            total_migrated = 0
+            migrate_query = f"""
+            INSERT INTO app.transactions (
+                id, customer_id, account_id, transaction_date, transaction_type, amount, currency,
+                meta_counterparty, meta_counterparty_type, meta_country_code, 
+                meta_destination_country, meta_origin_country, risk_flags, risk_score, source_system,
+                created_at
+            )
+            SELECT 
+                t.id,
+                c.id as customer_id,
+                acc.id as account_id,
+                t.transaction_date::timestamp with time zone,
+                CASE UPPER(t.transaction_type)
+                    WHEN 'BUY' THEN 'TRADE'
+                    WHEN 'SELL' THEN 'TRADE'
+                    WHEN 'FEE' THEN 'WITHDRAWAL'
+                    WHEN 'PAYMENT' THEN 'TRANSFER'
+                    WHEN 'REFUND' THEN 'DEPOSIT'
+                    WHEN 'TRANSFER_IN' THEN 'TRANSFER'
+                    WHEN 'TRANSFER_OUT' THEN 'TRANSFER'
+                    WHEN 'DEPOSIT' THEN 'DEPOSIT'
+                    WHEN 'WITHDRAWAL' THEN 'WITHDRAWAL'
+                    WHEN 'FX' THEN 'FX'
+                    ELSE 'TRANSFER'
+                END as transaction_type,
+                t.amount,
+                UPPER(t.currency) as currency,
+                t.meta_counterparty,
+                t.meta_counterparty_type,
+                t.meta_country_code,
+                t.meta_destination_country,
+                t.meta_origin_country,
+                t.risk_flags,
+                COALESCE((t.risk_flags->>'risk_score')::int, 0) as risk_score,
+                t.source_system,
+                COALESCE(t.created_at, NOW()) as created_at
+            FROM raw_data.transactions t
+            JOIN raw_data.accounts ra ON ra.account_id = t.account_id
+            JOIN raw_data.customers rc ON rc.customer_id = ra.customer_id
+            JOIN app.customers c ON c.id = rc.id
+            JOIN app.accounts acc ON acc.id = ra.id
+            """
             
-            while True:
-                migrate_query = f"""
-                INSERT INTO app.transactions (
-                    id, account_id, transaction_date, amount, currency,
-                    transaction_type, description, counterparty_name,
-                    counterparty_account, reference_number, 
-                    created_at, updated_at
-                )
-                SELECT 
-                    gen_random_uuid() as id,
-                    acc.id as account_id,
-                    t.transaction_date::timestamp with time zone,
-                    t.amount,
-                    UPPER(t.currency) as currency,
-                    UPPER(t.transaction_type) as transaction_type,
-                    t.description,
-                    t.counterparty_name,
-                    t.counterparty_account,
-                    t.reference_number,
-                    COALESCE(t.created_at, NOW()) as created_at,
-                    COALESCE(t.updated_at, NOW()) as updated_at
-                FROM raw_data.transactions t
-                JOIN raw_data.accounts ra ON ra.account_id = t.account_id
-                JOIN raw_data.customers rc ON rc.customer_id = ra.customer_id
-                JOIN app.customers c ON c.email = rc.email
-                JOIN app.accounts acc ON acc.customer_id = c.id AND acc.account_number = ra.account_number
-                ORDER BY t.transaction_date
-                LIMIT {batch_size} OFFSET {offset}
-                """
-                
-                cur.execute(migrate_query)
-                batch_count = cur.rowcount
-                
-                if batch_count == 0:
-                    break
-                    
-                total_migrated += batch_count
-                offset += batch_size
-                
-                print(f"📦 Migrated batch: {total_migrated}/{raw_count} transactions")
+            cur.execute(migrate_query)
+            total_migrated = cur.rowcount
             
             print(f"✅ Migrated {total_migrated} transactions")
             return total_migrated
@@ -191,13 +195,11 @@ def create_sample_users():
     
     with psycopg.connect(DATABASE_URL) as conn:
         with conn.cursor() as cur:
-            # Check if users exist
             cur.execute("SELECT COUNT(*) FROM app.users WHERE username = 'analyst'")
             if cur.fetchone()[0] > 0:
                 print("👤 Sample users already exist")
                 return
             
-            # Create sample users
             users_query = """
             INSERT INTO app.users (id, username, email, full_name, hashed_password, role, is_active, created_at, updated_at)
             VALUES 
@@ -208,9 +210,6 @@ def create_sample_users():
             
             cur.execute(users_query)
             print("✅ Created sample users (password: kyro123)")
-            print("   - analyst@kyro.com (ANALYST)")
-            print("   - admin@kyro.com (ADMIN)")
-            print("   - compliance@kyro.com (COMPLIANCE_OFFICER)")
 
 def generate_sample_alerts():
     """Generate some sample alerts for dashboard"""
@@ -218,10 +217,8 @@ def generate_sample_alerts():
     
     with psycopg.connect(DATABASE_URL) as conn:
         with conn.cursor() as cur:
-            # Clear existing alerts
             cur.execute("TRUNCATE TABLE app.alerts CASCADE")
             
-            # Generate alerts for high-risk transactions
             alerts_query = """
             WITH high_risk_txns AS (
                 SELECT 
@@ -249,14 +246,13 @@ def generate_sample_alerts():
                 LIMIT 50
             )
             INSERT INTO app.alerts (
-                id, customer_id, transaction_id, alert_type, 
-                risk_score, confidence, status, priority,
-                description, created_at, updated_at
+                id, customer_id, alert_type, 
+                risk_score, confidence, status,
+                ml_explanation, created_at
             )
             SELECT 
                 gen_random_uuid(),
                 customer_id,
-                transaction_id,
                 alert_type,
                 risk_score::int,
                 (0.7 + RANDOM() * 0.3)::numeric(3,2),
@@ -266,19 +262,13 @@ def generate_sample_alerts():
                     WHEN 2 THEN 'IN_REVIEW'
                     ELSE 'RESOLVED'
                 END,
-                CASE 
-                    WHEN risk_score > 80 THEN 'HIGH'
-                    WHEN risk_score > 60 THEN 'MEDIUM'
-                    ELSE 'LOW'
-                END,
                 CASE alert_type
                     WHEN 'LARGE_AMOUNT' THEN 'Large transaction amount detected'
                     WHEN 'WIRE_TRANSFER' THEN 'Wire transfer requires review'
                     WHEN 'HIGH_RISK_CUSTOMER' THEN 'Transaction from high-risk customer'
                     ELSE 'Unusual transaction pattern detected'
                 END,
-                transaction_date - (RANDOM() * INTERVAL '24 hours'),
-                transaction_date - (RANDOM() * INTERVAL '12 hours')
+                transaction_date - (RANDOM() * INTERVAL '24 hours')
             FROM high_risk_txns
             """
             
@@ -292,12 +282,10 @@ def main():
     print("=" * 50)
     
     try:
-        # Migrate core data
         customers = migrate_customers()
         accounts = migrate_accounts() 
         transactions = migrate_transactions()
         
-        # Create users and sample data
         create_sample_users()
         generate_sample_alerts()
         
@@ -307,13 +295,6 @@ def main():
         print(f"   - Customers: {customers}")
         print(f"   - Accounts: {accounts}")
         print(f"   - Transactions: {transactions}")
-        print(f"   - Users: 3 created")
-        print(f"   - Sample alerts generated")
-        print("\n🔐 Login credentials:")
-        print("   Username: analyst")
-        print("   Password: kyro123")
-        print(f"\n🌐 Frontend: http://localhost:3001/phase3/login.html")
-        print(f"🔧 API: http://localhost:8000/docs")
         
     except Exception as e:
         print(f"❌ Migration failed: {e}")

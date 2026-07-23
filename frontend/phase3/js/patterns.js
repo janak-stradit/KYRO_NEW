@@ -23,7 +23,7 @@ const Patterns = {
         this.loadDashboard();
     },
     
-    generateCustomerPatternData(totalCustomers = 1000) {
+    generateCustomerPatternData(totalCustomers = 10000) {
         // Generate comprehensive customer pattern data for all customers
         const allCustomers = [];
         for (let i = 1; i <= totalCustomers; i++) {
@@ -155,7 +155,7 @@ const Patterns = {
                                 </div>
                                 <div class="flex-grow-1">
                                     <small class="text-muted d-block mb-1" style="font-size: 12px;">Customers</small>
-                                    <h2 class="mb-0" style="font-weight: 700; font-size: 2rem;" id="customersCount">1000</h2>
+                                    <h2 class="mb-0" style="font-weight: 700; font-size: 2rem;" id="customersCount">10000</h2>
                                 </div>
                             </div>
                         </div>
@@ -494,7 +494,7 @@ const Patterns = {
         const totalPatternsAllTime = 500;
         const anomalies = Math.round(totalPatternsAllTime * 0.666); // ~66% are anomalies
         
-        let actualCustomerCount = 1000;
+        let actualCustomerCount = 10000;
         try {
             const kpiData = await API.get(API.endpoints.kpis);
             if (kpiData && kpiData.total_customers) {
