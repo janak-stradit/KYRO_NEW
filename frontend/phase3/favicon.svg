@@ -1,0 +1,7 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Black/Dark shape (75% opacity) -->
+  <path d="M8 4 L24 4 L20 16 L12 16 Z" fill="#000000" fill-opacity="0.75"/>
+  
+  <!-- Orange shape (75% opacity) - overlapping -->
+  <path d="M12 16 L28 16 L24 28 L8 28 Z" fill="#FF6A00" fill-opacity="0.75"/>
+</svg>

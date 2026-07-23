@@ -142,7 +142,7 @@ const Auth = {
             // Ignore logout errors
         } finally {
             this.clearAuthData();
-            window.location.href = "/login";
+            window.location.href = "/";
         }
     },
     
@@ -212,7 +212,12 @@ const Auth = {
      */
     checkAuthStatus() {
         const currentPath = window.location.pathname;
-        const isLoginPage = currentPath === '/login' || currentPath === '/';
+        const isLandingPage = currentPath === '/' || currentPath === '/landing' || currentPath.includes('landing.html');
+        const isLoginPage = currentPath === '/login' || currentPath.includes('login.html');
+        
+        // Protected routes that require authentication
+        const protectedRoutes = ['/dashboard', '/periodic-reviews', '/cases', '/patterns', '/kyrochat', '/real-time'];
+        const isProtectedRoute = protectedRoutes.some(route => currentPath.includes(route)) || currentPath.includes('index.html');
         
         if (this.isAuthenticated()) {
             const user = this.getUser();
@@ -220,13 +225,23 @@ const Auth = {
                 this.updateUserDisplay(user);
             }
             
-            // Redirect to dashboard if on login page
+            // Redirect to dashboard if on login page (but NOT landing page)
             if (isLoginPage) {
                 window.location.href = '/dashboard';
             }
         } else {
-            // Redirect to login if not authenticated and not on login page
-            if (!isLoginPage) {
+            // Clear any stale auth data
+            this.clearAuthData();
+            
+            // Redirect to login if trying to access protected route
+            if (isProtectedRoute) {
+                console.warn('Unauthorized access attempt to protected route:', currentPath);
+                window.location.href = '/login';
+                return;
+            }
+            
+            // Allow access to landing and login pages
+            if (!isLoginPage && !isLandingPage) {
                 window.location.href = '/login';
             }
         }
@@ -560,6 +575,39 @@ $(document).ready(function() {
     $("#logoutBtn").on("click", (e) => {
         e.preventDefault();
         Auth.logout();
+    });
+    
+    // Recheck auth on page visibility (tab focus)
+    document.addEventListener('visibilitychange', function() {
+        if (!document.hidden) {
+            // Page is visible again, check if still authenticated
+            const currentPath = window.location.pathname;
+            const isLandingPage = currentPath === '/' || currentPath === '/landing' || currentPath.includes('landing.html');
+            const isLoginPage = currentPath === '/login' || currentPath.includes('login.html');
+            const protectedRoutes = ['/dashboard', '/periodic-reviews', '/cases', '/patterns', '/kyrochat', '/real-time'];
+            const isProtectedRoute = protectedRoutes.some(route => currentPath.includes(route)) || currentPath.includes('index.html');
+            
+            if (isProtectedRoute && !Auth.isAuthenticated()) {
+                console.warn('Session expired or invalid. Redirecting to login.');
+                Auth.clearAuthData();
+                window.location.href = '/login';
+            }
+        }
+    });
+    
+    // Prevent back button after logout
+    window.addEventListener('pageshow', function(event) {
+        if (event.persisted) {
+            // Page was loaded from cache
+            const currentPath = window.location.pathname;
+            const protectedRoutes = ['/dashboard', '/periodic-reviews', '/cases', '/patterns', '/kyrochat', '/real-time'];
+            const isProtectedRoute = protectedRoutes.some(route => currentPath.includes(route)) || currentPath.includes('index.html');
+            
+            if (isProtectedRoute && !Auth.isAuthenticated()) {
+                console.warn('Protected page loaded from cache without authentication. Redirecting.');
+                window.location.href = '/login';
+            }
+        }
     });
 });
 

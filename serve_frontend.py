@@ -25,9 +25,11 @@ def main():
     class MyHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
         def translate_path(self, path):
             clean_path = path.split('?')[0].split('#')[0]
-            if clean_path == '/login':
+            if clean_path == '/':
+                path = '/landing.html'
+            elif clean_path == '/login':
                 path = '/login.html'
-            elif clean_path in ['/dashboard', '/periodic-reviews', '/cases', '/patterns', '/kyrochat', '/']:
+            elif clean_path in ['/dashboard', '/periodic-reviews', '/cases', '/patterns', '/kyrochat']:
                 path = '/index.html'
             return super().translate_path(path)
 

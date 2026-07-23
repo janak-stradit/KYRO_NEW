@@ -133,8 +133,32 @@ const kyroScripts = {
         
         greeting: "Hello! How can I assist you with compliance monitoring today?",
         
-        caseSummary: (total, resolved, pending, escalated) =>
-            `Case Summary: ${total} total cases. ${resolved} resolved, ${pending} pending review, ${escalated} escalated to analysts.`
+        caseSummary: (total, resolved, pending, escalated, failedCases = []) => {
+            let summary = `Case Summary: ${total} total cases. ${resolved} resolved, ${pending} pending review, ${escalated} escalated to analysts.`;
+            
+            if (failedCases && failedCases.length > 0) {
+                summary += ` ${failedCases.length} case${failedCases.length === 1 ? '' : 's'} failed processing.`;
+            }
+            
+            return summary;
+        },
+        
+        detailedCaseSummary: (data) => {
+            const { total, resolved, pending, escalated, failedCases = [], assignedCases = [] } = data;
+            
+            const parts = [];
+            parts.push(`📊 <strong>Case Processing Summary</strong>`);
+            parts.push(`Total Cases Reviewed: ${total}`);
+            parts.push(`✓ Successfully Resolved: ${resolved}`);
+            parts.push(`⏳ Pending Review: ${pending}`);
+            parts.push(`⚠️ Escalated: ${escalated}`);
+            
+            if (failedCases.length > 0) {
+                parts.push(`❌ Failed: ${failedCases.length}`);
+            }
+            
+            return parts.join('<br>');
+        }
     },
 
     instructions: {

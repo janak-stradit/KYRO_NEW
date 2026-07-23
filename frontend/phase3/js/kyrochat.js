@@ -75,24 +75,11 @@ const KyroChat = {
                                     <span class="kc-v-badge">v2.0</span>
                                 </div>
                                 <div class="kc-neural">✦ Neural network active</div>
-                                <span class="kc-state-pill" id="kcStateBadge">STOPPED</span>
-                                <p class="kc-agent-desc">Kyro monitors compliance, executes actions, and requests human help when needed.</p>
-                            </div>
-                        </div>
-
-                        <!-- Live status box (inset, grey bg) -->
-                        <div class="kc-status-card" id="kcStatusCard">
-                            <div class="kc-status-row">
-                                <div class="kc-status-lhs">
-                                    <span class="kc-live-dot" id="kcLiveDot"></span>
-                                    <span class="kc-status-label" id="kcStatusLabel">Kyro Live &bull; STOPPED</span>
+                                <div style="display: flex; align-items: center; gap: 10px; margin: 6px 0;">
+                                    <span class="kc-state-pill" id="kcStateBadge">STOPPED</span>
+                                    <span class="kc-sync-time" id="kcSyncTime">Synced --</span>
                                 </div>
-                                <span class="kc-sync-time" id="kcSyncTime">Synced --</span>
-                            </div>
-                            <div class="kc-processing">Processing now: <strong id="kcProcessingCount">20 cases</strong></div>
-                            <div class="kc-pulse-label" id="kcPulseLabel">
-                                Ready to screen when you start Kyro.<br>
-                                Ready to screen cases when autonomous execution starts.
+                                <p class="kc-agent-desc">Kyro monitors compliance, executes actions, and requests human help when needed.</p>
                             </div>
                         </div>
 
@@ -200,8 +187,6 @@ const KyroChat = {
     },
 
     updateStateUI() {
-        if (!document.getElementById("kcStatusCard")) return;
-
         const status = this.agentState.autonomous_status || "STOPPED";
         const isIntervention = this.agentState.intervention_needed || false;
 
@@ -209,26 +194,17 @@ const KyroChat = {
         const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
         $("#kcSyncTime").text(`Synced ${timeStr}`);
 
-        // Status label
-        $("#kcStatusLabel").text(`Kyro Live • ${status}`);
+        // Status badge
         $("#kcStateBadge").text(status);
 
-        // Processing count
-        $("#kcProcessingCount").text(`${this.agentState.processing_cases_count || 0} cases`);
-
-        // Pulse label
-        $("#kcPulseLabel").html((this.agentState.streaming_pulse_label || "Ready to screen cases when autonomous execution starts.").replace(/\n/g, "<br>"));
-
-        // Status card bg + dot color
+        // Status badge background color
         const styles = {
-            RUNNING: { bg: "#f0fdf4", border: "#bbf7d0", dotColor: "#22c55e", badgeBg: "#22c55e" },
-            PAUSED:  { bg: "#fffbeb", border: "#fde68a", dotColor: "#f59e0b", badgeBg: "#f59e0b" },
-            ERROR:   { bg: "#fef2f2", border: "#fecaca", dotColor: "#ef4444", badgeBg: "#ef4444" },
-            STOPPED: { bg: "#f8fafc", border: "#e2e8f0", dotColor: "#94a3b8", badgeBg: "#64748b" }
+            RUNNING: { badgeBg: "#22c55e", dotColor: "#22c55e" },
+            PAUSED:  { badgeBg: "#f59e0b", dotColor: "#f59e0b" },
+            ERROR:   { badgeBg: "#ef4444", dotColor: "#ef4444" },
+            STOPPED: { badgeBg: "#64748b", dotColor: "#94a3b8" }
         };
         const s = styles[status] || styles.STOPPED;
-        $("#kcStatusCard").css({ background: s.bg, "border-color": s.border });
-        $("#kcLiveDot").css("background-color", s.dotColor);
         $("#kcStateBadge").css("background-color", s.badgeBg);
 
         // Idle pill on right panel
@@ -439,7 +415,13 @@ const KyroChat = {
             } else if (q.includes("hello") || q.includes("hi")) {
                 response = kyroScripts.chat.greeting;
             } else if (q.includes("summary")) {
-                response = kyroScripts.chat.caseSummary(120, 85, 20, 15);
+                // Generate detailed summary with failed cases
+                const summaryData = this.generateDetailedSummaryData();
+                response = kyroScripts.chat.detailedCaseSummary(summaryData);
+                messageOptions = {
+                    showViewDetails: true,
+                    caseDetails: this.formatDetailedSummaryHTML(summaryData)
+                };
             } else {
                 response = kyroScripts.chat.defaultResponse;
             }
@@ -570,18 +552,26 @@ const KyroChat = {
             // Speak the welcome message immediately when Start button is pressed
             await this.speak(welcomeMessage);
             
-            // Update state
+            // Update state - Initialize stats properly
             this.agentState.autonomous_status = "RUNNING";
             this.agentState.streaming_pulse_label = "Actively screening transactions and monitoring compliance events";
             this.agentState.run_stats = { 
-                actions: 1, 
-                success: 1, 
+                actions: 0, 
+                success: 0, 
                 failure: 0, 
-                casesTouched: 5 
+                casesTouched: 0 
             };
+            
+            // Force UI update
             this.updateStateUI();
             
+            // Show stats card immediately
+            $("#kcStatsCard").show();
+            
             showToast("success", "Kyro is now running autonomously");
+            
+            // Small delay to ensure UI is ready
+            await new Promise(resolve => setTimeout(resolve, 500));
             
             // Simulate progressive stats update & actions
             this.startStatsSimulation();
@@ -676,7 +666,15 @@ const KyroChat = {
                 await this.speak(failMsg);
             }
             
+            // Force UI update to refresh stats display
             this.updateStateUI();
+            
+            // Also manually update stats if updateStateUI doesn't catch it
+            const rs = this.agentState.run_stats || {};
+            $("#kcStatActions").text(rs.actions || 0);
+            $("#kcStatSuccess").text(rs.success || 0);
+            $("#kcStatFailure").text(rs.failure || 0);
+            $("#kcStatCases").text(rs.casesTouched || 0);
         };
         
         // Start first action immediately
@@ -757,7 +755,7 @@ const KyroChat = {
         return {
             caseId: caseId,
             customerId: `ef${Math.random().toString(36).substr(2, 6)}f${Math.floor(Math.random() * 10)}`,
-            customerName: `Customer ${caseId.split('-')[1]}`,
+            customerName: `${['James', 'Maria', 'Robert', 'Jennifer', 'Michael', 'Linda', 'William', 'Patricia', 'David', 'Elizabeth'][Math.floor(Math.random() * 10)]} ${['Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia', 'Miller', 'Davis', 'Rodriguez', 'Martinez'][Math.floor(Math.random() * 10)]}`,
             riskType: riskTypes[Math.floor(Math.random() * riskTypes.length)],
             riskLevel: riskLevels[Math.floor(Math.random() * riskLevels.length)],
             riskScore: (Math.random() * 60 + 20).toFixed(1),
@@ -814,6 +812,140 @@ const KyroChat = {
                 </div>
             </div>
         `;
+    },
+
+    generateDetailedSummaryData() {
+        const analysts = ['Sarah Chen', 'Mike Rodriguez', 'Priya Patel', 'James Wilson', 'Unassigned'];
+        const failureReasons = [
+            'Insufficient transaction data for risk assessment',
+            'External data source timeout',
+            'Customer profile incomplete - missing KYC documentation',
+            'Duplicate case detected - merged with existing case',
+            'Model prediction confidence below threshold',
+            'API rate limit exceeded during scoring'
+        ];
+        
+        // Generate failed cases with details
+        const failedCases = [];
+        const failedCount = Math.floor(Math.random() * 5) + 3; // 3-7 failed cases
+        
+        for (let i = 0; i < failedCount; i++) {
+            failedCases.push({
+                caseId: `CUST-${String(Math.floor(Math.random() * 999) + 1).padStart(3, '0')}`,
+                customerId: `ef${Math.random().toString(36).substr(2, 6)}f${Math.floor(Math.random() * 10)}`,
+                failureReason: failureReasons[Math.floor(Math.random() * failureReasons.length)],
+                attemptedAt: new Date(Date.now() - Math.random() * 2 * 60 * 60 * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                assignedTo: 'Requires Manual Review'
+            });
+        }
+        
+        // Generate assigned cases
+        const assignedCases = [];
+        const assignedCount = Math.floor(Math.random() * 8) + 5; // 5-12 assigned cases
+        
+        for (let i = 0; i < assignedCount; i++) {
+            assignedCases.push({
+                caseId: `CUST-${String(Math.floor(Math.random() * 999) + 1).padStart(3, '0')}`,
+                customerId: `ef${Math.random().toString(36).substr(2, 6)}f${Math.floor(Math.random() * 10)}`,
+                assignedTo: analysts[Math.floor(Math.random() * analysts.length)],
+                priority: ['HIGH', 'MEDIUM', 'LOW'][Math.floor(Math.random() * 3)],
+                status: ['OPEN', 'IN_PROGRESS', 'PENDING_REVIEW'][Math.floor(Math.random() * 3)]
+            });
+        }
+        
+        return {
+            total: 120,
+            resolved: 85,
+            pending: 20,
+            escalated: 12,
+            failedCases: failedCases,
+            assignedCases: assignedCases
+        };
+    },
+
+    formatDetailedSummaryHTML(data) {
+        const { total, resolved, pending, escalated, failedCases, assignedCases } = data;
+        
+        let html = `
+            <div class="kc-case-list">
+                <div class="kc-case-section">
+                    <div class="kc-case-label">📊 Overall Statistics</div>
+                    <strong>Total Cases Processed:</strong> ${total}<br>
+                    <strong>✓ Successfully Resolved:</strong> <span style="color: #10b981; font-weight: 600;">${resolved}</span><br>
+                    <strong>⏳ Pending Review:</strong> <span style="color: #f59e0b; font-weight: 600;">${pending}</span><br>
+                    <strong>⚠️ Escalated to Analysts:</strong> <span style="color: #ef4444; font-weight: 600;">${escalated}</span><br>
+                    <strong>❌ Failed Processing:</strong> <span style="color: #ef4444; font-weight: 600;">${failedCases.length}</span>
+                </div>`;
+        
+        // Failed cases section
+        if (failedCases.length > 0) {
+            html += `
+                <div class="kc-case-section">
+                    <div class="kc-case-label">❌ Failed Cases - Requires Attention</div>`;
+            
+            failedCases.forEach((fc, idx) => {
+                html += `
+                    <div style="margin-bottom: 12px; padding: 8px; background: #fef2f2; border-left: 3px solid #ef4444; border-radius: 4px;">
+                        <strong>${idx + 1}. ${fc.caseId}</strong><br>
+                        <span style="font-size: 0.9em; color: #64748b;">Customer ID: ${fc.customerId}</span><br>
+                        <span style="font-size: 0.9em; color: #64748b;">Attempted: ${fc.attemptedAt}</span><br>
+                        <span style="font-size: 0.9em; color: #dc2626;"><strong>Reason:</strong> ${fc.failureReason}</span><br>
+                        <span style="font-size: 0.9em; color: #64748b;">Assignment: ${fc.assignedTo}</span>
+                    </div>`;
+            });
+            
+            html += `</div>`;
+        }
+        
+        // Assigned cases section
+        if (assignedCases.length > 0) {
+            html += `
+                <div class="kc-case-section">
+                    <div class="kc-case-label">👤 Currently Assigned Cases</div>`;
+            
+            // Group by analyst
+            const byAnalyst = {};
+            assignedCases.forEach(ac => {
+                if (!byAnalyst[ac.assignedTo]) {
+                    byAnalyst[ac.assignedTo] = [];
+                }
+                byAnalyst[ac.assignedTo].push(ac);
+            });
+            
+            Object.keys(byAnalyst).forEach(analyst => {
+                const cases = byAnalyst[analyst];
+                html += `
+                    <div style="margin-bottom: 10px;">
+                        <strong>👤 ${analyst}</strong> (${cases.length} case${cases.length !== 1 ? 's' : ''})<br>`;
+                
+                cases.slice(0, 3).forEach(ac => {
+                    const priorityColor = ac.priority === 'HIGH' ? '#ef4444' : ac.priority === 'MEDIUM' ? '#f59e0b' : '#10b981';
+                    html += `
+                        <span style="font-size: 0.85em; color: #64748b; margin-left: 10px;">
+                            • ${ac.caseId} (${ac.customerId}) - 
+                            <span style="color: ${priorityColor}; font-weight: 600;">${ac.priority}</span> - 
+                            ${ac.status}
+                        </span><br>`;
+                });
+                
+                if (cases.length > 3) {
+                    html += `<span style="font-size: 0.85em; color: #94a3b8; margin-left: 10px;">... +${cases.length - 3} more</span><br>`;
+                }
+                
+                html += `</div>`;
+            });
+            
+            html += `</div>`;
+        }
+        
+        html += `
+                <div class="kc-audit-note">
+                    <strong>🔍 Next Steps:</strong> Failed cases require manual intervention to resolve data quality or system integration issues. I've flagged these for immediate analyst review. Assigned cases are actively being processed by compliance team members.
+                </div>
+            </div>
+        `;
+        
+        return html;
     },
 
     async stopAgent() {
@@ -994,7 +1126,40 @@ const KyroChat = {
         const startTimeStr = runSummary.startTime.toLocaleString();
         const endTimeStr = runSummary.endTime.toLocaleString();
         
-        return `
+        // Generate failed cases if there were any failures
+        const failureReasons = [
+            'Insufficient transaction data for risk assessment',
+            'External data source timeout',
+            'Customer profile incomplete - missing KYC documentation',
+            'Duplicate case detected - merged with existing case',
+            'Model prediction confidence below threshold',
+            'API rate limit exceeded during scoring'
+        ];
+        
+        const customerFirstNames = ['James', 'Maria', 'Robert', 'Jennifer', 'Michael', 'Linda', 'William', 'Patricia', 'David', 'Elizabeth', 'Richard', 'Susan', 'Joseph', 'Jessica', 'Thomas', 'Sarah', 'Charles', 'Karen', 'Christopher', 'Nancy'];
+        const customerLastNames = ['Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia', 'Miller', 'Davis', 'Rodriguez', 'Martinez', 'Hernandez', 'Lopez', 'Gonzalez', 'Wilson', 'Anderson', 'Thomas', 'Taylor', 'Moore', 'Jackson', 'Martin'];
+        
+        const failedCases = [];
+        if (runSummary.failedActions > 0) {
+            // Generate case IDs from actual customer range (1 to total customers in system)
+            const maxCustomerId = Math.min(500, runSummary.casesTouched || 100); // Use actual customer count
+            
+            for (let i = 0; i < runSummary.failedActions; i++) {
+                const firstName = customerFirstNames[Math.floor(Math.random() * customerFirstNames.length)];
+                const lastName = customerLastNames[Math.floor(Math.random() * customerLastNames.length)];
+                const randomCustNum = Math.floor(Math.random() * maxCustomerId) + 1;
+                
+                failedCases.push({
+                    caseId: `CUST-${String(randomCustNum).padStart(3, '0')}`,
+                    customerName: `${firstName} ${lastName}`,
+                    customerId: `ef${Math.random().toString(36).substr(2, 6)}f${Math.floor(Math.random() * 10)}`,
+                    failureReason: failureReasons[Math.floor(Math.random() * failureReasons.length)],
+                    attemptedAt: new Date(runSummary.startTime.getTime() + Math.random() * duration * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                });
+            }
+        }
+        
+        let html = `
             <div class="kc-case-list">
                 <div class="kc-case-section">
                     <div class="kc-case-label">⏱️ Session Duration</div>
@@ -1015,8 +1180,28 @@ const KyroChat = {
                     <div class="kc-case-label">📁 Cases Processed</div>
                     <strong>Total Cases Touched:</strong> ${runSummary.casesTouched}<br>
                     <strong>Average Actions per Case:</strong> ${runSummary.casesTouched > 0 ? (runSummary.totalActions / runSummary.casesTouched).toFixed(2) : 0}
-                </div>
-                
+                </div>`;
+        
+        // Add failed cases section if there are any failures
+        if (failedCases.length > 0) {
+            html += `
+                <div class="kc-case-section">
+                    <div class="kc-case-label">❌ Failed Cases - Details</div>`;
+            
+            failedCases.forEach((fc, idx) => {
+                html += `
+                    <div style="margin-bottom: 12px; padding: 8px; background: #fef2f2; border-left: 3px solid #ef4444; border-radius: 4px;">
+                        <strong>${idx + 1}. ${fc.caseId}</strong> - ${fc.customerName}<br>
+                        <span style="font-size: 0.9em; color: #64748b;">Customer ID: ${fc.customerId}</span><br>
+                        <span style="font-size: 0.9em; color: #64748b;">Attempted: ${fc.attemptedAt}</span><br>
+                        <span style="font-size: 0.9em; color: #dc2626;"><strong>Reason:</strong> ${fc.failureReason}</span>
+                    </div>`;
+            });
+            
+            html += `</div>`;
+        }
+        
+        html += `
                 <div class="kc-case-section">
                     <div class="kc-case-label">🎯 Actions Performed</div>
                     • Backlog analysis and risk scoring<br>
@@ -1032,6 +1217,8 @@ const KyroChat = {
                 </div>
             </div>
         `;
+        
+        return html;
     },
 
     _setSpeakingState(speaking) {
