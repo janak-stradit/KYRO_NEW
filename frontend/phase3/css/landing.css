@@ -81,11 +81,39 @@ body {
     white-space: nowrap;
 }
 
-/* CTA Button */
+/* CTA and Auth Buttons */
+.nav-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.nav-signin {
+    display: inline-flex;
+    align-items: center;
+    padding: 10px 20px;
+    color: #1f2937;
+    font-weight: 600;
+    font-size: 0.875rem;
+    text-decoration: none;
+    transition: all 0.2s;
+    border-radius: 8px;
+    border: 1px solid #e5e7eb;
+    background: white;
+}
+
+.nav-signin:hover {
+    background: #f97316;
+    color: white;
+    border-color: #f97316;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(249, 115, 22, 0.2);
+}
+
 .nav-cta {
     display: inline-flex;
     align-items: center;
-    padding: 8px 20px;
+    padding: 10px 24px;
     background: linear-gradient(135deg, #f97316, #ea580c);
     color: white;
     font-weight: 600;
@@ -93,12 +121,12 @@ body {
     border-radius: 8px;
     text-decoration: none;
     transition: all 0.2s;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 2px 8px rgba(249, 115, 22, 0.3);
 }
 
 .nav-cta:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(249, 115, 22, 0.3);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(249, 115, 22, 0.4);
     color: white;
 }
 
@@ -728,5 +756,44 @@ html {
     
     .products-grid {
         grid-template-columns: 1fr;
+    }
+}
+
+/* Navbar Responsive Styles */
+@media (max-width: 640px) {
+    .nav-container {
+        padding: 0 1rem;
+    }
+    
+    .nav-actions {
+        gap: 8px;
+    }
+    
+    .nav-signin {
+        padding: 8px 12px;
+        font-size: 0.8125rem;
+    }
+    
+    .nav-cta {
+        padding: 8px 16px;
+        font-size: 0.8125rem;
+    }
+    
+    .logo-svg-container {
+        transform: scale(0.9);
+    }
+}
+
+@media (max-width: 480px) {
+    .nav-signin span {
+        display: none;
+    }
+    
+    .nav-signin::before {
+        content: "Sign In";
+    }
+    
+    .nav-cta {
+        padding: 8px 14px;
     }
 }

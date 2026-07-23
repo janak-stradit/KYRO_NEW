@@ -188,10 +188,10 @@ const PeriodicReviews = {
                             <span class="aml-freq-x" style="left: 53%;">6 Months</span>
                             <span class="aml-freq-x" style="left: 86%;">12 Months</span>
                             
-                            <!-- Bar chart bars - dynamically updated -->
-                            <div id="freqBar3M" style="position: absolute; bottom: 0; left: 13%; width: 14%; height: 31%; background: #ee4444; border-radius: 6px 6px 0 0; transition: height 0.3s ease;"></div>
-                            <div id="freqBar6M" style="position: absolute; bottom: 0; left: 46%; width: 14%; height: 75%; background: #f5a623; border-radius: 6px 6px 0 0; transition: height 0.3s ease;"></div>
-                            <div id="freqBar12M" style="position: absolute; bottom: 0; left: 79%; width: 14%; height: 81%; background: #1fb877; border-radius: 6px 6px 0 0; transition: height 0.3s ease;"></div>
+                            <!-- Bar chart bars - dynamically updated with animation -->
+                            <div id="freqBar3M" class="freq-bar-animated" style="position: absolute; bottom: 0; left: 13%; width: 14%; height: 0%; background: #ee4444; border-radius: 6px 6px 0 0; transition: height 0.8s cubic-bezier(0.4, 0, 0.2, 1);"></div>
+                            <div id="freqBar6M" class="freq-bar-animated" style="position: absolute; bottom: 0; left: 46%; width: 14%; height: 0%; background: #f5a623; border-radius: 6px 6px 0 0; transition: height 0.8s cubic-bezier(0.4, 0, 0.2, 1) 0.15s;"></div>
+                            <div id="freqBar12M" class="freq-bar-animated" style="position: absolute; bottom: 0; left: 79%; width: 14%; height: 0%; background: #1fb877; border-radius: 6px 6px 0 0; transition: height 0.8s cubic-bezier(0.4, 0, 0.2, 1) 0.3s;"></div>
                         </div>
                     </section>
                     
@@ -207,7 +207,7 @@ const PeriodicReviews = {
                         </div>
                         
                         <div class="aml-pr-donut-wrap">
-                            <div class="aml-pr-donut" id="scheduleDonut" role="img" aria-label="Active schedules"></div>
+                            <div class="aml-pr-donut donut-animated" id="scheduleDonut" role="img" aria-label="Active schedules"></div>
                         </div>
                         
                         <div class="aml-pr-status-legend">
@@ -354,9 +354,10 @@ const PeriodicReviews = {
         const dueSoon = this.reviewsData.filter(r => !r.overdue && r.dueIn <= 7).length;
         const future = this.reviewsData.filter(r => !r.overdue && r.dueIn > 7).length;
         
-        $("#overdueCount").text(overdue);
-        $("#dueSoonCount").text(dueSoon);
-        $("#futureCount").text(future);
+        // Animate count updates
+        this.animateCount("#overdueCount", 0, overdue, 600);
+        this.animateCount("#dueSoonCount", 0, dueSoon, 600);
+        this.animateCount("#futureCount", 0, future, 600);
         
         const active = this.reviewsData.filter(r => r.status === 'Active').length;
         const inactive = this.reviewsData.filter(r => r.status === 'Inactive').length;
@@ -373,6 +374,22 @@ const PeriodicReviews = {
         
         // Update bar chart based on frequency data
         this.updateFrequencyChart();
+    },
+    
+    animateCount(selector, start, end, duration) {
+        const $el = $(selector);
+        const range = end - start;
+        const increment = range / (duration / 16); // 60fps
+        let current = start;
+        
+        const timer = setInterval(() => {
+            current += increment;
+            if ((increment > 0 && current >= end) || (increment < 0 && current <= end)) {
+                current = end;
+                clearInterval(timer);
+            }
+            $el.text(Math.floor(current));
+        }, 16);
     },
     
     updateFrequencyChart() {
@@ -396,10 +413,17 @@ const PeriodicReviews = {
         $("#freqYAxis50").text(Math.round(scale * 0.5));
         $("#freqYAxis75").text(Math.round(scale * 0.25));
         
-        // Update bar heights
-        $("#freqBar3M").css('height', `${height3M}%`);
-        $("#freqBar6M").css('height', `${height6M}%`);
-        $("#freqBar12M").css('height', `${height12M}%`);
+        // Reset heights to 0 first for animation
+        $("#freqBar3M").css('height', '0%');
+        $("#freqBar6M").css('height', '0%');
+        $("#freqBar12M").css('height', '0%');
+        
+        // Trigger animation after a small delay
+        setTimeout(() => {
+            $("#freqBar3M").css('height', `${height3M}%`);
+            $("#freqBar6M").css('height', `${height6M}%`);
+            $("#freqBar12M").css('height', `${height12M}%`);
+        }, 100);
     },
     
     renderScheduleDonut() {
@@ -427,7 +451,17 @@ const PeriodicReviews = {
         }
         
         console.log("Applying donut style:", donutStyle);
-        $("#scheduleDonut").attr("style", donutStyle);
+        
+        // Reset and animate
+        const $donut = $("#scheduleDonut");
+        $donut.css({
+            'transform': 'scale(0)',
+            'opacity': '0'
+        });
+        
+        setTimeout(() => {
+            $donut.attr("style", donutStyle + " transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.6s ease; transform: scale(1); opacity: 1;");
+        }, 200);
     },
     
     initializeTable() {

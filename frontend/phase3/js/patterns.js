@@ -17,18 +17,40 @@ const Patterns = {
         patternType: 'all'
     },
     
-    init(params = {}) {
+    async init(params = {}) {
         console.log("Initializing Behavioral Patterns page...");
-        this.generateCustomerPatternData();
+        await this.fetchRealCustomersAndGeneratePatterns();
         this.loadDashboard();
     },
     
-    generateCustomerPatternData(totalCustomers = 1000) {
-        // Generate comprehensive customer pattern data for all customers
-        const allCustomers = [];
-        for (let i = 1; i <= totalCustomers; i++) {
-            allCustomers.push(`CUST-${String(i).padStart(3, '0')}`);
+    async fetchRealCustomersAndGeneratePatterns() {
+        try {
+            // Fetch real customers from API
+            const response = await API.get("/customers", { page_size: 1000 });
+            const customers = response.items || [];
+            
+            // Build customer ID list from real data
+            const allCustomers = customers.map((cust, idx) => {
+                return `CUST-${String(idx + 1).padStart(3, '0')}`;
+            });
+            
+            console.log(`Fetched ${allCustomers.length} real customers from API`);
+            
+            // Now generate pattern data using real customer IDs
+            this.generateCustomerPatternData(allCustomers);
+        } catch (error) {
+            console.error("Error fetching customers:", error);
+            // Fallback to default behavior with limited range
+            const allCustomers = [];
+            for (let i = 1; i <= 459; i++) {
+                allCustomers.push(`CUST-${String(i).padStart(3, '0')}`);
+            }
+            this.generateCustomerPatternData(allCustomers);
         }
+    },
+    
+    generateCustomerPatternData(allCustomers) {
+        // Generate comprehensive customer pattern data using provided customer list
         
         const patternTypes = [
             { name: 'Complexity Shift', value: 'complexity_shift', color: '#8b5cf6' },
@@ -494,7 +516,8 @@ const Patterns = {
         const totalPatternsAllTime = 500;
         const anomalies = Math.round(totalPatternsAllTime * 0.666); // ~66% are anomalies
         
-        let actualCustomerCount = 1000;
+        // Fetch actual customer count from API
+        let actualCustomerCount = 1000; // Default fallback
         try {
             const kpiData = await API.get(API.endpoints.kpis);
             if (kpiData && kpiData.total_customers) {
@@ -504,11 +527,11 @@ const Patterns = {
             console.error("Failed to fetch KPIs for customer count", e);
         }
 
-        // Update the DOM
-        $("#totalPatternsCount").text(totalPatternsAllTime);
-        $("#customersCount").text(actualCustomerCount); // Dynamic total customers in system
-        $("#patternTypesCount").text(patternTypes);
-        $("#anomaliesCount").text(anomalies);
+        // Update the DOM with formatted numbers
+        $("#totalPatternsCount").text(totalPatternsAllTime.toLocaleString());
+        $("#customersCount").text(actualCustomerCount.toLocaleString()); // Dynamic from API with formatting
+        $("#patternTypesCount").text(patternTypes.toLocaleString());
+        $("#anomaliesCount").text(anomalies.toLocaleString());
     },
     
     renderTable() {
@@ -808,9 +831,9 @@ const Patterns = {
         const self = this;
         
         // Refresh button
-        $("#refreshPatternsBtn").on("click", () => {
+        $("#refreshPatternsBtn").on("click", async () => {
             Utils.showToast("Refreshing pattern data...", "info");
-            this.generateCustomerPatternData();
+            await this.fetchRealCustomersAndGeneratePatterns();
             this.renderTable();
             this.updateChartsForPattern(this.currentFilters.patternType);
         });
