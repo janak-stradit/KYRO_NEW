@@ -273,56 +273,58 @@ const PeriodicReviews = {
                     <p class="aml-subtitle" style="padding: 0 28px; margin: 12px 0 16px;">Showing schedules...</p>
                     
                     <!-- Table -->
-                    <table class="table table-hover mb-0" id="reviewsTable" style="margin: 0;">
-                        <thead style="background: transparent; border-bottom: 1px solid var(--aml-border);">
-                            <tr>
-                                <th style="padding: 14px 28px; font-size: 12px; font-weight: 600; color: var(--aml-muted); border: none; text-transform: uppercase; letter-spacing: 0.3px;">
-                                    <div style="display: flex; align-items: center; gap: 6px;">
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-                                        Customer ID
-                                    </div>
-                                </th>
-                                <th style="padding: 14px 20px; font-size: 12px; font-weight: 600; color: var(--aml-muted); border: none; text-transform: uppercase; letter-spacing: 0.3px;">
-                                    <div style="display: flex; align-items: center; gap: 6px;">
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
-                                        Risk Level
-                                    </div>
-                                </th>
-                                <th style="padding: 14px 20px; font-size: 12px; font-weight: 600; color: var(--aml-muted); border: none; text-transform: uppercase; letter-spacing: 0.3px;">
-                                    <div style="display: flex; align-items: center; gap: 6px;">
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-                                        Last KYC Review
-                                    </div>
-                                </th>
-                                <th style="padding: 14px 20px; font-size: 12px; font-weight: 600; color: var(--aml-muted); border: none; text-transform: uppercase; letter-spacing: 0.3px;">
-                                    <div style="display: flex; align-items: center; gap: 6px;">
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-                                        Next Review
-                                    </div>
-                                </th>
-                                <th style="padding: 14px 20px; font-size: 12px; font-weight: 600; color: var(--aml-muted); border: none; text-transform: uppercase; letter-spacing: 0.3px;">
-                                    <div style="display: flex; align-items: center; gap: 6px;">
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-                                        Due In
-                                    </div>
-                                </th>
-                                <th style="padding: 14px 20px; font-size: 12px; font-weight: 600; color: var(--aml-muted); border: none; text-transform: uppercase; letter-spacing: 0.3px;">
-                                    <div style="display: flex; align-items: center; gap: 6px;">
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
-                                        Frequency
-                                    </div>
-                                </th>
-                                <th style="padding: 14px 20px; font-size: 12px; font-weight: 600; color: var(--aml-muted); border: none; text-transform: uppercase; letter-spacing: 0.3px;">
-                                    <div style="display: flex; align-items: center; gap: 6px;">
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
-                                        Status
-                                    </div>
-                                </th>
-                                <th style="padding: 14px 28px; font-size: 12px; font-weight: 600; color: var(--aml-muted); border: none; text-align: center; text-transform: uppercase; letter-spacing: 0.3px;">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody></tbody>
-                    </table>
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0" id="reviewsTable" style="margin: 0;">
+                            <thead style="background: transparent; border-bottom: 1px solid var(--aml-border);">
+                                <tr>
+                                    <th style="padding: 14px 28px; font-size: 12px; font-weight: 600; color: var(--aml-muted); border: none; text-transform: uppercase; letter-spacing: 0.3px;">
+                                        <div style="display: flex; align-items: center; gap: 6px;">
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                                            Customer ID
+                                        </div>
+                                    </th>
+                                    <th style="padding: 14px 20px; font-size: 12px; font-weight: 600; color: var(--aml-muted); border: none; text-transform: uppercase; letter-spacing: 0.3px;">
+                                        <div style="display: flex; align-items: center; gap: 6px;">
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                                            Risk Level
+                                        </div>
+                                    </th>
+                                    <th style="padding: 14px 20px; font-size: 12px; font-weight: 600; color: var(--aml-muted); border: none; text-transform: uppercase; letter-spacing: 0.3px;">
+                                        <div style="display: flex; align-items: center; gap: 6px;">
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                                            Last KYC Review
+                                        </div>
+                                    </th>
+                                    <th style="padding: 14px 20px; font-size: 12px; font-weight: 600; color: var(--aml-muted); border: none; text-transform: uppercase; letter-spacing: 0.3px;">
+                                        <div style="display: flex; align-items: center; gap: 6px;">
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                                            Next Review
+                                        </div>
+                                    </th>
+                                    <th style="padding: 14px 20px; font-size: 12px; font-weight: 600; color: var(--aml-muted); border: none; text-transform: uppercase; letter-spacing: 0.3px;">
+                                        <div style="display: flex; align-items: center; gap: 6px;">
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                                            Due In
+                                        </div>
+                                    </th>
+                                    <th style="padding: 14px 20px; font-size: 12px; font-weight: 600; color: var(--aml-muted); border: none; text-transform: uppercase; letter-spacing: 0.3px;">
+                                        <div style="display: flex; align-items: center; gap: 6px;">
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+                                            Frequency
+                                        </div>
+                                    </th>
+                                    <th style="padding: 14px 20px; font-size: 12px; font-weight: 600; color: var(--aml-muted); border: none; text-transform: uppercase; letter-spacing: 0.3px;">
+                                        <div style="display: flex; align-items: center; gap: 6px;">
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+                                            Status
+                                        </div>
+                                    </th>
+                                    <th style="padding: 14px 28px; font-size: 12px; font-weight: 600; color: var(--aml-muted); border: none; text-align: center; text-transform: uppercase; letter-spacing: 0.3px;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         `;

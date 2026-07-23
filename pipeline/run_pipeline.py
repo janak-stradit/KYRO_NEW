@@ -727,7 +727,7 @@ if __name__ == "__main__":
                     -(-num_total // batch_size),  # ceiling division
                     current_batch, processed)
 
-        dataset = generate_dataset(num_customers=current_batch)
+        dataset = generate_dataset(num_customers=current_batch, start_id=processed + 1)
 
         pipeline = AMLPipeline()
         stats = pipeline.run(dataset=dataset)

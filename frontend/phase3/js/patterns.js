@@ -12,78 +12,60 @@ const Patterns = {
         patternTypeDonut: null,
         patternTypeArea: null
     },
+    showAllRows: false,
     currentFilters: {
         customer: 'all',
         patternType: 'all'
     },
-    
+
     init(params = {}) {
         console.log("Initializing Behavioral Patterns page...");
         this.generateCustomerPatternData();
         this.loadDashboard();
     },
-    
-    generateCustomerPatternData(totalCustomers = 10000) {
-        // Generate comprehensive customer pattern data for all customers
-        const allCustomers = [];
-        for (let i = 1; i <= totalCustomers; i++) {
-            allCustomers.push(`CUST-${String(i).padStart(3, '0')}`);
-        }
-        
+
+    generateCustomerPatternData(totalCustomers = 9784) {
         const patternTypes = [
-            { name: 'Complexity Shift', value: 'complexity_shift', color: '#8b5cf6' },
-            { name: 'Counterparty Changes', value: 'counterparty_changes', color: '#22c55e' },
-            { name: 'Geographic Shift', value: 'geographic_shift', color: '#0ea5e9' },
+            { name: 'Complexity Shift',      value: 'complexity_shift',      color: '#8b5cf6' },
+            { name: 'Counterparty Changes',  value: 'counterparty_changes',  color: '#22c55e' },
+            { name: 'Geographic Shift',      value: 'geographic_shift',      color: '#0ea5e9' },
             { name: 'Inactive Reactivation', value: 'inactive_reactivation', color: '#eab308' },
-            { name: 'Threshold Breach', value: 'threshold_breach', color: '#ef4444' },
-            { name: 'Velocity Spike', value: 'velocity_spike', color: '#FF8D28' }
+            { name: 'Threshold Breach',      value: 'threshold_breach',      color: '#ef4444' },
+            { name: 'Velocity Spike',        value: 'velocity_spike',        color: '#FF8D28' }
         ];
-        
+
         this.customerPatternData = [];
-        
-        // Generate data for 50 customers with patterns
-        const sampleSize = 50;
-        const usedCustomers = new Set();
-        
-        for (let i = 0; i < sampleSize; i++) {
-            // Pick random customer that hasn't been used
-            let custId;
-            do {
-                custId = allCustomers[Math.floor(Math.random() * allCustomers.length)];
-            } while (usedCustomers.has(custId) && usedCustomers.size < allCustomers.length);
-            usedCustomers.add(custId);
-            
-            // Assign random pattern
-            const pattern = patternTypes[Math.floor(Math.random() * patternTypes.length)];
-            
+
+        // Generate pattern records for ALL 9,784 customers
+        for (let i = 1; i <= totalCustomers; i++) {
+            const custId = `CUST-${i}`;
+            const pattern = patternTypes[(i - 1) % patternTypes.length];
+
             this.customerPatternData.push({
-                customerId: custId,
-                patternType: pattern.value,
-                patternName: pattern.name,
-                patternColor: pattern.color,
-                lastKyc: 'Not available',
+                customerId:    custId,
+                patternType:   pattern.value,
+                patternName:   pattern.name,
+                patternColor:  pattern.color,
+                lastKyc:       'Not available',
                 baselineValue: (Math.random() * 20000).toFixed(2),
-                stdDeviation: (Math.random() * 1000).toFixed(2),
-                lastUpdated: '7/7/2026'
+                stdDeviation:  (Math.random() * 1000).toFixed(2),
+                lastUpdated:   '7/7/2026'
             });
         }
-        
-        console.log(`Generated ${this.customerPatternData.length} pattern records for ${usedCustomers.size} customers`);
+
+        console.log(`Generated pattern records for ${this.customerPatternData.length} customers`);
     },
-    
+
     async loadDashboard() {
-        // Generate unique customer list from pattern data
-        const uniqueCustomers = [...new Set(this.customerPatternData.map(d => d.customerId))].sort();
-        
-        // Build customer dropdown options
-        const customerOptions = uniqueCustomers.map(cust => 
-            `<option value="${cust}">${cust}</option>`
+        // Build customer options for all customers in dataset
+        const customerOptions = this.customerPatternData.map(d =>
+            `<option value="${d.customerId}">${d.customerId}</option>`
         ).join('');
-        
+
         const html = `
             <div class="container-fluid py-4" style="max-width: 1280px; margin: 0 auto;">
                 <!-- Header -->
-                <div class="d-flex justify-content-between align-items-center mb-4">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
                     <div>
                         <h2 class="mb-1" style="font-weight: 600;">Behavior Patterns</h2>
                         <p class="text-muted mb-0" style="font-size: 14px;">Customer behavioral baselines and anomaly detection analytics</p>
@@ -94,7 +76,9 @@ const Patterns = {
                             </span>
                         </div>
                     </div>
-                    <button class="btn btn-danger px-4" id="refreshPatternsBtn" style="font-size: 14px;">Refresh</button>
+                    <button class="btn btn-danger px-4 py-2 shadow-sm" id="refreshPatternsBtn" style="font-size: 14px; font-weight: 500; min-width: 120px; transition: all 0.2s ease;">
+                        <i class="fas fa-sync-alt me-2"></i>Refresh
+                    </button>
                 </div>
                 
                 <!-- Filters & Search Section -->
@@ -444,7 +428,7 @@ const Patterns = {
                                 <h5 class="mb-1" style="font-weight: 600;">Customer Behavioral Patterns</h5>
                                 <p class="text-muted mb-0" style="font-size: 13px;">Detailed view of all customer patterns and baselines</p>
                             </div>
-                            <button class="btn btn-sm" style="background: #FF8D28; color: white; font-size: 13px;">Show More</button>
+                            <button class="btn btn-sm" id="toggleShowMoreBtn" style="background: #FF8D28; color: white; font-size: 13px;">Show More</button>
                         </div>
                         
                         <div class="table-responsive">
@@ -476,24 +460,48 @@ const Patterns = {
                 </div>
             </div>
         `;
-        
+
         $("#mainContent").html(html);
         this.updateStats();
         this.renderTable();
         this.initCharts();
         this.setupEventListeners();
     },
-    
+
+    async refreshData() {
+        const $btn = $("#refreshPatternsBtn");
+        const originalText = $btn.html();
+        $btn.prop("disabled", true).html('<i class="fas fa-spinner fa-spin me-2"></i>Refreshing...');
+
+        try {
+            if (window.Utils && Utils.showToast) {
+                Utils.showToast("Refreshing pattern analytics data...", "info");
+            }
+
+            await this.updateStats();
+            this.generateCustomerPatternData();
+            this.renderTable();
+            this.updateChartsForPattern(this.currentFilters.patternType || 'all');
+
+            if (window.Utils && Utils.showToast) {
+                Utils.showToast("Pattern analytics data refreshed successfully!", "success");
+            }
+        } catch (error) {
+            console.error("Refresh error:", error);
+            if (window.Utils && Utils.showToast) {
+                Utils.showToast("Error refreshing pattern data", "error");
+            }
+        } finally {
+            $btn.prop("disabled", false).html(originalText);
+        }
+    },
+
     async updateStats() {
         // Calculate real-time stats from customerPatternData
         const totalPatterns = this.customerPatternData.length;
         const uniqueCustomers = new Set(this.customerPatternData.map(d => d.customerId)).size;
         const patternTypes = 6; // Fixed: 6 canonical pattern types
-        
-        // For anomalies, we can use a multiplier (e.g., 500 total patterns across all time, with historical data)
-        const totalPatternsAllTime = 500;
-        const anomalies = Math.round(totalPatternsAllTime * 0.666); // ~66% are anomalies
-        
+
         let actualCustomerCount = 10000;
         try {
             const kpiData = await API.get(API.endpoints.kpis);
@@ -504,16 +512,19 @@ const Patterns = {
             console.error("Failed to fetch KPIs for customer count", e);
         }
 
+        const totalPatternsAllTime = actualCustomerCount;
+        const anomalies = Math.round(totalPatternsAllTime * 0.666); // ~66% are anomalies
+
         // Update the DOM
         $("#totalPatternsCount").text(totalPatternsAllTime);
         $("#customersCount").text(actualCustomerCount); // Dynamic total customers in system
         $("#patternTypesCount").text(patternTypes);
         $("#anomaliesCount").text(anomalies);
     },
-    
+
     renderTable() {
         let filteredData = this.customerPatternData;
-        
+
         // Apply filters
         if (this.currentFilters.customer !== 'all') {
             filteredData = filteredData.filter(d => d.customerId === this.currentFilters.customer);
@@ -521,12 +532,19 @@ const Patterns = {
         if (this.currentFilters.patternType !== 'all') {
             filteredData = filteredData.filter(d => d.patternType === this.currentFilters.patternType);
         }
-        
+
+        // Limit display rows based on showAllRows state (15 vs 200)
+        const limit = this.showAllRows ? 200 : 15;
+        const displayData = filteredData.slice(0, limit);
+
+        // Update Show More / Show Less button text
+        $("#toggleShowMoreBtn").text(this.showAllRows ? 'Show Less' : 'Show More');
+
         // Generate table rows
-        const rows = filteredData.map(data => {
+        const rows = displayData.map(data => {
             const stdClass = parseFloat(data.stdDeviation) > 500 ? 'text-danger' : 'text-success';
             const bgColor = data.patternColor + '26'; // Add transparency
-            
+
             return `
                 <tr class="pattern-table-row" data-customer="${data.customerId}" data-pattern="${data.patternType}">
                     <td class="px-3 py-3">${data.customerId}</td>
@@ -549,9 +567,9 @@ const Patterns = {
                 </tr>
             `;
         }).join('');
-        
+
         $("#patternsTableBody").html(rows || '<tr><td colspan="7" class="text-center py-4 text-muted">No patterns found</td></tr>');
-        
+
         // Update filter status
         const activeFilters = [];
         if (this.currentFilters.customer !== 'all') activeFilters.push(`Customer: ${this.currentFilters.customer}`);
@@ -559,14 +577,15 @@ const Patterns = {
             const patternName = this.currentFilters.patternType.replace(/_/g, ' ');
             activeFilters.push(`Pattern: ${patternName}`);
         }
-        
+
+        const showingText = `Showing ${displayData.length} of ${filteredData.length} patterns`;
         if (activeFilters.length > 0) {
-            $("#filterStatus").text(activeFilters.join(', '));
+            $("#filterStatus").text(`${activeFilters.join(', ')} | ${showingText}`);
         } else {
-            $("#filterStatus").text('No filters applied');
+            $("#filterStatus").text(`${showingText}`);
         }
     },
-    
+
     initCharts() {
         // Transaction Size Baseline Chart (Area Chart - Purple/Blue)
         const sizeCtx = document.getElementById('transactionSizeChart');
@@ -575,7 +594,7 @@ const Patterns = {
             const gradient = ctx.createLinearGradient(0, 0, 0, 280);
             gradient.addColorStop(0, 'rgba(139, 92, 246, 0.5)');
             gradient.addColorStop(1, 'rgba(139, 92, 246, 0.05)');
-            
+
             this.charts.transactionSize = new Chart(sizeCtx, {
                 type: 'line',
                 data: {
@@ -595,22 +614,22 @@ const Patterns = {
                     maintainAspectRatio: false,
                     plugins: { legend: { display: false } },
                     scales: {
-                        x: { 
+                        x: {
                             grid: { display: false },
                             ticks: { font: { size: 11 } }
                         },
                         y: {
                             grid: { color: 'rgba(0,0,0,0.05)' },
-                            ticks: { 
+                            ticks: {
                                 font: { size: 11 },
-                                callback: value => '$' + (value/1000) + 'k'
+                                callback: value => '$' + (value / 1000) + 'k'
                             }
                         }
                     }
                 }
             });
         }
-        
+
         // Transaction Frequency Baselines Chart (Area Chart - Green)
         const freqCtx = document.getElementById('transactionFrequencyChart');
         if (freqCtx) {
@@ -618,7 +637,7 @@ const Patterns = {
             const gradient = ctx.createLinearGradient(0, 0, 0, 280);
             gradient.addColorStop(0, 'rgba(34, 197, 94, 0.5)');
             gradient.addColorStop(1, 'rgba(34, 197, 94, 0.05)');
-            
+
             this.charts.transactionFrequency = new Chart(freqCtx, {
                 type: 'line',
                 data: {
@@ -638,7 +657,7 @@ const Patterns = {
                     maintainAspectRatio: false,
                     plugins: { legend: { display: false } },
                     scales: {
-                        x: { 
+                        x: {
                             grid: { display: false },
                             ticks: { font: { size: 11 } }
                         },
@@ -650,7 +669,7 @@ const Patterns = {
                 }
             });
         }
-        
+
         // Pattern Type Distribution Donut Chart (Left)
         const donutCtx = document.getElementById('patternTypeDonutChart');
         if (donutCtx) {
@@ -686,7 +705,7 @@ const Patterns = {
                         legend: { display: false },
                         tooltip: {
                             callbacks: {
-                                label: function(context) {
+                                label: function (context) {
                                     return context.label + ': ' + context.parsed + '%';
                                 }
                             }
@@ -695,7 +714,7 @@ const Patterns = {
                 }
             });
         }
-        
+
         // Pattern Type Distribution Area Chart (Right)
         const areaCtx = document.getElementById('patternTypeAreaChart');
         if (areaCtx) {
@@ -703,7 +722,7 @@ const Patterns = {
             const gradient = ctx.createLinearGradient(0, 0, 0, 280);
             gradient.addColorStop(0, 'rgba(255, 141, 40, 0.4)');
             gradient.addColorStop(1, 'rgba(255, 141, 40, 0.05)');
-            
+
             this.charts.patternTypeArea = new Chart(areaCtx, {
                 type: 'line',
                 data: {
@@ -726,13 +745,13 @@ const Patterns = {
                     maintainAspectRatio: false,
                     plugins: { legend: { display: false } },
                     scales: {
-                        x: { 
+                        x: {
                             grid: { display: false },
                             ticks: { font: { size: 11 } }
                         },
                         y: {
                             grid: { color: 'rgba(0,0,0,0.05)' },
-                            ticks: { 
+                            ticks: {
                                 font: { size: 11 },
                                 callback: value => value + '%'
                             },
@@ -744,8 +763,8 @@ const Patterns = {
             });
         }
     },
-    
-    
+
+
     getChartDataForPattern(patternType) {
         // Different chart data for each pattern type
         const chartData = {
@@ -778,13 +797,13 @@ const Patterns = {
                 frequency: [110, 160, 220, 280, 260, 300, 280, 270, 310, 240]
             }
         };
-        
+
         return chartData[patternType] || chartData.all;
     },
-    
+
     updateChartsForPattern(patternType) {
         const data = this.getChartDataForPattern(patternType);
-        
+
         // Update Transaction Size Baseline chart with animation
         if (this.charts.transactionSize) {
             this.charts.transactionSize.data.datasets[0].data = data.size;
@@ -793,7 +812,7 @@ const Patterns = {
                 easing: 'easeInOutQuart'
             });
         }
-        
+
         // Update Transaction Frequency Baselines chart with animation
         if (this.charts.transactionFrequency) {
             this.charts.transactionFrequency.data.datasets[0].data = data.frequency;
@@ -803,20 +822,18 @@ const Patterns = {
             });
         }
     },
-    
+
     setupEventListeners() {
         const self = this;
-        
-        // Refresh button
-        $("#refreshPatternsBtn").on("click", () => {
-            Utils.showToast("Refreshing pattern data...", "info");
-            this.generateCustomerPatternData();
-            this.renderTable();
-            this.updateChartsForPattern(this.currentFilters.patternType);
+
+        // Refresh button (using delegated handler for reliability)
+        $(document).off("click", "#refreshPatternsBtn").on("click", "#refreshPatternsBtn", async function (e) {
+            e.preventDefault();
+            await self.refreshData();
         });
-        
+
         // Clear Filters button
-        $("#clearFiltersBtn").on("click", function() {
+        $("#clearFiltersBtn").on("click", function () {
             $("#filterCustomers").val("all");
             $("#filterPatternType").val("all");
             self.currentFilters.customer = "all";
@@ -825,56 +842,56 @@ const Patterns = {
             self.updateChartsForPattern("all");
             Utils.showToast("Filters cleared", "success");
         });
-        
+
         // Filter dropdowns with table update
-        $("#filterCustomers, #filterPatternType").on("change", function() {
+        $("#filterCustomers, #filterPatternType").on("change", function () {
             self.currentFilters.customer = $("#filterCustomers").val();
             self.currentFilters.patternType = $("#filterPatternType").val();
-            
+
             // Update table with filtered data
             self.renderTable();
-            
+
             // Update charts based on selected pattern type
             self.updateChartsForPattern(self.currentFilters.patternType);
-            
-            const patternName = self.currentFilters.patternType === 'all' 
-                ? 'All Pattern Types' 
+
+            const patternName = self.currentFilters.patternType === 'all'
+                ? 'All Pattern Types'
                 : self.currentFilters.patternType.replace(/_/g, ' ');
-            
+
             const customerName = self.currentFilters.customer === 'all'
                 ? 'All Customers'
                 : self.currentFilters.customer;
-            
+
             Utils.showToast(`Viewing: ${customerName} - ${patternName}`, "success");
         });
-        
+
         // Pattern card clicks
-        $(document).on("click", ".pattern-card", function() {
+        $(document).on("click", ".pattern-card", function () {
             const pattern = $(this).data("pattern");
-            
+
             // Highlight selected card
             $(".pattern-card").removeClass("border-primary");
             $(this).addClass("border-primary");
-            
+
             // Update the dropdown to the clicked pattern
             $("#filterPatternType").val(pattern).trigger("change");
         });
-        
+
         // View Cases button clicks - use body instead of document for better delegation
-        $("body").off("click", ".view-cases-btn").on("click", ".view-cases-btn", function(e) {
+        $("body").off("click", ".view-cases-btn").on("click", ".view-cases-btn", function (e) {
             e.preventDefault();
             e.stopPropagation();
-            
+
             const customerId = $(this).data("customer");
             const patternType = $(this).data("pattern");
             const patternName = patternType.replace(/_/g, ' ');
-            
+
             console.log("View Cases clicked:", customerId, patternType);
-            
+
             if (window.Utils && Utils.showToast) {
                 Utils.showToast(`Opening cases for ${customerId} - ${patternName}`, "info");
             }
-            
+
             // Navigate to cases page using App.navigateTo
             if (window.App && App.navigateTo) {
                 App.navigateTo('cases', { customer: customerId, pattern: patternType });
@@ -882,32 +899,33 @@ const Patterns = {
                 console.error("App.navigateTo not available");
             }
         });
-        
-        // Show More button
-        $(document).on("click", ".card-body .btn-sm", function() {
-            if ($(this).text() === 'Show More') {
-                $(this).text('Show Less');
-                Utils.showToast("Showing all patterns", "info");
-            } else {
-                $(this).text('Show More');
-                Utils.showToast("Showing limited patterns", "info");
+
+        // Show More / Show Less button
+        $(document).off("click", "#toggleShowMoreBtn").on("click", "#toggleShowMoreBtn", function (e) {
+            e.preventDefault();
+            self.showAllRows = !self.showAllRows;
+            self.renderTable();
+
+            if (window.Utils && Utils.showToast) {
+                const msg = self.showAllRows ? "Expanded pattern table (showing 200 patterns)" : "Collapsed pattern table (showing 15 patterns)";
+                Utils.showToast(msg, "info");
             }
         });
-        
+
         // Table row click to highlight (but not when clicking button)
-        $(document).on("click", ".pattern-table-row", function(e) {
+        $(document).on("click", ".pattern-table-row", function (e) {
             // Don't highlight if clicking the button
             if ($(e.target).hasClass('view-cases-btn') || $(e.target).closest('.view-cases-btn').length) {
                 return;
             }
-            
+
             $(".pattern-table-row").removeClass("table-active");
             $(this).addClass("table-active");
-            
+
             const customerId = $(this).data("customer");
             const patternType = $(this).data("pattern");
             const patternName = patternType.replace(/_/g, ' ');
-            
+
             if (window.Utils && Utils.showToast) {
                 Utils.showToast(`Selected: ${customerId} - ${patternName}`, "info");
             }

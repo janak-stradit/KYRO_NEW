@@ -133,7 +133,7 @@ def generate_accounts(customer_id, num_accounts=None):
 
 
 def generate_transactions(customer_id, account_id, num_transactions=None):
-    count = num_transactions or random.randint(50, 200)
+    count = num_transactions or random.randint(5, 20)
     txns = []
     for _ in range(count):
         txn_type = random.choice(TRANSACTION_TYPES)
@@ -177,10 +177,10 @@ def generate_transactions(customer_id, account_id, num_transactions=None):
     return txns
 
 
-def generate_dataset(num_customers=5000):
+def generate_dataset(num_customers=5000, start_id=1):
     customers, accounts, transactions = [], [], []
 
-    for i in range(1, num_customers + 1):
+    for i in range(start_id, start_id + num_customers):
         c = generate_customer(i)
         customers.append(c)
 

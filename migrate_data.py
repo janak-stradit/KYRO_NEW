@@ -71,6 +71,7 @@ def migrate_customers():
                 COALESCE(created_at, NOW()) as created_at,
                 COALESCE(updated_at, NOW()) as updated_at
             FROM raw_data.customers
+            ON CONFLICT (email) DO NOTHING
             """
             
             cur.execute(migrate_query)
@@ -201,11 +202,11 @@ def create_sample_users():
                 return
             
             users_query = """
-            INSERT INTO app.users (id, username, email, full_name, hashed_password, role, is_active, created_at, updated_at)
+            INSERT INTO app.users (id, username, email, full_name, hashed_password, role, is_active, created_at)
             VALUES 
-            (gen_random_uuid(), 'analyst', 'analyst@kyro.com', 'Test Analyst', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewEyKdyFFK/4V2r6', 'ANALYST', true, NOW(), NOW()),
-            (gen_random_uuid(), 'admin', 'admin@kyro.com', 'System Admin', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewEyKdyFFK/4V2r6', 'ADMIN', true, NOW(), NOW()),
-            (gen_random_uuid(), 'compliance', 'compliance@kyro.com', 'Compliance Officer', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewEyKdyFFK/4V2r6', 'COMPLIANCE_OFFICER', true, NOW(), NOW())
+            (gen_random_uuid(), 'analyst', 'analyst@kyro.com', 'Test Analyst', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewEyKdyFFK/4V2r6', 'ANALYST', true, NOW()),
+            (gen_random_uuid(), 'admin', 'admin@kyro.com', 'System Admin', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewEyKdyFFK/4V2r6', 'ADMIN', true, NOW()),
+            (gen_random_uuid(), 'compliance', 'compliance@kyro.com', 'Compliance Officer', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewEyKdyFFK/4V2r6', 'COMPLIANCE_OFFICER', true, NOW())
             """
             
             cur.execute(users_query)
@@ -262,12 +263,12 @@ def generate_sample_alerts():
                     WHEN 2 THEN 'IN_REVIEW'
                     ELSE 'RESOLVED'
                 END,
-                CASE alert_type
+                ('{"reason": "' || CASE alert_type
                     WHEN 'LARGE_AMOUNT' THEN 'Large transaction amount detected'
                     WHEN 'WIRE_TRANSFER' THEN 'Wire transfer requires review'
                     WHEN 'HIGH_RISK_CUSTOMER' THEN 'Transaction from high-risk customer'
                     ELSE 'Unusual transaction pattern detected'
-                END,
+                END || '"}')::jsonb,
                 transaction_date - (RANDOM() * INTERVAL '24 hours')
             FROM high_risk_txns
             """

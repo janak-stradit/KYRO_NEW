@@ -161,7 +161,7 @@ const Cases = {
                 
                 <!-- Results Count -->
                 <div class="mb-3">
-                    <strong style="font-size: 14px; color: #374151;" id="resultsCountTop">607 Result</strong>
+                    <strong style="font-size: 14px; color: #374151;" id="resultsCountTop">0 Result</strong>
                 </div>
                 
                 <!-- Filters Section -->
@@ -219,7 +219,7 @@ const Cases = {
                                     <i class="fas fa-clipboard-list" style="color: #FF8D28; font-size: 16px;"></i>
                                     <h6 class="mb-0" style="font-weight: 600; font-size: 15px;">Review Cases</h6>
                                 </div>
-                                <small class="text-muted" id="resultsCount" style="font-size: 12px;">Showing 50 of 607 cases</small>
+                                <small class="text-muted" id="resultsCount" style="font-size: 12px;">Showing 0 cases</small>
                             </div>
                         </div>
                         <div class="table-responsive">
@@ -277,25 +277,50 @@ const Cases = {
     
     async fetchCasesData() {
         try {
-            await new Promise(resolve => setTimeout(resolve, 800));
-            
-            // Mock data with varied trigger types to demonstrate real-time data integration
-            this.casesData = [
-                { caseId: '6541b2c8-7044', customerId: 'CUST-044', triggerType: 'BEHAVIOR BASED', priority: 'URGENT', riskLevel: 'HIGH', status: 'OPEN', createdAt: '7/17/2026', assignedTo: 'Unassigned' },
-                { caseId: '5c972006-2041', customerId: 'CUST-041', triggerType: 'TIME BASED', priority: 'URGENT', riskLevel: 'MEDIUM', status: 'OPEN', createdAt: '7/17/2026', assignedTo: 'Unassigned' },
-                { caseId: '7856209f-2040', customerId: 'CUST-040', triggerType: 'BEHAVIOR BASED', priority: 'URGENT', riskLevel: 'MEDIUM', status: 'OPEN', createdAt: '7/17/2026', assignedTo: 'Unassigned' },
-                { caseId: '4a9e6eb0-6039', customerId: 'CUST-039', triggerType: 'RULE BASED', priority: 'URGENT', riskLevel: 'HIGH', status: 'OPEN', createdAt: '7/17/2026', assignedTo: 'Unassigned' },
-                { caseId: 'df2fd299-e038', customerId: 'CUST-038', triggerType: 'BEHAVIOR BASED', priority: 'URGENT', riskLevel: 'HIGH', status: 'OPEN', createdAt: '7/17/2026', assignedTo: 'Unassigned' },
-                { caseId: '75845f89-6037', customerId: 'CUST-037', triggerType: 'MANUAL', priority: 'URGENT', riskLevel: 'HIGH', status: 'OPEN', createdAt: '7/17/2026', assignedTo: 'Unassigned' },
-                { caseId: '81ab4be7-c036', customerId: 'CUST-036', triggerType: 'TIME BASED', priority: 'URGENT', riskLevel: 'HIGH', status: 'OPEN', createdAt: '7/17/2026', assignedTo: 'Unassigned' },
-                { caseId: 'f4727cfd-3035', customerId: 'CUST-035', triggerType: 'BEHAVIOR BASED', priority: 'URGENT', riskLevel: 'HIGH', status: 'OPEN', createdAt: '7/17/2026', assignedTo: 'Unassigned' }
-            ];
-            
+            const data = await API.get("/alerts", { page_size: 100 });
+            const alerts = data.items || data;
+            this.totalCases = data.total || alerts.length;
+
+            // Map DB alert_type → UI trigger type labels
+            const triggerTypeMap = {
+                'BEHAVIORAL_ANOMALY': 'BEHAVIOR BASED',
+                'HIGH_RISK_CUSTOMER': 'RULE BASED',
+                'LARGE_AMOUNT':       'RULE BASED',
+                'WIRE_TRANSFER':      'BEHAVIOR BASED',
+                'TIME_BASED':         'TIME BASED',
+                'MANUAL':             'MANUAL'
+            };
+
+            this.casesData = alerts.map(alert => {
+                let riskLevel = 'LOW';
+                let priority = 'LOW';
+                if (alert.risk_score >= 80)      { riskLevel = 'HIGH';   priority = 'URGENT'; }
+                else if (alert.risk_score >= 60) { riskLevel = 'MEDIUM'; priority = 'HIGH'; }
+
+                const triggerType = triggerTypeMap[alert.alert_type] || 'BEHAVIOR BASED';
+
+                return {
+                    caseId:     alert.id,
+                    customerId: alert.customer_id,
+                    triggerType,
+                    priority,
+                    riskLevel,
+                    status:     alert.status || 'OPEN',
+                    createdAt:  new Date(alert.created_at).toLocaleDateString(),
+                    assignedTo: alert.assigned_to ? 'Assigned' : 'Unassigned',
+                    fullData:   alert
+                };
+            });
+
             this.updateDashboard();
             this.renderTable();
-            
+
         } catch (error) {
             console.error("Error fetching cases:", error);
+            this.casesData = [];
+            this.totalCases = 0;
+            this.updateDashboard();
+            this.renderTable();
         }
     },
     
@@ -409,7 +434,9 @@ const Cases = {
     },
     renderTable() {
         const filtered = this.getFilteredCases();
-        $("#resultsCount").text(`Showing ${filtered.length} of 607 cases`);
+        const total = this.totalCases || this.casesData.length;
+        $("#resultsCount").text(`Showing ${filtered.length} of ${total} cases`);
+        $("#resultsCountTop").text(`${total} Result`);
         
         if (filtered.length === 0) {
             $("#casesTableBody").html(`
