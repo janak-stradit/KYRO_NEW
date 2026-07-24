@@ -1163,9 +1163,9 @@ const Cases = {
         
         yPos += 6;
         doc.setFont(undefined, 'bold');
-        doc.text('Export Date:', margin + 5, yPos);
+        doc.text('Report Generated:', margin + 5, yPos);
         doc.setFont(undefined, 'normal');
-        doc.text(new Date(data.exportDate).toLocaleString(), margin + 30, yPos);
+        doc.text(new Date(data.exportDate).toLocaleString(), margin + 35, yPos);
         
         doc.setFont(undefined, 'bold');
         doc.text('Report Type:', margin + 105, yPos);
@@ -1297,7 +1297,7 @@ const Cases = {
             ['Customer Name:', data.customerName || 'Unknown Customer'],
             ['Customer ID:', data.customerId],
             ['Account Type:', 'Business - Corporate'],
-            ['Account Age:', '3.5 years'],
+            ['Account Tenure:', '3.5 years'],
             ['KYC Status:', 'Verified'],
             ['Previous Cases:', '2 (Both resolved)'],
             ['Industry:', 'Import/Export'],
@@ -1329,13 +1329,14 @@ const Cases = {
         
         const findings = [
             '1. Pattern Analysis: Customer exhibited sudden change in transaction behavior starting ' +
-            '   15 days ago, with transaction frequency increasing by 300%.',
+            '   15 days ago. Transaction frequency increased from 5 transactions per week to 20 ' +
+            '   transactions per week (4x increase).',
             '',
             '2. Geographic Anomaly: Multiple transactions routed through high-risk jurisdictions ' +
             '   not previously associated with this customer\'s business profile.',
             '',
-            '3. Amount Structuring: Several transactions appear to be deliberately structured ' +
-            '   below reporting thresholds ($9,500 - $9,900 range).',
+            '3. Amount Structuring: Multiple transactions kept just below the $10,000 reporting ' +
+            '   threshold. For example: $9,500, $9,700, $9,900. This appears intentional.',
             '',
             '4. Counterparty Analysis: Introduction of 8 new counterparties within a 10-day period, ' +
             '   all with limited transaction history and unclear business relationships.'
