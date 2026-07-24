@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     debug: bool = False
     log_level: str = "INFO"
 
-    database_url: str = "sqlite:///./kyro_aml.db"
+    database_url: str = "postgresql+psycopg://kyro_user:kyro_pass@localhost:5434/kyro_aml"
     redis_url: str = "redis://localhost:6380/0"
 
     secret_key: str = "change-me-in-production"

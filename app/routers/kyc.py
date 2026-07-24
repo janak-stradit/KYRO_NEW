@@ -44,11 +44,20 @@ def list_reviews(
     review_status: str | None = None,
     db: Session = Depends(get_db),
 ) -> Page[KYCReviewOut]:
-    query = db.query(KYCReview)
+    query = db.query(KYCReview, Customer).join(Customer, KYCReview.customer_id == Customer.id)
     if review_status:
         query = query.filter(KYCReview.review_status == review_status)
     total = query.count()
-    items = query.order_by(KYCReview.created_at.desc()).offset(pagination.offset).limit(pagination.limit).all()
+    results = query.order_by(KYCReview.created_at.desc()).offset(pagination.offset).limit(pagination.limit).all()
+
+    items = []
+    for review, customer in results:
+        out = KYCReviewOut.model_validate(review)
+        out.last_review_date = customer.kyc_last_review or review.created_at
+        out.risk_level = customer.risk_level
+        out.customer_name = customer.full_name
+        items.append(out)
+
     return Page(items=items, total=total, page=pagination.page, page_size=pagination.page_size)
 
 

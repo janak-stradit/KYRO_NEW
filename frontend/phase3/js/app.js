@@ -143,13 +143,18 @@ const App = {
     },
     
     setupRouting() {
-        // Define page handlers
+        // Define page handlers for all application views
         this.pages = {
-            dashboard: Dashboard,
-            'periodic-reviews': PeriodicReviews,
-            cases: Cases,
-            patterns: Patterns,
-            kyrochat: KyroChat
+            dashboard: window.Dashboard,
+            'periodic-reviews': window.PeriodicReviews,
+            cases: window.Cases,
+            patterns: window.Patterns,
+            kyrochat: window.KyroChat,
+            customers: window.Customers,
+            transactions: window.Transactions,
+            'real-time': window.RealTime,
+            reports: window.Reports,
+            settings: window.Settings
         };
     },
     

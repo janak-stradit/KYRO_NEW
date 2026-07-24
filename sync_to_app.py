@@ -105,7 +105,7 @@ def main():
         run(f"""
             INSERT INTO app.customers
                 (id, full_name, email, phone, date_of_birth,
-                 country, residency_country, kyc_status,
+                 country, residency_country, kyc_status, kyc_last_review,
                  pep_flag, sanctions_flag, adverse_media_flag,
                  risk_level, risk_score, customer_type,
                  created_at, updated_at)
@@ -114,10 +114,11 @@ def main():
                 full_name,
                 email,
                 phone,
-                NULLIF(date_of_birth, '')::date,
+                NULLIF(date_of_birth::text, '')::date,
                 country,
                 residency_country,
                 {KYC_MAP} AS kyc_status,
+                NULLIF(kyc_last_review::text, '')::timestamptz,
                 COALESCE(pep_flag,           false),
                 COALESCE(sanctions_flag,     false),
                 COALESCE(adverse_media_flag, false),
@@ -130,8 +131,12 @@ def main():
                 {CUST_TYPE_MAP} AS customer_type,
                 COALESCE(created_at, NOW()),
                 NOW()
-            FROM raw_data.customers;
-        """, conn, "Insert customers from raw_data")
+            FROM (
+                SELECT DISTINCT ON (email) *
+                FROM raw_data.customers
+                ORDER BY email, customer_id
+            ) deduped;
+        """, conn, "Insert customers from raw_data (deduplicated by email)")
 
         # ── 3. Accounts ───────────────────────────────────────────────────
         print("\n[3/4] Accounts")

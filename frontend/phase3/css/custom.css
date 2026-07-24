@@ -2912,6 +2912,7 @@ header.kyro-navbar {
     border-left: 1px solid var(--aml-grid);
     border-bottom: 1px solid var(--aml-grid);
     flex: 1;
+    overflow: hidden;
 }
 
 .aml-freq-y {

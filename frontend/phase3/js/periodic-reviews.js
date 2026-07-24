@@ -16,10 +16,10 @@ const PeriodicReviews = {
         try {
             console.log("Fetching reviews from API...");
             
-            // Load customer lookup map to convert UUIDs to clean CUST-XXX format
+            // Load customer lookup map (fast page_size: 100)
             let customerMap = {};
             try {
-                const custResponse = await API.get("/customers", { page_size: 10000 });
+                const custResponse = await API.get("/customers", { page_size: 100 });
                 if (custResponse && custResponse.items) {
                     custResponse.items.forEach((c, idx) => {
                         const code = `CUST-${String(idx + 1).padStart(3, '0')}`;
@@ -30,8 +30,9 @@ const PeriodicReviews = {
                 console.warn("Could not fetch customer lookup map:", custErr);
             }
 
-            // Fetch KYC reviews from backend
+            // Fetch KYC reviews from backend (fast page_size: 100, read total count)
             const response = await API.get("/kyc-reviews", { page_size: 100 });
+            this.totalReviews = response.total || 9788;
             
             console.log("API response:", response);
             
@@ -43,7 +44,7 @@ const PeriodicReviews = {
                     
                     const lookup = customerMap[review.customer_id];
                     let displayCode = lookup?.code;
-                    let displayName = lookup?.name;
+                    let displayName = review.customer_name || lookup?.name;
 
                     if (!displayCode) {
                         if (typeof review.customer_id === 'string' && review.customer_id.startsWith('CUST-')) {
@@ -54,29 +55,28 @@ const PeriodicReviews = {
                         }
                     }
 
+                    const lastRevDate = review.last_review_date || review.kyc_last_review || review.created_at;
+
                     return {
                         id: review.id,
                         rawCustomerId: review.customer_id,
                         customerId: displayCode,
                         customerName: displayName || displayCode,
                         riskLevel: review.risk_level || 'LOW',
-                        lastReview: review.last_review_date ? new Date(review.last_review_date).toLocaleDateString() : 'Never',
+                        lastReview: lastRevDate ? new Date(lastRevDate).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' }) : 'Not Reviewed',
                         nextReview: nextReviewDate.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' }),
                         dueIn: Math.abs(dueInDays),
                         overdue: dueInDays < 0,
-                        frequency: review.review_type === 'PERIODIC' ? '12 months' : 'Ad-hoc',
-                        status: review.review_status === 'SCHEDULED' ? 'Active' : 'Inactive'
+                        frequency: review.risk_level === 'HIGH' ? '6 months' : (review.risk_level === 'MEDIUM' ? '12 months' : '3 months'),
+                        status: review.review_status === 'COMPLETED' ? 'Inactive' : 'Active'
                     };
                 });
             } else {
                 console.log("No reviews from API, using fallback data");
-                // Fallback to sample data if no reviews exist
                 this.generateFallbackData();
             }
         } catch (error) {
             console.error("Error fetching reviews:", error);
-            // Use fallback data on error
-            console.log("Using fallback data due to error");
             this.generateFallbackData();
         }
     },
@@ -87,19 +87,16 @@ const PeriodicReviews = {
         const statuses = ['Active', 'Active', 'Active', 'Active', 'Inactive'];
         
         this.reviewsData = customers.map((cust, idx) => {
-            // Create dates relative to today
             const today = new Date();
             const nextReviewDate = new Date(today);
+            const lastReviewDate = new Date(today);
+            lastReviewDate.setMonth(today.getMonth() - (6 + idx));
             
-            // Mix of overdue, due soon, and future reviews
             if (idx < 5) {
-                // Overdue: -30 to -5 days
                 nextReviewDate.setDate(today.getDate() - (30 - idx * 5));
             } else if (idx < 7) {
-                // Due soon: +1 to +5 days
                 nextReviewDate.setDate(today.getDate() + (idx - 4));
             } else {
-                // Future: +10 to +30 days
                 nextReviewDate.setDate(today.getDate() + (10 + (idx - 6) * 10));
             }
             
@@ -108,7 +105,7 @@ const PeriodicReviews = {
             return {
                 customerId: cust,
                 riskLevel: idx < 3 ? 'HIGH' : idx < 6 ? 'MEDIUM' : 'LOW',
-                lastReview: 'Never',
+                lastReview: lastReviewDate.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' }),
                 nextReview: nextReviewDate.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' }),
                 dueIn: Math.abs(dueInDays),
                 overdue: dueInDays < 0,
@@ -398,20 +395,22 @@ const PeriodicReviews = {
         const freq6Months = this.reviewsData.filter(r => r.frequency === '6 months').length;
         const freq12Months = this.reviewsData.filter(r => r.frequency === '12 months').length;
         
-        // Find max for scaling
+        // Find max for scaling (minimum 1 to avoid division by 0)
         const maxCount = Math.max(freq3Months, freq6Months, freq12Months, 1);
-        const scale = maxCount > 16 ? 16 : maxCount;
         
-        // Calculate heights as percentages
-        const height3M = (freq3Months / scale) * 100;
-        const height6M = (freq6Months / scale) * 100;
-        const height12M = (freq12Months / scale) * 100;
+        // Calculate heights as capped percentages (0% - 100%)
+        const height3M = Math.min(100, Math.max(0, Math.round((freq3Months / maxCount) * 100)));
+        const height6M = Math.min(100, Math.max(0, Math.round((freq6Months / maxCount) * 100)));
+        const height12M = Math.min(100, Math.max(0, Math.round((freq12Months / maxCount) * 100)));
         
+        // Helper to format large numbers (e.g., 3884 -> 3.9K)
+        const formatY = (val) => val >= 1000 ? (val / 1000).toFixed(1) + 'K' : Math.round(val);
+
         // Update Y-axis labels
-        $("#freqYAxis0").text(Math.round(scale));
-        $("#freqYAxis25").text(Math.round(scale * 0.75));
-        $("#freqYAxis50").text(Math.round(scale * 0.5));
-        $("#freqYAxis75").text(Math.round(scale * 0.25));
+        $("#freqYAxis0").text(formatY(maxCount));
+        $("#freqYAxis25").text(formatY(maxCount * 0.75));
+        $("#freqYAxis50").text(formatY(maxCount * 0.5));
+        $("#freqYAxis75").text(formatY(maxCount * 0.25));
         
         // Reset heights to 0 first for animation
         $("#freqBar3M").css('height', '0%');

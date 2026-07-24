@@ -47,7 +47,7 @@ class TransactionOut(BaseModel):
     meta_counterparty: str | None = None
     meta_counterparty_type: str | None = None
     meta_country: str | None = None
-    risk_flags: dict[str, Any] | None = None
+    risk_flags: Any | None = None
     risk_score: int
     source_system: str | None = None
     created_at: datetime
@@ -56,7 +56,7 @@ class TransactionOut(BaseModel):
 class TransactionRiskOut(BaseModel):
     transaction_id: uuid.UUID
     risk_score: int
-    risk_flags: dict[str, Any] | None = None
+    risk_flags: Any | None = None
     triggered_rules: list[str]
 
 

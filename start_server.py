@@ -25,7 +25,7 @@ def main():
     dotenv.load_dotenv()
     
     # Set environment variables if needed
-    os.environ.setdefault("DATABASE_URL", "sqlite:///kyro_aml.db")
+    os.environ.setdefault("DATABASE_URL", "postgresql+psycopg://kyro_user:kyro_pass@localhost:5434/kyro_aml")
     
     try:
         uvicorn.run(

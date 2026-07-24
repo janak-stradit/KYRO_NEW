@@ -99,6 +99,9 @@ class KYCReviewOut(BaseModel):
     risk_level_after: str | None = None
     reviewed_by: uuid.UUID | None = None
     created_at: datetime
+    last_review_date: datetime | date | None = None
+    risk_level: str | None = None
+    customer_name: str | None = None
 
 
 class ScreeningOut(BaseModel):
