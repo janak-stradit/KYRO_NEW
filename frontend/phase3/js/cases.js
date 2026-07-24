@@ -277,6 +277,20 @@ const Cases = {
     
     async fetchCasesData() {
         try {
+            // Build customer map to convert UUIDs to clean CUST-XXX IDs
+            let customerMap = {};
+            try {
+                const custResponse = await API.get("/customers", { page_size: 10000 });
+                if (custResponse && custResponse.items) {
+                    custResponse.items.forEach((c, idx) => {
+                        const code = `CUST-${String(idx + 1).padStart(3, '0')}`;
+                        customerMap[c.id] = code;
+                    });
+                }
+            } catch (err) {
+                console.warn("Could not fetch customer lookup map for cases:", err);
+            }
+
             const data = await API.get("/alerts", { page_size: 100 });
             const alerts = data.items || data;
             this.totalCases = data.total || alerts.length;
@@ -291,7 +305,7 @@ const Cases = {
                 'MANUAL':             'MANUAL'
             };
 
-            this.casesData = alerts.map(alert => {
+            this.casesData = alerts.map((alert, idx) => {
                 let riskLevel = 'LOW';
                 let priority = 'LOW';
                 if (alert.risk_score >= 80)      { riskLevel = 'HIGH';   priority = 'URGENT'; }
@@ -299,16 +313,26 @@ const Cases = {
 
                 const triggerType = triggerTypeMap[alert.alert_type] || 'BEHAVIOR BASED';
 
+                let displayCustId = customerMap[alert.customer_id];
+                if (!displayCustId) {
+                    if (typeof alert.customer_id === 'string' && alert.customer_id.startsWith('CUST-')) {
+                        displayCustId = alert.customer_id;
+                    } else {
+                        displayCustId = `CUST-${String(idx + 1).padStart(3, '0')}`;
+                    }
+                }
+
                 return {
-                    caseId:     alert.id,
-                    customerId: alert.customer_id,
+                    caseId:        alert.id,
+                    customerId:    displayCustId,
+                    rawCustomerId: alert.customer_id,
                     triggerType,
                     priority,
                     riskLevel,
-                    status:     alert.status || 'OPEN',
-                    createdAt:  new Date(alert.created_at).toLocaleDateString(),
-                    assignedTo: alert.assigned_to ? 'Assigned' : 'Unassigned',
-                    fullData:   alert
+                    status:        alert.status || 'OPEN',
+                    createdAt:     new Date(alert.created_at).toLocaleDateString(),
+                    assignedTo:    alert.assigned_to ? 'Assigned' : 'Unassigned',
+                    fullData:      alert
                 };
             });
 

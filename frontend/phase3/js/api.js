@@ -73,11 +73,25 @@ const API = {
         }
     },
 
+    _cache: {},
+
+    /**
+     * Clear API cache
+     */
+    clearCache() {
+        this._cache = {};
+    },
+
     /**
      * GET request
      */
     async get(endpoint, params = {}) {
-        return this.retryRequest(() => {
+        const cacheKey = `${endpoint}?${JSON.stringify(params)}`;
+        if (this._cache[cacheKey]) {
+            return this._cache[cacheKey];
+        }
+
+        const promise = this.retryRequest(() => {
             return new Promise((resolve, reject) => {
                 $.ajax({
                     url: `${this.baseUrl}${endpoint}`,
@@ -85,20 +99,27 @@ const API = {
                     headers: this.getHeaders(),
                     data: params,
                     timeout: this.timeout,
-                    success: resolve,
+                    success: (data) => {
+                        this._cache[cacheKey] = data;
+                        resolve(data);
+                    },
                     error: (xhr) => {
+                        delete this._cache[cacheKey];
                         this.handleError(xhr, endpoint);
                         reject(xhr);
                     }
                 });
             });
         });
+
+        return promise;
     },
 
     /**
      * POST request
      */
     async post(endpoint, data = {}) {
+        this.clearCache();
         return this.retryRequest(() => {
             return new Promise((resolve, reject) => {
                 $.ajax({
@@ -121,6 +142,7 @@ const API = {
      * PUT request
      */
     async put(endpoint, data = {}) {
+        this.clearCache();
         return this.retryRequest(() => {
             return new Promise((resolve, reject) => {
                 $.ajax({
@@ -143,6 +165,7 @@ const API = {
      * DELETE request
      */
     async delete(endpoint) {
+        this.clearCache();
         return this.retryRequest(() => {
             return new Promise((resolve, reject) => {
                 $.ajax({

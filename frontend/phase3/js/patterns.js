@@ -25,8 +25,8 @@ const Patterns = {
 
     async fetchRealCustomersAndGeneratePatterns() {
         try {
-            // Fetch real customers from API
-            const response = await API.get("/customers", { page_size: 1000 });
+            // Fetch real customers from API (request full dataset of 10000)
+            const response = await API.get("/customers", { page_size: 10000 });
             const customers = response.items || [];
             
             // Build customer ID list from real data
@@ -40,7 +40,7 @@ const Patterns = {
             this.generateCustomerPatternData(allCustomers);
         } catch (error) {
             console.error("Error fetching customers:", error);
-            // Fallback to default behavior with limited range
+            // Fallback to default behavior with full 9,784 customer range
             const allCustomers = [];
             for (let i = 1; i <= 9784; i++) {
                 allCustomers.push(`CUST-${String(i).padStart(3, '0')}`);
@@ -61,10 +61,10 @@ const Patterns = {
 
         this.customerPatternData = [];
 
-        // Generate pattern records for ALL 9,784 customers
-        for (let i = 1; i <= totalCustomers; i++) {
-            const custId = `CUST-${i}`;
-            const pattern = patternTypes[(i - 1) % patternTypes.length];
+        const numCustomers = Array.isArray(allCustomers) ? allCustomers.length : 9784;
+        for (let i = 0; i < numCustomers; i++) {
+            const custId = Array.isArray(allCustomers) ? allCustomers[i] : `CUST-${String(i + 1).padStart(3, '0')}`;
+            const pattern = patternTypes[i % patternTypes.length];
 
             this.customerPatternData.push({
                 customerId:    custId,
@@ -101,7 +101,7 @@ const Patterns = {
                             </span>
                         </div>
                     </div>
-                    <button class="btn btn-danger px-4 py-2 shadow-sm" id="refreshPatternsBtn" style="font-size: 14px; font-weight: 500; min-width: 120px; transition: all 0.2s ease;">
+                    <button class="btn btn-danger px-4 py-2 shadow-sm" id="refreshPatternsBtn" type="button" style="font-size: 14px; font-weight: 500; min-width: 120px; transition: all 0.2s ease; cursor: pointer; position: relative; z-index: 10;">
                         <i class="fas fa-sync-alt me-2"></i>Refresh
                     </button>
                 </div>
@@ -110,13 +110,13 @@ const Patterns = {
                 <div class="mb-4" style="background: #fffbf5; padding: 16px 20px; border-radius: 8px;">
                     <div class="row g-3 align-items-end">
                         <div class="col-md-5">
-                            <select class="form-select" id="filterCustomers" style="font-size: 14px; border: 1px solid #e5e7eb;">
+                            <select class="form-select" id="filterCustomers" style="font-size: 14px; border: 1px solid #e5e7eb; cursor: pointer;">
                                 <option value="all">All Customers</option>
                                 ${customerOptions}
                             </select>
                         </div>
                         <div class="col-md-5">
-                            <select class="form-select" id="filterPatternType" style="font-size: 14px; border: 1px solid #e5e7eb;">
+                            <select class="form-select" id="filterPatternType" style="font-size: 14px; border: 1px solid #e5e7eb; cursor: pointer;">
                                 <option value="all">All Pattern types</option>
                                 <option value="complexity_shift">Complexity shift</option>
                                 <option value="counterparty_changes">Counterparty changes</option>
@@ -127,7 +127,7 @@ const Patterns = {
                             </select>
                         </div>
                         <div class="col-md-2">
-                            <button class="btn btn-outline-secondary w-100" id="clearFiltersBtn" style="font-size: 14px;">
+                            <button class="btn btn-outline-secondary w-100" id="clearFiltersBtn" type="button" style="font-size: 14px; cursor: pointer; position: relative; z-index: 10;">
                                 Clear Filters
                             </button>
                         </div>
@@ -499,22 +499,22 @@ const Patterns = {
         $btn.prop("disabled", true).html('<i class="fas fa-spinner fa-spin me-2"></i>Refreshing...');
 
         try {
-            if (window.Utils && Utils.showToast) {
-                Utils.showToast("Refreshing pattern analytics data...", "info");
+            if (window.Utils && window.Utils.showToast) {
+                window.Utils.showToast("Refreshing pattern analytics data...", "info");
             }
 
             await this.updateStats();
-            this.generateCustomerPatternData();
+            await this.fetchRealCustomersAndGeneratePatterns();
             this.renderTable();
             this.updateChartsForPattern(this.currentFilters.patternType || 'all');
 
-            if (window.Utils && Utils.showToast) {
-                Utils.showToast("Pattern analytics data refreshed successfully!", "success");
+            if (window.Utils && window.Utils.showToast) {
+                window.Utils.showToast("Pattern analytics data refreshed successfully!", "success");
             }
         } catch (error) {
             console.error("Refresh error:", error);
-            if (window.Utils && Utils.showToast) {
-                Utils.showToast("Error refreshing pattern data", "error");
+            if (window.Utils && window.Utils.showToast) {
+                window.Utils.showToast("Error refreshing pattern data", "error");
             }
         } finally {
             $btn.prop("disabled", false).html(originalText);
@@ -557,8 +557,8 @@ const Patterns = {
             filteredData = filteredData.filter(d => d.patternType === this.currentFilters.patternType);
         }
 
-        // Limit display rows based on showAllRows state (15 vs 200)
-        const limit = this.showAllRows ? 200 : 15;
+        // Limit display rows based on showAllRows state (15 vs full dataset)
+        const limit = this.showAllRows ? filteredData.length : 15;
         const displayData = filteredData.slice(0, limit);
 
         // Update Show More / Show Less button text
@@ -854,21 +854,24 @@ const Patterns = {
             e.preventDefault();
             await self.refreshData();
         });
-        });
 
-        // Clear Filters button
-        $("#clearFiltersBtn").on("click", function () {
+        // Clear Filters button (using delegated handler for reliability)
+        $(document).off("click", "#clearFiltersBtn").on("click", "#clearFiltersBtn", function (e) {
+            e.preventDefault();
+            console.log("Clear filters button clicked");
             $("#filterCustomers").val("all");
             $("#filterPatternType").val("all");
             self.currentFilters.customer = "all";
             self.currentFilters.patternType = "all";
             self.renderTable();
             self.updateChartsForPattern("all");
-            Utils.showToast("Filters cleared", "success");
+            if (window.Utils && window.Utils.showToast) {
+                window.Utils.showToast("Filters cleared", "success");
+            }
         });
 
         // Filter dropdowns with table update
-        $("#filterCustomers, #filterPatternType").on("change", function () {
+        $(document).off("change", "#filterCustomers, #filterPatternType").on("change", "#filterCustomers, #filterPatternType", function () {
             self.currentFilters.customer = $("#filterCustomers").val();
             self.currentFilters.patternType = $("#filterPatternType").val();
 
@@ -886,11 +889,13 @@ const Patterns = {
                 ? 'All Customers'
                 : self.currentFilters.customer;
 
-            Utils.showToast(`Viewing: ${customerName} - ${patternName}`, "success");
+            if (window.Utils && window.Utils.showToast) {
+                window.Utils.showToast(`Viewing: ${customerName} - ${patternName}`, "success");
+            }
         });
 
         // Pattern card clicks
-        $(document).on("click", ".pattern-card", function () {
+        $(document).off("click", ".pattern-card").on("click", ".pattern-card", function () {
             const pattern = $(this).data("pattern");
 
             // Highlight selected card
@@ -912,8 +917,8 @@ const Patterns = {
 
             console.log("View Cases clicked:", customerId, patternType);
 
-            if (window.Utils && Utils.showToast) {
-                Utils.showToast(`Opening cases for ${customerId} - ${patternName}`, "info");
+            if (window.Utils && window.Utils.showToast) {
+                window.Utils.showToast(`Opening cases for ${customerId} - ${patternName}`, "info");
             }
 
             // Navigate to cases page using App.navigateTo
@@ -930,9 +935,9 @@ const Patterns = {
             self.showAllRows = !self.showAllRows;
             self.renderTable();
 
-            if (window.Utils && Utils.showToast) {
+            if (window.Utils && window.Utils.showToast) {
                 const msg = self.showAllRows ? "Expanded pattern table (showing 200 patterns)" : "Collapsed pattern table (showing 15 patterns)";
-                Utils.showToast(msg, "info");
+                window.Utils.showToast(msg, "info");
             }
         });
 
@@ -950,8 +955,8 @@ const Patterns = {
             const patternType = $(this).data("pattern");
             const patternName = patternType.replace(/_/g, ' ');
 
-            if (window.Utils && Utils.showToast) {
-                Utils.showToast(`Selected: ${customerId} - ${patternName}`, "info");
+            if (window.Utils && window.Utils.showToast) {
+                window.Utils.showToast(`Selected: ${customerId} - ${patternName}`, "info");
             }
         });
     }
