@@ -36,7 +36,10 @@ const RealTime = {
         try {
             console.log("🔄 Connecting to real-time updates...");
             
-            const url = `/api/v1/alerts/stream?token=${encodeURIComponent(token)}`;
+            const baseUrl = (window.API && API.baseUrl) 
+                ? API.baseUrl 
+                : (window.Auth && Auth.getApiUrl ? Auth.getApiUrl("/api/v1") : "/api/v1");
+            const url = `${baseUrl}/alerts/stream?token=${encodeURIComponent(token)}`;
             this.eventSource = new EventSource(url);
             
             this.eventSource.onopen = (event) => {

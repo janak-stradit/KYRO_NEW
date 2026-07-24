@@ -318,6 +318,119 @@ def get_processing_cases(db: Session = Depends(get_db)) -> list[dict[str, Any]]:
     return processing
 
 
+# ── Real Failed Cases endpoint ────────────────────────────────────────────────
+# Maps alert_type and triggered_rules to a business-readable transaction reason
+_RULE_REASON_MAP = {
+    "R001": "Threshold breach: Single high-value transaction exceeds $10,000 reporting limit",
+    "R002": "Velocity spike: More than 5 transactions within a 24-hour window",
+    "R003": "Rapid velocity: More than 3 transactions within a single hour",
+    "R004": "Geographic risk: Transaction routed through sanctioned or high-risk jurisdiction",
+    "R005": "PEP exposure: Customer identified as a Politically Exposed Person",
+    "R006": "Sanctions match: Customer matched against active sanctions screening list",
+    "R007": "New counterparty: First-time transfer to previously unseen counterparty",
+    "R008": "Off-hours activity: High-value transaction initiated on weekend",
+    "R009": "Structuring detected: Round-figure transaction amount consistent with layering pattern",
+    "R010": "Rapid succession: Multiple transactions within 60-second window indicating burst activity",
+}
+
+_ALERT_TYPE_REASON_MAP = {
+    "VELOCITY_SPIKE":        "Unusual velocity spike — transaction frequency far exceeds customer's 90-day baseline",
+    "GEOGRAPHIC_SHIFT":      "Geographic shift detected — cross-border transfers to previously unseen high-risk regions",
+    "GEOGRAPHY":             "Geographic risk — transaction originates from or routes through a sanctioned jurisdiction",
+    "THRESHOLD_BREACH":      "Threshold breach — single wire transfer exceeds mandatory reporting threshold",
+    "COUNTERPARTY_CHANGES":  "Counterparty anomaly — rapid introduction of multiple new unverified counterparties",
+    "COMPLEXITY_SHIFT":      "Complexity shift — sudden layering pattern with multiple intermediary accounts detected",
+    "INACTIVE_REACTIVATION": "Dormant account reactivation — sudden high-value activity on long-inactive account",
+    "BEHAVIORAL_ANOMALY":    "Behavioral deviation — transaction pattern significantly diverges from established customer baseline",
+    "HIGH_RISK_CUSTOMER":    "High-risk customer flag — customer profile carries PEP, sanctions, or adverse media indicators",
+    "PEP":                   "PEP exposure — customer is a Politically Exposed Person; enhanced due diligence required",
+    "SANCTIONS":             "Sanctions match — customer or counterparty matched on active OFAC/UN sanctions screening list",
+    "STRUCTURING":           "Structuring pattern — multiple near-threshold deposits consistent with deliberate split structuring",
+}
+
+
+def _derive_failure_reason(alert_type: str | None, triggered_rules: dict | None) -> str:
+    """Derive a transaction-centric human-readable failure reason from alert metadata."""
+    # First try triggered rules — most specific
+    if triggered_rules and isinstance(triggered_rules, dict):
+        rules_list = triggered_rules.get("rules") or triggered_rules.get("triggered_rules") or []
+        if rules_list:
+            # Use the highest-severity rule's reason
+            for rule_id in ["R006", "R005", "R010", "R004", "R002", "R003", "R009", "R001", "R007", "R008"]:
+                if rule_id in rules_list:
+                    return _RULE_REASON_MAP.get(rule_id, "")
+            # Fallback: first rule in list
+            return _RULE_REASON_MAP.get(rules_list[0], "")
+
+    # Fall back to alert_type mapping
+    if alert_type:
+        normalized = alert_type.upper().replace(" ", "_")
+        return _ALERT_TYPE_REASON_MAP.get(normalized, _ALERT_TYPE_REASON_MAP["BEHAVIORAL_ANOMALY"])
+
+    return _ALERT_TYPE_REASON_MAP["BEHAVIORAL_ANOMALY"]
+
+
+@router.get("/api/v1/agent/failed-cases")
+def get_real_failed_cases(
+    limit: int = 8,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+) -> list[dict[str, Any]]:
+    """Return real high-risk alerts as failed cases for Kyro Chat display.
+    Selects OPEN or ESCALATED alerts ordered by risk score descending.
+    Derives a transaction-based failure reason from alert_type and triggered_rules.
+    """
+    alerts = (
+        db.query(Alert, Customer.full_name)
+        .join(Customer, Alert.customer_id == Customer.id)
+        .filter(Alert.status.in_(["OPEN", "ESCALATED"]))
+        .order_by(Alert.risk_score.desc())
+        .limit(limit)
+        .all()
+    )
+
+    # Build sequential CUST-XXX lookup per customer in result set
+    cust_seq: dict[str, int] = {}
+    seq_counter = 1
+
+    results = []
+    for alert, full_name in alerts:
+        cust_id_str = str(alert.customer_id)
+        if cust_id_str not in cust_seq:
+            cust_seq[cust_id_str] = seq_counter
+            seq_counter += 1
+        cust_label = f"CUST-{cust_seq[cust_id_str]:03d}"
+        case_label = f"CASE-{str(alert.id)[:6].upper()}"
+
+        reason = _derive_failure_reason(alert.alert_type, alert.triggered_rules)
+
+        # Also pull SHAP top feature description if available
+        ml_expl = alert.ml_explanation
+        if ml_expl and isinstance(ml_expl, dict):
+            top_features = ml_expl.get("top_features") or []
+            if top_features and isinstance(top_features, list):
+                risk_increasing = [f for f in top_features if f.get("direction") == "INCREASES_RISK"]
+                if risk_increasing:
+                    feat_desc = risk_increasing[0].get("description", "")
+                    if feat_desc:
+                        reason = feat_desc  # Use SHAP explanation as the most precise reason
+
+        results.append({
+            "caseId": case_label,
+            "customerId": cust_label,
+            "customerName": full_name or "Unknown Customer",
+            "alertType": alert.alert_type or "BEHAVIORAL_ANOMALY",
+            "riskScore": alert.risk_score,
+            "confidence": float(alert.confidence) if alert.confidence else None,
+            "failureReason": reason,
+            "recommendedAction": alert.recommended_action,
+            "status": alert.status,
+            "createdAt": alert.created_at.strftime("%H:%M") if alert.created_at else "--:--",
+        })
+
+    return results
+
+
 # Action Timeline endpoint
 @router.get("/api/v1/agent/autonomous/actions/timeline")
 def get_action_timeline(hours: int = 24) -> list[dict[str, Any]]:
