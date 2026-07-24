@@ -394,7 +394,8 @@ const Dashboard = {
             this.showChartLoading();
             
             console.log("📈 Fetching chart data from API...");
-            const chartData = await API.get("/dashboard/charts");
+            // Force fresh data with version timestamp
+            const chartData = await API.get("/dashboard/charts", { v: Date.now() });
             console.log("✅ Chart Data received:", chartData);
             
             // Hide loading overlays
