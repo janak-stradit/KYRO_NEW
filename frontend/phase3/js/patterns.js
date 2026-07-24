@@ -25,26 +25,27 @@ const Patterns = {
     
     async fetchRealCustomersAndGeneratePatterns() {
         try {
-            // Fetch real customers from API
-            const response = await API.get("/customers", { page_size: 1000 });
+            // Fetch real customers from API (max page_size: 5000)
+            const response = await API.get("/customers", { page_size: 5000 });
             const customers = response.items || [];
             
-            // Build customer ID list from real data
+            console.log(`✅ Fetched ${customers.length} real customers from API`);
+            
+            // Build customer ID list from real database customers
             const allCustomers = customers.map((cust, idx) => {
                 return `CUST-${String(idx + 1).padStart(3, '0')}`;
             });
             
-            console.log(`Fetched ${allCustomers.length} real customers from API`);
-            
             // Now generate pattern data using real customer IDs
             this.generateCustomerPatternData(allCustomers);
         } catch (error) {
-            console.error("Error fetching customers:", error);
-            // Fallback to default behavior with limited range
+            console.error("❌ Error fetching customers:", error);
+            // Fallback to max database size
             const allCustomers = [];
-            for (let i = 1; i <= 459; i++) {
+            for (let i = 1; i <= 1454; i++) {
                 allCustomers.push(`CUST-${String(i).padStart(3, '0')}`);
             }
+            console.log(`⚠️ Using fallback: ${allCustomers.length} customers`);
             this.generateCustomerPatternData(allCustomers);
         }
     },
@@ -832,7 +833,9 @@ const Patterns = {
         
         // Refresh button
         $("#refreshPatternsBtn").on("click", async () => {
-            Utils.showToast("Refreshing pattern data...", "info");
+            if (typeof Utils !== 'undefined' && Utils.showToast) {
+                Utils.showToast("Refreshing pattern data...", "info");
+            }
             await this.fetchRealCustomersAndGeneratePatterns();
             this.renderTable();
             this.updateChartsForPattern(this.currentFilters.patternType);

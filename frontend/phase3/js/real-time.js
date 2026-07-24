@@ -208,7 +208,7 @@ const RealTime = {
         
         // Update dashboard if visible
         const currentPage = App.getCurrentPage();
-        if (currentPage === 'dashboard' && window.Dashboard) {
+        if (currentPage === 'dashboard' && window.Dashboard && typeof Dashboard.updateSystemHealth === 'function') {
             Dashboard.updateSystemHealth(status);
         }
     },

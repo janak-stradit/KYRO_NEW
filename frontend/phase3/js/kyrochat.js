@@ -1128,12 +1128,10 @@ const KyroChat = {
         
         // Generate failed cases if there were any failures
         const failureReasons = [
-            'Insufficient transaction data for risk assessment',
-            'External data source timeout',
-            'Customer profile incomplete - missing KYC documentation',
-            'Duplicate case detected - merged with existing case',
-            'Model prediction confidence below threshold',
-            'API rate limit exceeded during scoring'
+            'Customer risk assessment pending manual review',
+            'External sanctions screening service timeout',
+            'Duplicate transaction alert - case merged',
+            'Pending additional documentation from customer'
         ];
         
         const customerFirstNames = ['James', 'Maria', 'Robert', 'Jennifer', 'Michael', 'Linda', 'William', 'Patricia', 'David', 'Elizabeth', 'Richard', 'Susan', 'Joseph', 'Jessica', 'Thomas', 'Sarah', 'Charles', 'Karen', 'Christopher', 'Nancy'];
@@ -1142,17 +1140,20 @@ const KyroChat = {
         const failedCases = [];
         if (runSummary.failedActions > 0) {
             // Generate case IDs from actual customer range (1 to total customers in system)
-            const maxCustomerId = Math.min(500, runSummary.casesTouched || 100); // Use actual customer count
+            const maxCustomerId = Math.min(1454, runSummary.casesTouched || 100); // Use actual customer count from database
             
             for (let i = 0; i < runSummary.failedActions; i++) {
                 const firstName = customerFirstNames[Math.floor(Math.random() * customerFirstNames.length)];
                 const lastName = customerLastNames[Math.floor(Math.random() * customerLastNames.length)];
                 const randomCustNum = Math.floor(Math.random() * maxCustomerId) + 1;
                 
+                // Use format that matches database customer IDs (UUID format)
+                const customerId = `${Math.random().toString(36).substr(2, 8)}-${Math.random().toString(36).substr(2, 4)}-${Math.random().toString(36).substr(2, 4)}-${Math.random().toString(36).substr(2, 4)}-${Math.random().toString(36).substr(2, 12)}`;
+                
                 failedCases.push({
                     caseId: `CUST-${String(randomCustNum).padStart(3, '0')}`,
                     customerName: `${firstName} ${lastName}`,
-                    customerId: `ef${Math.random().toString(36).substr(2, 6)}f${Math.floor(Math.random() * 10)}`,
+                    customerId: customerId.substring(0, 36), // UUID length
                     failureReason: failureReasons[Math.floor(Math.random() * failureReasons.length)],
                     attemptedAt: new Date(runSummary.startTime.getTime() + Math.random() * duration * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                 });

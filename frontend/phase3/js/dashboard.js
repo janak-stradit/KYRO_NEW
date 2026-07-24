@@ -302,7 +302,13 @@ const Dashboard = {
     
     async loadKPIs() {
         try {
+            // Show loading state
+            this.showKPILoading();
+            
             const data = await API.get(API.endpoints.kpis);
+            
+            // Hide loading state
+            this.hideKPILoading();
             
             // Keep notification updates intact
             $("#notificationBadge").text(data.pending_alerts);
@@ -372,7 +378,13 @@ const Dashboard = {
 
     async initializeCharts() {
         try {
+            // Show loading overlays
+            this.showChartLoading();
+            
             const chartData = await API.get("/dashboard/charts");
+            
+            // Hide loading overlays
+            this.hideChartLoading();
             
             // Generate bar chart with real CSS data
             this.renderCSSBarChart(chartData);
@@ -385,6 +397,7 @@ const Dashboard = {
             
         } catch (error) {
             console.error("Charts initialization error:", error);
+            this.hideChartLoading();
             this.renderFallbackCharts();
         }
     },
@@ -643,6 +656,38 @@ const Dashboard = {
         // Instantly update KPIs and Charts on new alert events
         await this.loadKPIs();
         await this.initializeCharts();
+    },
+    
+    // Loading State Handlers
+    showKPILoading() {
+        // Add pulse animation to KPI cards
+        $('.figma-card').addClass('loading-pulse');
+    },
+    
+    hideKPILoading() {
+        $('.figma-card').removeClass('loading-pulse');
+    },
+    
+    showChartLoading() {
+        // Add loading overlays to chart containers
+        $('.chart-container, .bar-chart-kyro-container, .kyro-donut-container').each(function() {
+            if (!$(this).find('.chart-loading-overlay').length) {
+                $(this).css('position', 'relative').append(`
+                    <div class="chart-loading-overlay">
+                        <div>
+                            <div class="chart-spinner"></div>
+                            <div class="loading-text">Loading chart data...</div>
+                        </div>
+                    </div>
+                `);
+            }
+        });
+    },
+    
+    hideChartLoading() {
+        $('.chart-loading-overlay').fadeOut(300, function() {
+            $(this).remove();
+        });
     }
 };
 

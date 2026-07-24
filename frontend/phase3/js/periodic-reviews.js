@@ -19,7 +19,7 @@ const PeriodicReviews = {
             // Load customer lookup map to convert UUIDs to clean CUST-XXX format
             let customerMap = {};
             try {
-                const custResponse = await API.get("/customers", { page_size: 1000 });
+                const custResponse = await API.get("/customers", { page_size: 5000 });
                 if (custResponse && custResponse.items) {
                     custResponse.items.forEach((c, idx) => {
                         const code = `CUST-${String(idx + 1).padStart(3, '0')}`;
@@ -563,7 +563,7 @@ const PeriodicReviews = {
     async showScheduleReviewModal() {
         try {
             // Fetch real customers from API
-            const customersResponse = await API.get("/customers", { page_size: 1000 });
+            const customersResponse = await API.get("/customers", { page_size: 5000 });
             const customers = customersResponse.items || [];
             
             const customerOptions = customers.map((cust, idx) => {
