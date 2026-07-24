@@ -186,6 +186,24 @@ const KyroChat = {
         }
     },
 
+    // Fetch real failed cases from backend API (OPEN / ESCALATED alerts, ordered by risk score)
+    async fetchRealFailedCases(limit = 8) {
+        try {
+            const token = localStorage.getItem('access_token') || '';
+            const res = await fetch(`${API.baseUrl}/agent/failed-cases?limit=${limit}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+            // Cache for reuse during the session
+            this._realFailedCasesCache = Array.isArray(data) ? data : [];
+            return this._realFailedCasesCache;
+        } catch (err) {
+            console.warn('fetchRealFailedCases failed, using cached or empty:', err.message);
+            return this._realFailedCasesCache || [];
+        }
+    },
+
     updateStateUI() {
         const status = this.agentState.autonomous_status || "STOPPED";
         const isIntervention = this.agentState.intervention_needed || false;
@@ -415,8 +433,8 @@ const KyroChat = {
             } else if (q.includes("hello") || q.includes("hi")) {
                 response = kyroScripts.chat.greeting;
             } else if (q.includes("summary")) {
-                // Generate detailed summary with failed cases
-                const summaryData = this.generateDetailedSummaryData();
+                // Generate detailed summary with real failed cases from backend
+                const summaryData = await this.generateDetailedSummaryData();
                 response = kyroScripts.chat.detailedCaseSummary(summaryData);
                 messageOptions = {
                     showViewDetails: true,
@@ -572,9 +590,13 @@ const KyroChat = {
             
             // Small delay to ensure UI is ready
             await new Promise(resolve => setTimeout(resolve, 500));
-            
+
+            // Pre-fetch real failed cases so they're cached for the stop summary
+            this.fetchRealFailedCases(8).catch(() => {});
+
             // Simulate progressive stats update & actions
             this.startStatsSimulation();
+
             
         } catch (error) {
             console.error(error);
@@ -814,58 +836,45 @@ const KyroChat = {
         `;
     },
 
-    generateDetailedSummaryData() {
+
+    async generateDetailedSummaryData() {
         const analysts = ['Sarah Chen', 'Mike Rodriguez', 'Priya Patel', 'James Wilson', 'Unassigned'];
-        const failureReasons = [
-            'Unusual velocity spike in high-risk cross-border transfers',
-            'Structuring detected: Multiple rapid cash deposits near threshold',
-            'Sudden transaction volume surge inconsistent with historical baseline',
-            'Counterparty risk: High-risk transfers to unverified offshore entity',
-            'Geographic shift: High-value transfers originating from sanctioned region',
-            'Rapid movement of funds through newly reactivated account',
-            'Threshold breach: Single high-value wire transfer exceeding limit',
-            'Unexplained high-frequency international wire transfers without clear rationale'
-        ];
-        
-        // Generate failed cases with details
-        const failedCases = [];
-        const failedCount = Math.floor(Math.random() * 5) + 3; // 3-7 failed cases
-        
-        for (let i = 0; i < failedCount; i++) {
-            const custNum = Math.floor(Math.random() * 9784) + 1;
-            const custIdStr = `CUST-${String(custNum).padStart(3, '0')}`;
-            failedCases.push({
-                caseId: custIdStr,
-                customerId: custIdStr,
-                failureReason: failureReasons[Math.floor(Math.random() * failureReasons.length)],
-                attemptedAt: new Date(Date.now() - Math.random() * 2 * 60 * 60 * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                assignedTo: 'Requires Manual Review'
-            });
-        }
-        
-        // Generate assigned cases
-        const assignedCases = [];
-        const assignedCount = Math.floor(Math.random() * 8) + 5; // 5-12 assigned cases
-        
-        for (let i = 0; i < assignedCount; i++) {
-            assignedCases.push({
-                caseId: `CUST-${String(Math.floor(Math.random() * 999) + 1).padStart(3, '0')}`,
-                customerId: `ef${Math.random().toString(36).substr(2, 6)}f${Math.floor(Math.random() * 10)}`,
-                assignedTo: analysts[Math.floor(Math.random() * analysts.length)],
-                priority: ['HIGH', 'MEDIUM', 'LOW'][Math.floor(Math.random() * 3)],
-                status: ['OPEN', 'IN_PROGRESS', 'PENDING_REVIEW'][Math.floor(Math.random() * 3)]
-            });
-        }
-        
+
+        // Fetch real failed cases from backend (OPEN / ESCALATED alerts ordered by risk score)
+        const realCases = await this.fetchRealFailedCases(8);
+
+        // Map real API cases to the display shape
+        const failedCases = realCases.map(c => ({
+            caseId:        c.caseId,
+            customerId:    c.customerId,
+            customerName:  c.customerName,
+            alertType:     c.alertType,
+            riskScore:     c.riskScore,
+            failureReason: c.failureReason,
+            attemptedAt:   c.createdAt,
+            assignedTo:    c.recommendedAction ? `Action Required: ${c.recommendedAction}` : 'Requires Manual Review'
+        }));
+
+        // Build assigned-cases list from same real data
+        const assignedCases = realCases.slice(0, 5).map((c, i) => ({
+            caseId:     c.caseId,
+            customerId: c.customerId,
+            assignedTo: analysts[i % analysts.length],
+            priority:   c.riskScore >= 75 ? 'HIGH' : c.riskScore >= 50 ? 'MEDIUM' : 'LOW',
+            status:     c.status === 'ESCALATED' ? 'IN_PROGRESS' : 'OPEN'
+        }));
+
         return {
             total: 120,
             resolved: 85,
             pending: 20,
             escalated: 12,
-            failedCases: failedCases,
-            assignedCases: assignedCases
+            failedCases,
+            assignedCases
         };
     },
+
+
 
     formatDetailedSummaryHTML(data) {
         const { total, resolved, pending, escalated, failedCases, assignedCases } = data;
@@ -1131,40 +1140,34 @@ const KyroChat = {
         const endTimeStr = runSummary.endTime.toLocaleString();
         
         // Generate failed cases if there were any failures
-        const failureReasons = [
-            'Unusual velocity spike in high-risk cross-border transfers',
-            'Structuring detected: Multiple rapid cash deposits near threshold',
-            'Sudden transaction volume surge inconsistent with historical baseline',
-            'Counterparty risk: High-risk transfers to unverified offshore entity',
-            'Geographic shift: High-value transfers originating from sanctioned region',
-            'Rapid movement of funds through newly reactivated account',
-            'Threshold breach: Single high-value wire transfer exceeding limit',
-            'Unexplained high-frequency international wire transfers without clear rationale'
-        ];
-        
-        const customerFirstNames = ['James', 'Maria', 'Robert', 'Jennifer', 'Michael', 'Linda', 'William', 'Patricia', 'David', 'Elizabeth', 'Richard', 'Susan', 'Joseph', 'Jessica', 'Thomas', 'Sarah', 'Charles', 'Karen', 'Christopher', 'Nancy'];
-        const customerLastNames = ['Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia', 'Miller', 'Davis', 'Rodriguez', 'Martinez', 'Hernandez', 'Lopez', 'Gonzalez', 'Wilson', 'Anderson', 'Thomas', 'Taylor', 'Moore', 'Jackson', 'Martin'];
-        
+        // Use real failed cases from backend (cached from earlier fetch, or fetch now)
+        const realFailedData = this._realFailedCasesCache || [];
         const failedCases = [];
         if (runSummary.failedActions > 0) {
-            // Generate case IDs from actual customer range (1 to total customers in system)
-            const maxCustomerId = Math.min(500, runSummary.casesTouched || 100); // Use actual customer count
-            
-            for (let i = 0; i < runSummary.failedActions; i++) {
-                const firstName = customerFirstNames[Math.floor(Math.random() * customerFirstNames.length)];
-                const lastName = customerLastNames[Math.floor(Math.random() * customerLastNames.length)];
-                const randomCustNum = Math.floor(Math.random() * maxCustomerId) + 1;
-                const custIdStr = `CUST-${String(randomCustNum).padStart(3, '0')}`;
-                
+            const source = realFailedData.slice(0, runSummary.failedActions);
+            source.forEach(c => {
                 failedCases.push({
-                    caseId: custIdStr,
-                    customerName: `${firstName} ${lastName}`,
-                    customerId: custIdStr,
-                    failureReason: failureReasons[Math.floor(Math.random() * failureReasons.length)],
-                    attemptedAt: new Date(runSummary.startTime.getTime() + Math.random() * duration * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                    caseId:       c.caseId,
+                    customerName: c.customerName,
+                    customerId:   c.customerId,
+                    failureReason: c.failureReason,
+                    attemptedAt:  c.createdAt || new Date(runSummary.startTime.getTime()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                });
+            });
+            // If we have fewer real cases than failedActions, fill from rest of cache
+            if (failedCases.length < runSummary.failedActions && realFailedData.length > source.length) {
+                realFailedData.slice(source.length, runSummary.failedActions).forEach(c => {
+                    failedCases.push({
+                        caseId:       c.caseId,
+                        customerName: c.customerName,
+                        customerId:   c.customerId,
+                        failureReason: c.failureReason,
+                        attemptedAt:  c.createdAt || '--:--'
+                    });
                 });
             }
         }
+
         
         let html = `
             <div class="kc-case-list">

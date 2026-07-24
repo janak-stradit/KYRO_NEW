@@ -25,27 +25,22 @@ const Patterns = {
 
     async fetchRealCustomersAndGeneratePatterns() {
         try {
-            // Fetch real customers from API (request full dataset of 10000)
+            // Fetch real customers from API (request full dataset)
             const response = await API.get("/customers", { page_size: 10000 });
             const customers = response.items || [];
-            
-            // Build customer ID list from real data
-            const allCustomers = customers.map((cust, idx) => {
-                return `CUST-${String(idx + 1).padStart(3, '0')}`;
-            });
-            
-            console.log(`Fetched ${allCustomers.length} real customers from API`);
-            
-            // Now generate pattern data using real customer IDs
-            this.generateCustomerPatternData(allCustomers);
+
+            console.log(`Fetched ${customers.length} real customers from API`);
+
+            // Pass the full customer objects so we can read kyc_last_review
+            this.generateCustomerPatternData(customers);
         } catch (error) {
             console.error("Error fetching customers:", error);
-            // Fallback to default behavior with full 9,784 customer range
-            const allCustomers = [];
+            // Fallback: generate placeholder entries for 9,784 customers
+            const fallback = [];
             for (let i = 1; i <= 9784; i++) {
-                allCustomers.push(`CUST-${String(i).padStart(3, '0')}`);
+                fallback.push({ id: `fallback-${i}`, kyc_last_review: null });
             }
-            this.generateCustomerPatternData(allCustomers);
+            this.generateCustomerPatternData(fallback);
         }
     },
 
@@ -63,7 +58,23 @@ const Patterns = {
 
         const numCustomers = Array.isArray(allCustomers) ? allCustomers.length : 9784;
         for (let i = 0; i < numCustomers; i++) {
-            const custId = Array.isArray(allCustomers) ? allCustomers[i] : `CUST-${String(i + 1).padStart(3, '0')}`;
+            // Support both plain string IDs (fallback) and full customer objects (real API)
+            const custObj  = Array.isArray(allCustomers) ? allCustomers[i] : null;
+            const isObj    = custObj && typeof custObj === 'object';
+            const custId   = isObj
+                ? `CUST-${String(i + 1).padStart(3, '0')}`
+                : (custObj || `CUST-${String(i + 1).padStart(3, '0')}`);
+
+            // Read real kyc_last_review from customer object
+            const rawKyc   = isObj ? custObj.kyc_last_review : null;
+            let lastKyc    = 'Not available';
+            if (rawKyc) {
+                try {
+                    const d = new Date(rawKyc);
+                    lastKyc = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                } catch (_) { /* keep Not available */ }
+            }
+
             const pattern = patternTypes[i % patternTypes.length];
 
             this.customerPatternData.push({
@@ -71,7 +82,7 @@ const Patterns = {
                 patternType:   pattern.value,
                 patternName:   pattern.name,
                 patternColor:  pattern.color,
-                lastKyc:       'Not available',
+                lastKyc,
                 baselineValue: (Math.random() * 20000).toFixed(2),
                 stdDeviation:  (Math.random() * 1000).toFixed(2),
                 lastUpdated:   '7/7/2026'
