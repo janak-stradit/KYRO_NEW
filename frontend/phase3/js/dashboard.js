@@ -18,6 +18,11 @@ const Dashboard = {
         showLoading("#mainContent", "Loading dashboard...");
         
         try {
+            // Force clear API cache to get fresh data
+            if (API && API.clearCache) {
+                API.clearCache();
+            }
+            
             const dashboardHtml = await this.getDashboardHTML();
             $("#mainContent").html(dashboardHtml);
             
@@ -305,7 +310,9 @@ const Dashboard = {
             // Show loading state
             this.showKPILoading();
             
+            console.log("📊 Fetching KPIs from API...");
             const data = await API.get(API.endpoints.kpis);
+            console.log("✅ KPI Data received:", data);
             
             // Hide loading state
             this.hideKPILoading();
@@ -318,6 +325,8 @@ const Dashboard = {
             const formattedTotalTx = Number(data.total_transactions || 0).toLocaleString();
             const formattedTotalVol = '$' + Number(data.total_volume || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
             const formattedAvgAmt = '$' + Number(data.avg_amount || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            
+            console.log("💰 Transaction Stats:", { formattedTotalTx, formattedTotalVol, formattedAvgAmt });
             
             $("#txOverviewCount").text(formattedTotalTx);
             $("#txOverviewVolume").text(formattedTotalVol);
@@ -332,7 +341,10 @@ const Dashboard = {
             
             // Load patterns data
             try {
+                console.log("🔍 Fetching patterns data...");
                 const patternData = await API.get("/dashboard/patterns");
+                console.log("✅ Pattern Data received:", patternData);
+                
                 if (patternData) {
                     // Update Behavioral Patterns Take Action count
                     $("#takeActionPatternsVal").text(`${patternData.total_pattern_hits || 0} Detected`);
@@ -381,7 +393,9 @@ const Dashboard = {
             // Show loading overlays
             this.showChartLoading();
             
+            console.log("📈 Fetching chart data from API...");
             const chartData = await API.get("/dashboard/charts");
+            console.log("✅ Chart Data received:", chartData);
             
             // Hide loading overlays
             this.hideChartLoading();

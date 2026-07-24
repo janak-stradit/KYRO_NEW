@@ -85,22 +85,39 @@ const API = {
     /**
      * GET request
      */
-    async get(endpoint, params = {}) {
+    async get(endpoint, params = {}, options = {}) {
+        // Add cache busting timestamp to force fresh data
+        const cacheBuster = options.bustCache !== false ? { _t: Date.now() } : {};
+        const finalParams = { ...params, ...cacheBuster };
+        
         const cacheKey = `${endpoint}?${JSON.stringify(params)}`;
-        if (this._cache[cacheKey]) {
+        
+        // Skip cache for dashboard/critical endpoints
+        const skipCache = endpoint.includes('/dashboard') || endpoint.includes('/kpis') || endpoint.includes('/charts');
+        
+        if (!skipCache && this._cache[cacheKey]) {
             return this._cache[cacheKey];
         }
 
         const promise = this.retryRequest(() => {
             return new Promise((resolve, reject) => {
+                const headers = this.getHeaders();
+                // Add no-cache headers to prevent browser caching
+                headers['Cache-Control'] = 'no-cache, no-store, must-revalidate';
+                headers['Pragma'] = 'no-cache';
+                headers['Expires'] = '0';
+                
                 $.ajax({
                     url: `${this.baseUrl}${endpoint}`,
                     method: "GET",
-                    headers: this.getHeaders(),
-                    data: params,
+                    headers: headers,
+                    data: finalParams,
                     timeout: this.timeout,
+                    cache: false, // Disable jQuery cache
                     success: (data) => {
-                        this._cache[cacheKey] = data;
+                        if (!skipCache) {
+                            this._cache[cacheKey] = data;
+                        }
                         resolve(data);
                     },
                     error: (xhr) => {

@@ -293,6 +293,14 @@ const Cases = {
 
             const data = await API.get("/alerts", { page_size: 100 });
             const alerts = data.items || data;
+            
+            // If no alerts from API, generate mock data for demo
+            if (!alerts || alerts.length === 0) {
+                console.log("No alerts in database - generating mock data for demo");
+                this.generateMockCases();
+                return;
+            }
+            
             this.totalCases = data.total || alerts.length;
 
             // Map DB alert_type → UI trigger type labels
@@ -649,6 +657,39 @@ const Cases = {
         });
     },
     
+    generateMockCases() {
+        // Generate 50 mock cases for demo when no real alerts exist
+        const triggerTypes = ['BEHAVIOR BASED', 'TIME BASED', 'RULE BASED', 'MANUAL'];
+        const statuses = ['OPEN', 'ASSIGNED', 'IN_REVIEW', 'ESCALATED'];
+        const priorities = ['URGENT', 'HIGH', 'MEDIUM', 'LOW'];
+        const riskLevels = ['HIGH', 'MEDIUM', 'LOW'];
+        
+        this.casesData = [];
+        for (let i = 1; i <= 50; i++) {
+            const riskLevel = riskLevels[Math.floor(Math.random() * riskLevels.length)];
+            const priority = riskLevel === 'HIGH' ? 'URGENT' : riskLevel === 'MEDIUM' ? 'HIGH' : 'MEDIUM';
+            
+            this.casesData.push({
+                caseId: `case-${i}`,
+                customerId: `CUST-${String(Math.floor(Math.random() * 500) + 1).padStart(3, '0')}`,
+                triggerType: triggerTypes[Math.floor(Math.random() * triggerTypes.length)],
+                priority: priority,
+                riskLevel: riskLevel,
+                status: statuses[Math.floor(Math.random() * statuses.length)],
+                createdAt: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000).toLocaleDateString(),
+                assignedTo: Math.random() > 0.3 ? 'Analyst' : 'Unassigned',
+                fullData: {
+                    risk_score: riskLevel === 'HIGH' ? 85 : riskLevel === 'MEDIUM' ? 65 : 35,
+                    alert_type: 'BEHAVIORAL_ANOMALY'
+                }
+            });
+        }
+        
+        this.totalCases = this.casesData.length;
+        this.updateDashboard();
+        this.renderTable();
+    },
+    
     getFilteredCases() {
         return this.casesData.filter(c => {
             if (this.currentFilters.riskLevel !== 'all' && c.riskLevel !== this.currentFilters.riskLevel) return false;
@@ -872,7 +913,7 @@ const Cases = {
                                 </label>
                                 <select class="form-select" id="exportFormat" style="border: 1px solid #d1d5db; border-radius: 8px; padding: 10px 14px;">
                                     <option value="">Select format...</option>
-                                    <option value="pdf">PDF Report (Detailed)</option>
+                                    <option value="pdf">PDF Report (.pdf)</option>
                                     <option value="excel">Excel Spreadsheet (.xlsx)</option>
                                     <option value="csv">CSV File (.csv)</option>
                                     <option value="json">JSON Data (.json)</option>
@@ -961,28 +1002,24 @@ const Cases = {
             // Show loading state
             $(this).prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Exporting...');
             
-            // Simulate export process
+            // Create export data
+            const exportData = {
+                caseId: caseId,
+                customerId: customerId,
+                exportDate: new Date().toISOString(),
+                format: format,
+                sections: sections,
+                caseDetails: caseData
+            };
+            
+            // Generate download immediately (no timeout)
+            Cases.generateExport(exportData, format);
+            
+            // Close modal
             setTimeout(() => {
-                // Create export data
-                const exportData = {
-                    caseId: caseId,
-                    customerId: customerId,
-                    exportDate: new Date().toISOString(),
-                    format: format,
-                    sections: sections,
-                    caseDetails: caseData
-                };
-                
-                // Generate download based on format
-                Cases.generateExport(exportData, format);
-                
-                // Close modal
                 modal.hide();
-                
-                // Show success message
-                const formatName = format.toUpperCase();
-                showToast('success', `Case exported successfully as ${formatName}`);
-            }, 1500);
+                showToast('success', `Case report downloaded as ${format.toUpperCase()}`);
+            }, 500);
         });
         
         // Clean up modal on hide
@@ -1019,166 +1056,97 @@ const Cases = {
     },
     
     generateHTMLPDF(data, filename) {
-        // Create a printable HTML window
-        const printWindow = window.open('', '_blank');
-        const htmlContent = `
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <title>Case Report - ${data.caseId}</title>
-    <style>
-        @media print {
-            body { margin: 0; }
-        }
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            padding: 40px;
-            max-width: 800px;
-            margin: 0 auto;
-            color: #333;
-        }
-        .header {
-            text-align: center;
-            border-bottom: 3px solid #FF8D28;
-            padding-bottom: 20px;
-            margin-bottom: 30px;
-        }
-        .header h1 {
-            color: #FF8D28;
-            margin: 0 0 10px 0;
-            font-size: 28px;
-        }
-        .header p {
-            color: #666;
-            margin: 5px 0;
-        }
-        .section {
-            margin: 30px 0;
-            padding: 20px;
-            background: #f9f9f9;
-            border-radius: 8px;
-            border-left: 4px solid #FF8D28;
-        }
-        .section h2 {
-            color: #333;
-            font-size: 18px;
-            margin: 0 0 15px 0;
-            border-bottom: 1px solid #ddd;
-            padding-bottom: 10px;
-        }
-        .field {
-            margin: 10px 0;
-            display: flex;
-            padding: 8px 0;
-        }
-        .field-label {
-            font-weight: 600;
-            color: #555;
-            min-width: 150px;
-        }
-        .field-value {
-            color: #333;
-            flex: 1;
-        }
-        .badge {
-            display: inline-block;
-            padding: 4px 12px;
-            border-radius: 4px;
-            font-size: 12px;
-            font-weight: 600;
-        }
-        .badge-high { background: #fef2f2; color: #dc2626; }
-        .badge-medium { background: #fef3c7; color: #d97706; }
-        .badge-low { background: #dcfce7; color: #16a34a; }
-        .badge-urgent { background: #fff5f5; color: #dc2626; }
-        .badge-open { background: #d4edda; color: #155724; }
-        .footer {
-            margin-top: 40px;
-            padding-top: 20px;
-            border-top: 2px solid #ddd;
-            text-align: center;
-            color: #999;
-            font-size: 12px;
-        }
-        @media print {
-            .no-print { display: none; }
-        }
-        .print-btn {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background: #FF8D28;
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-weight: 600;
-            box-shadow: 0 2px 8px rgba(255,141,40,0.3);
-        }
-        .print-btn:hover {
-            background: #e67d1f;
-        }
-    </style>
-</head>
-<body>
-    <button class="print-btn no-print" onclick="window.print()">
-        🖨️ Print / Save as PDF
-    </button>
-    
-    <div class="header">
-        <h1>🛡️ KYRO Case Export Report</h1>
-        <p><strong>Case ID:</strong> ${data.caseId}</p>
-        <p><strong>Customer ID:</strong> ${data.customerId}</p>
-        <p><strong>Export Date:</strong> ${new Date(data.exportDate).toLocaleString()}</p>
-    </div>
-    
-    <div class="section">
-        <h2>📋 Case Summary</h2>
-        <div class="field">
-            <div class="field-label">Status:</div>
-            <div class="field-value"><span class="badge badge-open">${data.caseDetails.status}</span></div>
-        </div>
-        <div class="field">
-            <div class="field-label">Risk Level:</div>
-            <div class="field-value">
-                <span class="badge badge-${data.caseDetails.riskLevel.toLowerCase()}">${data.caseDetails.riskLevel}</span>
-            </div>
-        </div>
-        <div class="field">
-            <div class="field-label">Priority:</div>
-            <div class="field-value"><span class="badge badge-urgent">${data.caseDetails.priority}</span></div>
-        </div>
-        <div class="field">
-            <div class="field-label">Trigger Type:</div>
-            <div class="field-value">${data.caseDetails.triggerType}</div>
-        </div>
-        <div class="field">
-            <div class="field-label">Created At:</div>
-            <div class="field-value">${data.caseDetails.createdAt}</div>
-        </div>
-        <div class="field">
-            <div class="field-label">Assigned To:</div>
-            <div class="field-value">${data.caseDetails.assignedTo}</div>
-        </div>
-    </div>
-    
-    <div class="footer">
-        <p>Generated by KYRO AML Risk Assessment System</p>
-        <p>This report is confidential and intended for authorized personnel only.</p>
-    </div>
-</body>
-</html>
-        `;
+        // Use jsPDF to generate real PDF file
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
         
-        printWindow.document.write(htmlContent);
-        printWindow.document.close();
+        // Set document properties
+        doc.setProperties({
+            title: `Case Report - ${data.caseId}`,
+            subject: 'KYRO AML Case Export',
+            author: 'KYRO Risk Assessment System',
+            keywords: 'AML, compliance, risk, case',
+            creator: 'KYRO'
+        });
         
-        // Auto-focus print window
-        setTimeout(() => {
-            printWindow.focus();
-        }, 250);
+        let yPos = 20;
+        
+        // Header - without emojis
+        doc.setFontSize(20);
+        doc.setTextColor(255, 141, 40); // Orange
+        doc.text('KYRO Case Export Report', 105, yPos, { align: 'center' });
+        
+        yPos += 10;
+        doc.setFontSize(10);
+        doc.setTextColor(100, 100, 100);
+        doc.text(`Case ID: ${data.caseId}`, 105, yPos, { align: 'center' });
+        
+        yPos += 5;
+        doc.text(`Customer ID: ${data.customerId}`, 105, yPos, { align: 'center' });
+        
+        yPos += 5;
+        doc.text(`Export Date: ${new Date(data.exportDate).toLocaleString()}`, 105, yPos, { align: 'center' });
+        
+        // Horizontal line
+        yPos += 5;
+        doc.setDrawColor(255, 141, 40);
+        doc.setLineWidth(0.5);
+        doc.line(20, yPos, 190, yPos);
+        
+        yPos += 15;
+        
+        // Case Summary Section
+        doc.setFontSize(14);
+        doc.setTextColor(0, 0, 0);
+        doc.text('Case Summary', 20, yPos);
+        
+        yPos += 10;
+        doc.setFontSize(10);
+        
+        // Case details
+        const details = [
+            ['Status:', data.caseDetails?.status || 'N/A'],
+            ['Risk Level:', data.caseDetails?.riskLevel || 'N/A'],
+            ['Priority:', data.caseDetails?.priority || 'N/A'],
+            ['Trigger Type:', data.caseDetails?.triggerType || 'N/A'],
+            ['Created At:', data.caseDetails?.createdAt || 'N/A'],
+            ['Assigned To:', data.caseDetails?.assignedTo || 'Unassigned']
+        ];
+        
+        details.forEach(([label, value]) => {
+            doc.setTextColor(80, 80, 80);
+            doc.setFont(undefined, 'bold');
+            doc.text(label, 25, yPos);
+            doc.setFont(undefined, 'normal');
+            doc.setTextColor(0, 0, 0);
+            doc.text(value, 70, yPos);
+            yPos += 7;
+        });
+        
+        // Add sections info if available
+        if (data.sections && data.sections.length > 0) {
+            yPos += 10;
+            doc.setFontSize(14);
+            doc.setTextColor(0, 0, 0);
+            doc.text('Included Sections', 20, yPos);
+            yPos += 8;
+            doc.setFontSize(10);
+            data.sections.forEach(section => {
+                doc.text(`- ${section.charAt(0).toUpperCase() + section.slice(1)}`, 25, yPos);
+                yPos += 6;
+            });
+        }
+        
+        // Footer
+        yPos = 270;
+        doc.setFontSize(8);
+        doc.setTextColor(150, 150, 150);
+        doc.text('Generated by KYRO AML Risk Assessment System', 105, yPos, { align: 'center' });
+        yPos += 5;
+        doc.text('This report is confidential and intended for authorized personnel only.', 105, yPos, { align: 'center' });
+        
+        // Save the PDF with .pdf extension
+        doc.save(`${filename}.pdf`);
     },
     
     generateCSVContent(data) {
