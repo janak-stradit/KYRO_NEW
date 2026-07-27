@@ -28,5 +28,43 @@ output/
 .env
 pyrightconfig.json
 
-# ── IDE ───────────────────────────────────────────────────────
+# ── Test Media & Artifacts ─────────────────────────────────────
+test_audio.mp3
+artifacts/
+test_tts_live.sh
+test_upsert.py
+test_elevenlabs.py
+
+# ── IDE & System Files ─────────────────────────────────────────
 .idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# ── Logs & Runtime Outputs ─────────────────────────────────────
+nohup.out
+pipeline_logs.txt
+*.out
+
+# ── Temporary Notes & Comparison Specs ─────────────────────────
+phase1.txt
+PHASE2.txt
+KYRO_SCRIPTS_COMPARISON.txt
+TTS_COMPARISON.txt
+TRIGGER_RULES_UPDATE.js
+
+# ── Local Fix & Inspection Utilities ───────────────────────────
+fix_pass.py
+fix_passwords.py
+check_customer_count.py
+show_customer_count.py
+show_customer_count.sh
+check_video_resolutions.py
+check_videos.py
+
+# ── Extra Shell Scripts ────────────────────────────────────────
+start.sh
+start_manual.sh
+start_with_env.sh
+run.sh
+stop.sh
