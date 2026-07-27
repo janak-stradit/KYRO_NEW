@@ -136,10 +136,20 @@ def send_message(req: ChatRequest, db: Session = Depends(get_db)) -> ChatRespons
         suggestions = ["What is the status of the backlog?", "Explain risk for case C-102"]
         
     elif "anomaly" in user_msg or "transaction" in user_msg:
-        high_alerts = db.query(Alert).filter(Alert.risk_score >= 80).limit(3).all()
+        high_alerts = (
+            db.query(Alert, Customer)
+            .join(Customer, Alert.customer_id == Customer.id)
+            .filter(Alert.risk_score >= 80)
+            .limit(3)
+            .all()
+        )
         if high_alerts:
-            details = "\n".join([f"• Alert ID: {a.id} | Score: {a.risk_score} | Rec: {a.recommended_action}" for a in high_alerts])
-            response_text = f"Found high-risk alerts that require human verification:\n{details}"
+            details_list = []
+            for a, cust in high_alerts:
+                reason = _derive_transaction_behavioral_reason(db, a, cust)
+                details_list.append(f"• Customer: {cust.full_name} (Risk Score: {a.risk_score}/100)\n  Details: {reason}")
+            details = "\n\n".join(details_list)
+            response_text = f"Recent transaction anomalies requiring compliance review:\n\n{details}"
         else:
             response_text = "No critical transaction anomalies detected in the current queue."
         suggestions = ["What is the status of the backlog?", "How is the ML model performing?"]
@@ -363,27 +373,36 @@ def _derive_transaction_behavioral_reason(db: Session, alert: Alert, customer: C
     if top_txn:
         amt_fmt = f"${float(top_txn.amount):,.2f}"
         curr = top_txn.currency or "USD"
-        txn_type = top_txn.transaction_type or "TRANSFER"
-        cp = top_txn.meta_counterparty or "External Entity"
-        sys_src = top_txn.source_system or "CORE_BANKING"
+        txn_type = (top_txn.transaction_type or "TRANSFER").title()
+        cp = top_txn.meta_counterparty or "External Counterparty"
 
         if alert_type in ("SANCTIONS_HIT", "SANCTIONS") or customer.sanctions_flag:
-            return f"Sanctions match: High-value {txn_type} of {curr} {amt_fmt} via {sys_src} to counterparty '{cp}' matched OFAC/UN sanctions watchlist."
+            return f"Sanctions Risk Match: High-value {txn_type} of {curr} {amt_fmt} to counterparty '{cp}' matched OFAC/UN sanctions watchlists."
         elif alert_type in ("PEP_ACTIVITY", "PEP") or customer.pep_flag:
-            return f"PEP activity: {txn_type} of {curr} {amt_fmt} via {sys_src} to counterparty '{cp}' requires mandatory Politically Exposed Person enhanced scrutiny."
+            return f"Politically Exposed Person (PEP) Activity: {txn_type} of {curr} {amt_fmt} involving counterparty '{cp}' requires mandatory enhanced due diligence screening."
         elif alert_type in ("THRESHOLD_BREACH", "LARGE_AMOUNT") or float(top_txn.amount) >= 10000:
-            return f"Threshold breach: Single {txn_type} of {curr} {amt_fmt} via {sys_src} to '{cp}' exceeds regulatory reporting limit ($10,000)."
+            return f"Large Transaction Reporting Limit Breached: Single {txn_type} of {curr} {amt_fmt} to counterparty '{cp}' exceeded the $10,000 regulatory reporting threshold."
         elif alert_type in ("VELOCITY_SPIKE", "STRUCTURING"):
-            return f"Velocity spike: {txn_count} rapid transactions totaling ${float(total_volume):,.2f} via {sys_src} violate customer's 90-day velocity baseline."
+            return f"Unusual Transaction Velocity: Customer executed {txn_count} rapid transactions totaling ${float(total_volume):,.2f}, violating historical baseline frequency."
         elif alert_type in ("GEOGRAPHIC_SHIFT", "GEOGRAPHY") or top_txn.meta_country:
             country = top_txn.meta_country or "High-Risk Jurisdiction"
-            return f"Geographic shift: {curr} {amt_fmt} {txn_type} routed to {country} via {sys_src} departs from customer's primary country profile."
+            return f"Cross-Border Geographic Risk: {curr} {amt_fmt} {txn_type} transfer routed to {country} represents an unusual geographic destination for this customer profile."
         elif alert_type in ("COUNTERPARTY_CHANGES", "COMPLEXITY_SHIFT"):
-            return f"Counterparty anomaly: {txn_type} of {curr} {amt_fmt} to unverified counterparty '{cp}' ({txn_count} lifetime transactions) indicates layering activity."
+            return f"Unverified Counterparty Layering Anomaly: {txn_type} of {curr} {amt_fmt} to unverified entity '{cp}' ({txn_count} total account transactions) indicates potential funds layering."
         else:
-            return f"Behavioral deviation: {txn_type} of {curr} {amt_fmt} via {sys_src} to '{cp}' ({txn_count} transactions, ${float(total_volume):,.2f} total) exceeds customer risk baseline."
+            return f"Transaction Behavioral Pattern Deviation: {txn_type} of {curr} {amt_fmt} to counterparty '{cp}' ({txn_count} total transactions, ${float(total_volume):,.2f} cumulative volume) deviates from customer's established activity profile."
     else:
-        return f"Behavioral risk score {alert.risk_score}/100 flagged for enhanced due diligence review."
+        flags = []
+        if customer.sanctions_flag:
+            flags.append("active sanctions watchlist hit")
+        if customer.pep_flag:
+            flags.append("politically exposed person (PEP) status")
+        if customer.adverse_media_flag:
+            flags.append("adverse media screening hit")
+            
+        if flags:
+            return f"Compliance Profile Screening Risk: Customer flagged for {', '.join(flags)} with risk score {alert.risk_score}/100."
+        return f"Behavioral Risk Profile Deviation: Customer risk score {alert.risk_score}/100 ({customer.risk_level or 'HIGH'} risk level) flagged for enhanced due diligence review."
 
 
 @router.get("/api/v1/agent/failed-cases")

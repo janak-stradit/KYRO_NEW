@@ -953,7 +953,7 @@ const KyroChat = {
         
         html += `
                 <div class="kc-audit-note">
-                    <strong>🔍 Next Steps:</strong> Failed cases require manual intervention to resolve data quality or system integration issues. I've flagged these for immediate analyst review. Assigned cases are actively being processed by compliance team members.
+                    <strong>🔍 Next Steps:</strong> High-risk cases with transactional anomalies require enhanced due diligence (EDD). I've flagged these for immediate compliance review. Assigned cases are actively being processed by compliance team members.
                 </div>
             </div>
         `;

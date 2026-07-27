@@ -49,9 +49,9 @@ const kyroScripts = {
 
     actions: {
         reduce_backlog: {
-            start: "I detected case backlog. Analyzing cases via two-layer risk scoring and LLM examination.",
+            start: "I detected case backlog. Analyzing cases via risk scoring and transactional behavioral analysis.",
             success: (count, resolved, escalated) => {
-                const parts = [`Backlog analysis complete. I examined ${count} case${count === 1 ? "" : "s"} through risk scoring and LLM.`];
+                const parts = [`Backlog analysis complete. I examined ${count} case${count === 1 ? "" : "s"} through risk scoring and transaction history analysis.`];
                 if (resolved && resolved > 0) parts.push(`${resolved} resolved (low-risk, auto-approved).`);
                 if (escalated && escalated > 0) parts.push(`${escalated} escalated (high-risk, requires analyst review).`);
                 const remaining = count - (resolved || 0) - (escalated || 0);
@@ -74,9 +74,9 @@ const kyroScripts = {
         },
         
         resolve_escalated_cases: {
-            start: "I detected escalated cases. Re-assessing each with LLM analysis to confirm or downgrade risk.",
+            start: "I detected escalated cases. Re-assessing each with transaction pattern evaluation to confirm or downgrade risk.",
             success: (count, downgraded) => {
-                const parts = [`Escalation review complete. I re-assessed ${count} escalated case${count === 1 ? "" : "s"} via LLM.`];
+                const parts = [`Escalation review complete. I re-assessed ${count} escalated case${count === 1 ? "" : "s"} via transaction pattern evaluation.`];
                 if (downgraded && downgraded > 0) parts.push(`${downgraded} downgraded after risk re-evaluation.`);
                 const kept = count - (downgraded || 0);
                 if (kept > 0) parts.push(`${kept} confirmed as high-risk and remain escalated.`);
