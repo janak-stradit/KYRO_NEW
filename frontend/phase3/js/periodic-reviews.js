@@ -398,14 +398,14 @@ const PeriodicReviews = {
         const freq6Months = this.reviewsData.filter(r => r.frequency === '6 months').length;
         const freq12Months = this.reviewsData.filter(r => r.frequency === '12 months').length;
         
-        // Find max for scaling
-        const maxCount = Math.max(freq3Months, freq6Months, freq12Months, 1);
-        const scale = maxCount > 16 ? 16 : maxCount;
+        // Find max for scaling dynamically
+        const maxVal = Math.max(freq3Months, freq6Months, freq12Months, 1);
+        const scale = maxVal <= 16 ? 16 : Math.ceil(maxVal / 10) * 10;
         
-        // Calculate heights as percentages
-        const height3M = (freq3Months / scale) * 100;
-        const height6M = (freq6Months / scale) * 100;
-        const height12M = (freq12Months / scale) * 100;
+        // Calculate heights as percentages (bounded strictly 0-100%)
+        const height3M = Math.min(100, Math.max(0, (freq3Months / scale) * 100));
+        const height6M = Math.min(100, Math.max(0, (freq6Months / scale) * 100));
+        const height12M = Math.min(100, Math.max(0, (freq12Months / scale) * 100));
         
         // Update Y-axis labels
         $("#freqYAxis0").text(Math.round(scale));
