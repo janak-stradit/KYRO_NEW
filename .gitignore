@@ -68,3 +68,5 @@ start_manual.sh
 start_with_env.sh
 run.sh
 stop.sh
+check_status.sh
+
