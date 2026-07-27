@@ -27,7 +27,9 @@ pipeline_logs.txt
 
 # ── Secrets & Local Configs ────────────────────────────────────
 .env
+.env.example
 pyrightconfig.json
+pytest.ini
 
 # ── Test Artifacts & Test Scripts ──────────────────────────────
 test_audio.mp3
@@ -56,6 +58,14 @@ load_10k.py
 load_10k_customers.py
 migrate_data.py
 sync_to_app.py
+check_db.py
+validate_pipeline.py
+run_dashboard.py
+
+# ── Local Development Server Runners ───────────────────────────
+start_kyro.py
+start_server.py
+init_db.py
 
 # ── Workstation Shell Scripts ──────────────────────────────────
 start.sh
