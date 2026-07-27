@@ -42,7 +42,13 @@ KYRO_SCRIPTS_COMPARISON.txt
 TTS_COMPARISON.txt
 TRIGGER_RULES_UPDATE.js
 
-# ── One-off Local Debug & Utility Scripts ──────────────────────
+# ── Unwanted Standalone & Debug Scripts ────────────────────────
+check_db.py
+generate_200_clean.py
+generator_service.py
+serve_frontend.py
+start_server.py
+validate_pipeline.py
 fix_pass.py
 fix_passwords.py
 check_customer_count.py
