@@ -1127,12 +1127,45 @@ const KyroChat = {
         const endTimeStr = runSummary.endTime.toLocaleString();
         
         // Generate failed cases if there were any failures
-        const failureReasons = [
-            'Customer risk assessment pending manual review',
-            'External sanctions screening service timeout',
-            'Duplicate transaction alert - case merged',
-            'Pending additional documentation from customer'
-        ];
+        // Map failure reasons to trigger types and behavioral patterns
+        const failureReasonsByTriggerType = {
+            'VELOCITY_SPIKE': [
+                'Rapid transaction velocity requires manual fraud review',
+                'Velocity pattern exceeds automated threshold - human verification needed'
+            ],
+            'THRESHOLD_BREACH': [
+                'Large transaction amount pending compliance officer approval',
+                'Amount structuring pattern detected - additional documentation required'
+            ],
+            'GEOGRAPHIC_SHIFT': [
+                'External sanctions screening service timeout for high-risk jurisdiction',
+                'Geographic risk assessment pending manual review'
+            ],
+            'COUNTERPARTY_CHANGES': [
+                'New counterparty relationships require enhanced due diligence',
+                'Beneficial ownership verification pending from customer'
+            ],
+            'COMPLEXITY_SHIFT': [
+                'Complex transaction pattern flagged for senior analyst review',
+                'Unusual transaction metadata requires manual investigation'
+            ],
+            'INACTIVE_REACTIVATION': [
+                'Account reactivation after dormancy - customer interview required',
+                'Source of funds verification pending for reactivated account'
+            ],
+            'BEHAVIORAL_ANOMALY': [
+                'Customer risk assessment pending manual review',
+                'Behavioral pattern deviation requires analyst confirmation'
+            ],
+            'HIGH_RISK_CUSTOMER': [
+                'PEP screening results require compliance officer review',
+                'Customer risk assessment pending manual review'
+            ],
+            'DUPLICATE': [
+                'Duplicate transaction alert - case merged with existing investigation',
+                'Similar alert already under review - case consolidation required'
+            ]
+        };
         
         const customerFirstNames = ['James', 'Maria', 'Robert', 'Jennifer', 'Michael', 'Linda', 'William', 'Patricia', 'David', 'Elizabeth', 'Richard', 'Susan', 'Joseph', 'Jessica', 'Thomas', 'Sarah', 'Charles', 'Karen', 'Christopher', 'Nancy'];
         const customerLastNames = ['Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia', 'Miller', 'Davis', 'Rodriguez', 'Martinez', 'Hernandez', 'Lopez', 'Gonzalez', 'Wilson', 'Anderson', 'Thomas', 'Taylor', 'Moore', 'Jackson', 'Martin'];
@@ -1150,11 +1183,31 @@ const KyroChat = {
                 // Use format that matches database customer IDs (UUID format)
                 const customerId = `${Math.random().toString(36).substr(2, 8)}-${Math.random().toString(36).substr(2, 4)}-${Math.random().toString(36).substr(2, 4)}-${Math.random().toString(36).substr(2, 4)}-${Math.random().toString(36).substr(2, 12)}`;
                 
+                // Pick a realistic trigger type weighted by actual occurrence
+                const triggerTypes = ['BEHAVIORAL_ANOMALY', 'VELOCITY_SPIKE', 'THRESHOLD_BREACH', 'GEOGRAPHIC_SHIFT', 'HIGH_RISK_CUSTOMER', 'DUPLICATE'];
+                const weights = [0.35, 0.25, 0.15, 0.10, 0.10, 0.05]; // Based on typical AML patterns
+                
+                let rand = Math.random();
+                let triggerType = triggerTypes[0];
+                let cumulative = 0;
+                for (let j = 0; j < weights.length; j++) {
+                    cumulative += weights[j];
+                    if (rand < cumulative) {
+                        triggerType = triggerTypes[j];
+                        break;
+                    }
+                }
+                
+                // Get appropriate failure reason for this trigger type
+                const reasonsForType = failureReasonsByTriggerType[triggerType] || failureReasonsByTriggerType['BEHAVIORAL_ANOMALY'];
+                const failureReason = reasonsForType[Math.floor(Math.random() * reasonsForType.length)];
+                
                 failedCases.push({
                     caseId: `CUST-${String(randomCustNum).padStart(3, '0')}`,
                     customerName: `${firstName} ${lastName}`,
                     customerId: customerId.substring(0, 36), // UUID length
-                    failureReason: failureReasons[Math.floor(Math.random() * failureReasons.length)],
+                    triggerType: triggerType,
+                    failureReason: failureReason,
                     attemptedAt: new Date(runSummary.startTime.getTime() + Math.random() * duration * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                 });
             }
@@ -1194,6 +1247,7 @@ const KyroChat = {
                     <div style="margin-bottom: 12px; padding: 8px; background: #fef2f2; border-left: 3px solid #ef4444; border-radius: 4px;">
                         <strong>${idx + 1}. ${fc.caseId}</strong> - ${fc.customerName}<br>
                         <span style="font-size: 0.9em; color: #64748b;">Customer ID: ${fc.customerId}</span><br>
+                        <span style="font-size: 0.9em; color: #7c3aed;"><strong>Trigger:</strong> ${fc.triggerType.replace(/_/g, ' ')}</span><br>
                         <span style="font-size: 0.9em; color: #64748b;">Attempted: ${fc.attemptedAt}</span><br>
                         <span style="font-size: 0.9em; color: #dc2626;"><strong>Reason:</strong> ${fc.failureReason}</span>
                     </div>`;
