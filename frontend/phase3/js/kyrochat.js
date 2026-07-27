@@ -415,8 +415,9 @@ const KyroChat = {
             } else if (q.includes("hello") || q.includes("hi")) {
                 response = kyroScripts.chat.greeting;
             } else if (q.includes("summary")) {
-                // Generate detailed summary with failed cases
-                const summaryData = this.generateDetailedSummaryData();
+                // Generate detailed summary with real failed cases from DB
+                const realCases = await this.getRealFailedCases();
+                const summaryData = this.generateDetailedSummaryData(realCases);
                 response = kyroScripts.chat.detailedCaseSummary(summaryData);
                 messageOptions = {
                     showViewDetails: true,
@@ -814,42 +815,54 @@ const KyroChat = {
         `;
     },
 
-    generateDetailedSummaryData() {
+    async getRealFailedCases() {
+        try {
+            if (window.API && window.API.get) {
+                const res = await window.API.get('/agent/failed-cases?limit=6');
+                if (Array.isArray(res) && res.length > 0) {
+                    return res;
+                }
+            } else {
+                const host = window.location.hostname || 'localhost';
+                const proto = window.location.protocol || 'http:';
+                const url = `${proto}//${host}:8010/api/v1/agent/failed-cases?limit=6`;
+                const res = await fetch(url).then(r => r.json());
+                if (Array.isArray(res) && res.length > 0) {
+                    return res;
+                }
+            }
+        } catch (e) {
+            console.warn("Could not fetch real failed cases from backend:", e);
+        }
+        return [];
+    },
+
+    generateDetailedSummaryData(realCases = []) {
         const analysts = ['Sarah Chen', 'Mike Rodriguez', 'Priya Patel', 'James Wilson', 'Unassigned'];
-        const failureReasons = [
-            'Insufficient transaction data for risk assessment',
-            'External data source timeout',
-            'Customer profile incomplete - missing KYC documentation',
-            'Duplicate case detected - merged with existing case',
-            'Model prediction confidence below threshold',
-            'API rate limit exceeded during scoring'
-        ];
         
-        // Generate failed cases with details
-        const failedCases = [];
-        const failedCount = Math.floor(Math.random() * 5) + 3; // 3-7 failed cases
-        
-        for (let i = 0; i < failedCount; i++) {
-            failedCases.push({
-                caseId: `CUST-${String(Math.floor(Math.random() * 999) + 1).padStart(3, '0')}`,
-                customerId: `ef${Math.random().toString(36).substr(2, 6)}f${Math.floor(Math.random() * 10)}`,
-                failureReason: failureReasons[Math.floor(Math.random() * failureReasons.length)],
-                attemptedAt: new Date(Date.now() - Math.random() * 2 * 60 * 60 * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                assignedTo: 'Requires Manual Review'
-            });
+        let failedCases = [];
+        if (realCases && realCases.length > 0) {
+            failedCases = realCases.map((rc, i) => ({
+                caseId: rc.caseId || `CASE-${String(i+1).padStart(3, '0')}`,
+                customerId: rc.customerId ? rc.customerId.substring(0, 8) + '...' : `cust-${i+1}`,
+                customerName: rc.customerName || 'Unknown Customer',
+                failureReason: rc.failureReason,
+                attemptedAt: rc.createdAt || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                assignedTo: rc.recommendedAction || 'Requires Manual Review'
+            }));
         }
         
         // Generate assigned cases
         const assignedCases = [];
-        const assignedCount = Math.floor(Math.random() * 8) + 5; // 5-12 assigned cases
+        const assignedCount = Math.max(5, failedCases.length + 2);
         
         for (let i = 0; i < assignedCount; i++) {
             assignedCases.push({
-                caseId: `CUST-${String(Math.floor(Math.random() * 999) + 1).padStart(3, '0')}`,
+                caseId: `CUST-${String(i + 101).padStart(3, '0')}`,
                 customerId: `ef${Math.random().toString(36).substr(2, 6)}f${Math.floor(Math.random() * 10)}`,
-                assignedTo: analysts[Math.floor(Math.random() * analysts.length)],
-                priority: ['HIGH', 'MEDIUM', 'LOW'][Math.floor(Math.random() * 3)],
-                status: ['OPEN', 'IN_PROGRESS', 'PENDING_REVIEW'][Math.floor(Math.random() * 3)]
+                assignedTo: analysts[i % analysts.length],
+                priority: ['HIGH', 'MEDIUM', 'LOW'][i % 3],
+                status: ['OPEN', 'IN_PROGRESS', 'PENDING_REVIEW'][i % 3]
             });
         }
         
@@ -972,11 +985,12 @@ const KyroChat = {
             
             showToast("info", "Kyro agent stopped");
             
-            // Generate and display run summary
+            // Generate and display run summary with real transaction-based reasons
+            const realCases = await this.getRealFailedCases();
             const summaryMessage = this.generateRunSummary(runSummary);
             this.addMessage("assistant", summaryMessage, {
                 showViewDetails: true,
-                caseDetails: this.formatRunSummaryDetails(runSummary)
+                caseDetails: this.formatRunSummaryDetails(runSummary, realCases)
             });
             this.speak("Autonomous monitoring stopped. Run summary generated.");
             
@@ -1113,7 +1127,7 @@ const KyroChat = {
         return `Autonomous monitoring session completed. I executed ${runSummary.totalActions} action${runSummary.totalActions !== 1 ? 's' : ''} with ${successRate}% success rate, processing ${runSummary.casesTouched} case${runSummary.casesTouched !== 1 ? 's' : ''} over ${durationStr}. All actions have been logged to the audit trail.`;
     },
 
-    formatRunSummaryDetails(runSummary) {
+    formatRunSummaryDetails(runSummary, realCases = []) {
         const duration = Math.round((runSummary.endTime - runSummary.startTime) / 1000);
         const minutes = Math.floor(duration / 60);
         const seconds = duration % 60;
@@ -1126,38 +1140,17 @@ const KyroChat = {
         const startTimeStr = runSummary.startTime.toLocaleString();
         const endTimeStr = runSummary.endTime.toLocaleString();
         
-        // Generate failed cases if there were any failures
-        const failureReasons = [
-            'Customer risk assessment pending manual review',
-            'External sanctions screening service timeout',
-            'Duplicate transaction alert - case merged',
-            'Pending additional documentation from customer'
-        ];
-        
-        const customerFirstNames = ['James', 'Maria', 'Robert', 'Jennifer', 'Michael', 'Linda', 'William', 'Patricia', 'David', 'Elizabeth', 'Richard', 'Susan', 'Joseph', 'Jessica', 'Thomas', 'Sarah', 'Charles', 'Karen', 'Christopher', 'Nancy'];
-        const customerLastNames = ['Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia', 'Miller', 'Davis', 'Rodriguez', 'Martinez', 'Hernandez', 'Lopez', 'Gonzalez', 'Wilson', 'Anderson', 'Thomas', 'Taylor', 'Moore', 'Jackson', 'Martin'];
-        
         const failedCases = [];
-        if (runSummary.failedActions > 0) {
-            // Generate case IDs from actual customer range (1 to total customers in system)
-            const maxCustomerId = Math.min(1454, runSummary.casesTouched || 100); // Use actual customer count from database
-            
-            for (let i = 0; i < runSummary.failedActions; i++) {
-                const firstName = customerFirstNames[Math.floor(Math.random() * customerFirstNames.length)];
-                const lastName = customerLastNames[Math.floor(Math.random() * customerLastNames.length)];
-                const randomCustNum = Math.floor(Math.random() * maxCustomerId) + 1;
-                
-                // Use format that matches database customer IDs (UUID format)
-                const customerId = `${Math.random().toString(36).substr(2, 8)}-${Math.random().toString(36).substr(2, 4)}-${Math.random().toString(36).substr(2, 4)}-${Math.random().toString(36).substr(2, 4)}-${Math.random().toString(36).substr(2, 12)}`;
-                
+        if (realCases && realCases.length > 0) {
+            realCases.forEach(rc => {
                 failedCases.push({
-                    caseId: `CUST-${String(randomCustNum).padStart(3, '0')}`,
-                    customerName: `${firstName} ${lastName}`,
-                    customerId: customerId.substring(0, 36), // UUID length
-                    failureReason: failureReasons[Math.floor(Math.random() * failureReasons.length)],
-                    attemptedAt: new Date(runSummary.startTime.getTime() + Math.random() * duration * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                    caseId: rc.caseId,
+                    customerName: rc.customerName,
+                    customerId: rc.customerId ? rc.customerId.substring(0, 8) + '...' : 'N/A',
+                    failureReason: rc.failureReason,
+                    attemptedAt: rc.createdAt || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                 });
-            }
+            });
         }
         
         let html = `

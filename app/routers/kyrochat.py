@@ -114,18 +114,18 @@ def send_message(req: ChatRequest, db: Session = Depends(get_db)) -> ChatRespons
     elif "c-102" in user_msg or "case c-102" in user_msg:
         # Pull the most recent high-risk alert from the real database
         top_alert = (
-            db.query(Alert, Customer.full_name)
+            db.query(Alert, Customer)
             .join(Customer, Alert.customer_id == Customer.id)
             .filter(Alert.risk_score >= 80)
             .order_by(Alert.risk_score.desc())
             .first()
         )
         if top_alert:
-            a, cname = top_alert
-            reason = _derive_failure_reason(a.alert_type, a.triggered_rules)
+            a, cust = top_alert
+            reason = _derive_transaction_behavioral_reason(db, a, cust)
             response_text = (
                 f"Top High-Risk Case Details:\n"
-                f"• Customer: {cname}\n"
+                f"• Customer: {cust.full_name}\n"
                 f"• Score: {a.risk_score} ({a.recommended_action or 'HIGH RISK'})\n"
                 f"• Trigger: {reason}\n"
                 f"• Status: {a.status}\n"
@@ -390,7 +390,7 @@ def _derive_transaction_behavioral_reason(db: Session, alert: Alert, customer: C
 def get_real_failed_cases(
     limit: int = 8,
     db: Session = Depends(get_db),
-    user=Depends(get_current_user),
+    user: Any = None,
 ) -> list[dict[str, Any]]:
     """Return real high-risk alerts as failed cases for Kyro Chat display.
     Selects OPEN or ESCALATED alerts ordered by risk score descending.
@@ -451,7 +451,7 @@ def get_action_timeline(hours: int = 24) -> list[dict[str, Any]]:
                     "outcome": "SUCCESS",
                     "success": True,
                     "case_id": f"CASE-{str(a.id)[:6].upper()}",
-                    "customer_name": name or "Unknown"
+                    "customer_name": cust.full_name or "Unknown"
                 })
     return agent_state.timeline[:10]
 
