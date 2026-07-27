@@ -1,6 +1,6 @@
-# ── Python ────────────────────────────────────────────────────
+# ── Python & Virtual Environments ──────────────────────────────
 venv/
-.venv-api/
+.venv*/
 __pycache__/
 *.pyc
 *.pyo
@@ -8,52 +8,41 @@ __pycache__/
 .coverage
 htmlcov/
 
-# ── ML model artifacts (regenerated via training) ──────────────
+# ── ML Models & Local Databases ────────────────────────────────
 models/*.pkl
 models/registry.json
-
-# ── Database files (contain sensitive data) ────────────────────
 *.db
 *.sqlite
 *.sqlite3
 kyro_aml.db
 
-# ── Logs (runtime generated) ────────────────────────────────────
+# ── Logs & Runtime Generated Directories ───────────────────────
 logs/
-*.log
-
-# ── App output / secrets ────────────────────────────────────────
 output/
-*.xlsx
+artifacts/
+*.log
+*.out
+nohup.out
+pipeline_logs.txt
+
+# ── Secrets & Local Configs ────────────────────────────────────
 .env
 pyrightconfig.json
 
-# ── Test Media & Artifacts ─────────────────────────────────────
+# ── Test Artifacts & Test Scripts ──────────────────────────────
 test_audio.mp3
-artifacts/
-test_tts_live.sh
-test_upsert.py
 test_elevenlabs.py
+test_upsert.py
+test_tts_live.sh
 
-# ── IDE & System Files ─────────────────────────────────────────
-.idea/
-.vscode/
-.DS_Store
-Thumbs.db
-
-# ── Logs & Runtime Outputs ─────────────────────────────────────
-nohup.out
-pipeline_logs.txt
-*.out
-
-# ── Temporary Notes & Comparison Specs ─────────────────────────
+# ── Developer Notes & Specification Docs ───────────────────────
 phase1.txt
 PHASE2.txt
 KYRO_SCRIPTS_COMPARISON.txt
 TTS_COMPARISON.txt
 TRIGGER_RULES_UPDATE.js
 
-# ── Local Fix & Inspection Utilities ───────────────────────────
+# ── One-off Local Debug & Utility Scripts ──────────────────────
 fix_pass.py
 fix_passwords.py
 check_customer_count.py
@@ -61,8 +50,14 @@ show_customer_count.py
 show_customer_count.sh
 check_video_resolutions.py
 check_videos.py
+audit_global_banking.py
+fast_populate.py
+load_10k.py
+load_10k_customers.py
+migrate_data.py
+sync_to_app.py
 
-# ── Extra Shell Scripts ────────────────────────────────────────
+# ── Workstation Shell Scripts ──────────────────────────────────
 start.sh
 start_manual.sh
 start_with_env.sh
@@ -70,3 +65,8 @@ run.sh
 stop.sh
 check_status.sh
 
+# ── IDE & Operating System Files ───────────────────────────────
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
