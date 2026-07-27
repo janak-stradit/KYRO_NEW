@@ -30,3 +30,59 @@ pyrightconfig.json
 
 # ── IDE ───────────────────────────────────────────────────────
 .idea/
+
+# ── Test files ─────────────────────────────────────────────────
+tests/
+**/tests/
+test_*.py
+*_test.py
+check_*.py
+audit_*.py
+fix_*.py
+test_*.sh
+*.test.js
+*.spec.js
+*.test.ts
+*.spec.ts
+
+# ── Test files ─────────────────────────────────────────────────
+tests/
+**/tests/
+test_*.py
+*_test.py
+check_*.py
+audit_*.py
+fix_*.py
+test_*.sh
+*.test.js
+*.spec.js
+*.test.ts
+*.spec.ts
+
+# ── Test files ─────────────────────────────────────────────────
+tests/
+**/tests/
+test_*.py
+*_test.py
+check_*.py
+audit_*.py
+fix_*.py
+test_*.sh
+*.test.js
+*.spec.js
+*.test.ts
+*.spec.ts
+
+# ── Test files ─────────────────────────────────────────────────
+tests/
+**/tests/
+test_*.py
+*_test.py
+check_*.py
+audit_*.py
+fix_*.py
+test_*.sh
+*.test.js
+*.spec.js
+*.test.ts
+*.spec.ts
