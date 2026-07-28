@@ -29,6 +29,8 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+    env:
+      DATABASE_URL: postgresql+psycopg://kyro_user:kyro_pass@localhost:5432/kyro_aml_test
     steps:
       - uses: actions/checkout@v4
 
@@ -39,9 +41,10 @@ jobs:
 
       - run: pip install -r requirements-api.txt -r requirements-ml.txt
 
+      - name: Run DB migrations
+        run: alembic -c app/alembic.ini upgrade head
+
       - name: Run API test suite
-        env:
-          DATABASE_URL: postgresql+psycopg://kyro_user:kyro_pass@localhost:5432/kyro_aml_test
         run: pytest tests/api --cov=app
 
   build-and-push:
