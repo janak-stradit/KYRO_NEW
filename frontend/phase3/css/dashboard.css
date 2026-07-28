@@ -1,0 +1,465 @@
+/* KYRO Dashboard-Specific Styles - Premium Light Theme Design */
+
+/* Dashboard Layout */
+.dashboard-header {
+    background: transparent;
+    color: var(--kyro-text-primary);
+    padding: 1.5rem 0;
+    margin: 0 0 1.5rem 0;
+    border-bottom: 1px solid rgba(124, 143, 172, 0.12);
+}
+
+.dashboard-title {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: var(--kyro-primary);
+    margin: 0;
+}
+
+.dashboard-subtitle {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 0.875rem;
+    color: var(--kyro-text-secondary);
+    margin: 0.25rem 0 0 0;
+}
+
+/* KPI Cards Grid */
+.kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+/* KPI Card Variants - Clean Premium White Cards with Border Indicators */
+.kpi-card {
+    background: #ffffff;
+    border: 1px solid rgba(124, 143, 172, 0.12);
+    border-radius: 12px;
+    box-shadow: 0px 12px 24px -4px rgba(145, 158, 171, 0.12), 0px 0px 2px rgba(145, 158, 171, 0.2);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow: hidden;
+    position: relative;
+    padding: 1.25rem;
+}
+
+.kpi-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0px 16px 32px -4px rgba(145, 158, 171, 0.18), 0px 0px 4px rgba(145, 158, 171, 0.2);
+}
+
+.kpi-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 6px;
+    height: 100%;
+}
+
+.kpi-card.kpi-blue::before {
+    background-color: var(--kyro-primary);
+}
+
+.kpi-card.kpi-red::before {
+    background-color: var(--kyro-danger);
+}
+
+.kpi-card.kpi-orange::before {
+    background-color: #FF8D28;
+}
+
+.kpi-card.kpi-green::before {
+    background-color: var(--kyro-success);
+}
+
+.kpi-card .card-body {
+    padding: 0 !important;
+}
+
+.kpi-card h6 {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--kyro-text-secondary);
+    margin-bottom: 0.5rem;
+}
+
+.kpi-card h2 {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--kyro-text-primary);
+    margin: 0;
+    line-height: 1.1;
+}
+
+.kpi-card small {
+    font-size: 0.75rem;
+    color: var(--kyro-text-muted);
+}
+
+.kpi-card .icon-wrapper {
+    width: 44px;
+    height: 44px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.kpi-card.kpi-blue .icon-wrapper {
+    background-color: rgba(26, 35, 126, 0.08);
+    color: var(--kyro-primary);
+}
+
+.kpi-card.kpi-red .icon-wrapper {
+    background-color: rgba(229, 57, 53, 0.08);
+    color: var(--kyro-danger);
+}
+
+.kpi-card.kpi-orange .icon-wrapper {
+    background-color: rgba(255, 141, 40, 0.08);
+    color: #FF8D28;
+}
+
+.kpi-card.kpi-green .icon-wrapper {
+    background-color: rgba(67, 160, 71, 0.08);
+    color: var(--kyro-success);
+}
+
+/* KPI Counter */
+.kpi-counter {
+    font-variant-numeric: tabular-nums;
+}
+
+/* Chart Cards styling */
+.chart-card {
+    background: #ffffff;
+    border: 1px solid rgba(124, 143, 172, 0.12);
+    border-radius: 12px;
+    box-shadow: 0px 12px 24px -4px rgba(145, 158, 171, 0.12), 0px 0px 2px rgba(145, 158, 171, 0.2);
+    margin-bottom: 1.5rem;
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.chart-card:hover {
+    box-shadow: 0px 16px 32px -4px rgba(145, 158, 171, 0.18), 0px 0px 4px rgba(145, 158, 171, 0.2);
+}
+
+.chart-header {
+    background: transparent;
+    padding: 1.25rem 1.5rem 0.5rem 1.5rem;
+    border-bottom: none;
+}
+
+.chart-title {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--kyro-text-primary);
+    margin: 0;
+}
+
+.chart-subtitle {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 0.75rem;
+    color: var(--kyro-text-secondary);
+    margin: 0.25rem 0 0 0;
+}
+
+.chart-body {
+    padding: 1.5rem;
+}
+
+.chart-canvas {
+    max-height: 280px;
+}
+
+/* Alert Feed Card */
+.alert-feed {
+    background: #ffffff;
+    border: 1px solid rgba(124, 143, 172, 0.12);
+    border-radius: 12px;
+    box-shadow: 0px 12px 24px -4px rgba(145, 158, 171, 0.12), 0px 0px 2px rgba(145, 158, 171, 0.2);
+    max-height: 480px;
+    overflow-y: auto;
+}
+
+.alert-feed-header {
+    background: #ffffff;
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid rgba(124, 143, 172, 0.12);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.alert-feed-item {
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid rgba(124, 143, 172, 0.08);
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.alert-feed-item:hover {
+    background: rgba(26, 35, 126, 0.02);
+    transform: translateX(2px);
+}
+
+.alert-feed-item:last-child {
+    border-bottom: none;
+}
+
+.alert-customer {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-weight: 600;
+    font-size: 0.875rem;
+    color: var(--kyro-text-primary);
+}
+
+.alert-type {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 0.7rem;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.alert-type.behavioral {
+    background: rgba(156, 39, 176, 0.08);
+    color: #9c27b0;
+}
+
+.alert-type.velocity {
+    background: rgba(255, 141, 40, 0.08);
+    color: #FF8D28;
+}
+
+.alert-type.geography {
+    background: rgba(76, 175, 80, 0.08);
+    color: #4caf50;
+}
+
+.alert-type.volume {
+    background: rgba(244, 67, 54, 0.08);
+    color: #f44336;
+}
+
+.risk-badge {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-weight: 600;
+    font-size: 0.75rem;
+}
+
+/* Risk Distribution Chart */
+.risk-distribution-legend {
+    display: flex;
+    justify-content: center;
+    gap: 1.5rem;
+    margin-top: 1.25rem;
+}
+
+.legend-item {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 0.8rem;
+    color: var(--kyro-text-secondary);
+}
+
+/* Performance Gauge */
+.performance-gauge {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.gauge-value {
+    position: absolute;
+    top: 45%;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: var(--kyro-text-primary);
+}
+
+.gauge-label {
+    position: absolute;
+    top: 75%;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 0.75rem;
+    color: var(--kyro-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* System Health Widget */
+.system-health {
+    background: #ffffff;
+    border: 1px solid rgba(124, 143, 172, 0.12);
+    border-radius: 12px;
+    box-shadow: 0px 12px 24px -4px rgba(145, 158, 171, 0.12), 0px 0px 2px rgba(145, 158, 171, 0.2);
+    padding: 1.5rem;
+    height: 100%;
+}
+
+.health-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid rgba(124, 143, 172, 0.08);
+}
+
+.health-item:last-child {
+    border-bottom: none;
+}
+
+.health-label {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-weight: 500;
+    font-size: 0.875rem;
+    color: var(--kyro-text-primary);
+}
+
+.health-value {
+    font-family: 'SF Mono', Monaco, monospace;
+    font-weight: 600;
+    font-size: 0.875rem;
+}
+
+/* Real-time Indicator */
+.real-time-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.75rem;
+    color: var(--kyro-success);
+    font-weight: 600;
+}
+
+.real-time-dot {
+    width: 6px;
+    height: 6px;
+    background: var(--kyro-success);
+    border-radius: 50%;
+    animation: pulse 1.5s ease infinite;
+}
+
+/* Take Action Section */
+.take-action-header {
+    text-align: center;
+    margin-top: 2rem;
+    margin-bottom: 1.5rem;
+}
+
+.take-action-title {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--kyro-text-primary);
+    margin: 0;
+}
+
+.take-action-subtitle {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 0.875rem;
+    color: var(--kyro-text-secondary);
+    margin-top: 0.25rem;
+}
+
+.quick-actions {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+/* Take Action Quick Cards (styled premium white like figma design) */
+.quick-action-card {
+    background: #ffffff;
+    border: 1px solid rgba(124, 143, 172, 0.12);
+    border-radius: 15px;
+    box-shadow: 0px 12px 24px -4px rgba(145, 158, 171, 0.12), 0px 0px 2px rgba(145, 158, 171, 0.2);
+    padding: 2rem 1.5rem;
+    text-align: center;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    cursor: pointer;
+    text-decoration: none;
+    color: var(--kyro-text-primary);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 250px;
+}
+
+.quick-action-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0px 16px 32px -4px rgba(145, 158, 171, 0.18), 0px 0px 4px rgba(145, 158, 171, 0.2);
+    text-decoration: none;
+    color: var(--kyro-text-primary);
+}
+
+.quick-action-icon {
+    font-size: 2.25rem;
+    color: #FF8D28;
+    margin-bottom: 1rem;
+}
+
+.quick-action-title {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-weight: 700;
+    font-size: 1.25rem;
+    color: var(--kyro-text-primary);
+    margin-bottom: 0.5rem;
+}
+
+.quick-action-description {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 0.875rem;
+    color: var(--kyro-text-secondary);
+    margin-bottom: 1.5rem;
+    line-height: 1.4;
+}
+
+/* Action Button styling inside cards */
+.quick-action-btn {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    padding: 0.5rem 1.5rem;
+    background-color: #FF8D28;
+    color: #ffffff;
+    border-radius: 6px;
+    font-weight: 700;
+    font-size: 0.875rem;
+    display: inline-block;
+    transition: all 0.2s;
+    border: none;
+}
+
+.quick-action-card:hover .quick-action-btn {
+    background-color: #e0771f;
+}
+
+/* Dark Theme Variables support for Dashboard specifically */
+[data-theme="dark"] .kpi-card,
+[data-theme="dark"] .chart-card,
+[data-theme="dark"] .alert-feed,
+[data-theme="dark"] .alert-feed-header,
+[data-theme="dark"] .system-health,
+[data-theme="dark"] .quick-action-card {
+    background-color: var(--kyro-bg-secondary);
+    border-color: rgba(255, 255, 255, 0.08);
+    box-shadow: 0px 12px 24px -4px rgba(0, 0, 0, 0.35), 0px 0px 2px rgba(0, 0, 0, 0.4);
+}
+[data-theme="dark"] .alert-feed-item {
+    border-bottom-color: rgba(255, 255, 255, 0.04);
+}
+[data-theme="dark"] .health-item {
+    border-bottom-color: rgba(255, 255, 255, 0.04);
+}

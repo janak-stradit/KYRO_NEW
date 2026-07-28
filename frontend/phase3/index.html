@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>KYRO Risk Assessment Specialist</title>
+    <meta name="description" content="AI-powered AML risk assessment with behavioral pattern detection">
+    
+    <!-- Bootstrap 5.3 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Font Awesome 6 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <!-- DataTables CSS -->
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css">
+    <!-- Flatpickr CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <!-- Dropzone CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/dropzone/5.9.3/dropzone.min.css">
+    <!-- Custom KYRO Theme -->
+    <link rel="stylesheet" href="css/figma-design.css?v=999999999999999">
+    <link rel="stylesheet" href="css/custom.css?v=9999999999">
+    <link rel="stylesheet" href="css/dashboard.css">
+    <link rel="stylesheet" href="css/kyrochat.css">
+    
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡️</text></svg>">
+</head>
+<body class="d-flex flex-column min-vh-100">
+    <!-- Navigation Bar -->
+    <header class="fixed-top kyro-navbar">
+        <!-- Single Row: Logo + Search on Right -->
+        <div class="d-flex justify-content-between align-items-center py-3 px-4" style="border-bottom: 1px solid #e5e7eb;">
+            <!-- Left: Logo + Navigation Links -->
+            <div class="d-flex align-items-center gap-2 kyro-header-left">
+                <!-- Hamburger Menu Button (Mobile/Tablet) -->
+                <button class="btn border-0 text-dark p-2 d-lg-none" id="hamburgerMenuBtn" aria-label="Toggle Navigation">
+                    <i class="fas fa-bars fs-5" style="color: #374151;"></i>
+                </button>
+                
+                <!-- Logo -->
+                <a class="navbar-brand d-flex align-items-center m-0 p-0" href="landing.html" onclick="window.location.href='landing.html'; return false;" style="text-decoration: none;">
+                    <div style="display: flex; align-items: center;">
+                        <svg width="22" height="26" viewBox="0 0 22 26" fill="none" xmlns="http://www.w3.org/2000/svg" style="width: 24px; height: 28px;">
+                            <path d="M17.3573 25.4845C20.1188 25.4845 22.4006 23.2307 21.9439 20.5073C21.6589 18.808 21.228 17.142 20.6555 15.5347C19.5319 12.3802 17.8851 9.51402 15.809 7.0997C13.733 4.68537 11.2683 2.77023 8.55578 1.46361C7.38388 0.899101 6.17563 0.452955 4.94442 0.128265C2.27429 -0.575893 0 1.72305 0 4.48447V20.4845C0 23.2459 2.23858 25.4845 5 25.4845H17.3573Z" fill="black" fill-opacity="0.75"/>
+                        </svg>
+                        <svg width="22" height="26" viewBox="0 0 22 26" fill="none" xmlns="http://www.w3.org/2000/svg" style="width: 24px; height: 28px; margin-left: -12px;">
+                            <path d="M4.64504 25.4845C1.88362 25.4845 -0.39823 23.2307 0.0585117 20.5073C0.343506 18.808 0.774422 17.142 1.3469 15.5347C2.47046 12.3802 4.11729 9.51402 6.19336 7.0997C8.26943 4.68537 10.7341 2.77023 13.4466 1.46361C14.6185 0.899101 15.8267 0.452955 17.058 0.128265C19.7281 -0.575893 22.0024 1.72305 22.0024 4.48447V20.4845C22.0024 23.2459 19.7638 25.4845 17.0024 25.4845H4.64504Z" fill="#FF6A00" fill-opacity="0.75"/>
+                        </svg>
+                    </div>
+                    <span class="fw-bold ms-2" style="font-size: 1.25rem; color: #1f2937;">AML</span>
+                </a>
+            </div>
+            
+            <!-- Right: Search + User Controls -->
+            <div class="d-flex align-items-center gap-3">
+                <!-- Search -->
+                <div class="position-relative d-none d-md-block">
+                    <input type="text" class="form-control" placeholder="search" id="globalSearch" style="width: 240px; padding: 6px 35px 6px 12px; border-radius: 12px; border: 1px solid #d1d5db; font-size: 0.875rem;">
+                    <i class="fas fa-search position-absolute top-50 translate-middle-y text-muted" style="right: 12px; font-size: 14px;"></i>
+                </div>
+                
+                <!-- Notifications -->
+                <div class="dropdown d-none d-sm-block">
+                    <button class="btn border-0 bg-transparent text-muted p-2 position-relative" type="button" id="notificationsDropdown" data-bs-toggle="dropdown">
+                        <i class="fas fa-bell"></i>
+                        <span id="notificationBadge" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="font-size: 0.6rem;">0</span>
+                    </button>
+                    <ul id="notificationList" class="dropdown-menu dropdown-menu-end">
+                        <li class="dropdown-item-text text-center text-muted">No alerts</li>
+                    </ul>
+                </div>
+                
+                <!-- User Menu -->
+                <div class="dropdown">
+                    <button class="btn border-0 bg-transparent d-flex align-items-center gap-2 p-0" type="button" id="userMenuDropdown" data-bs-toggle="dropdown">
+                        <div class="rounded-circle d-flex align-items-center justify-content-center text-white" style="width: 32px; height: 32px; background: linear-gradient(135deg, #FF8C42, #ff6b35); font-weight: 600; font-size: 0.875rem;">
+                            <span id="userInitials">A</span>
+                        </div>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end p-2 shadow" style="min-width: 200px;">
+                        <li class="px-2 py-1">
+                            <div class="fw-bold small" id="userDropdownName">Analyst</div>
+                            <div class="text-muted" style="font-size: 0.75rem;" id="userDropdownEmail">analyst@kyro.com</div>
+                        </li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item small" href="/profile"><i class="fas fa-user me-2"></i>Profile</a></li>
+                        <li><a class="dropdown-item small" href="/settings"><i class="fas fa-cog me-2"></i>Settings</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a id="logoutBtn" class="dropdown-item small text-danger" href="#"><i class="fas fa-sign-out-alt me-2"></i>Sign Out</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Second Row: Navigation Links (Hidden on mobile/tablet because Hamburger Menu is present) -->
+        <div class="px-4 py-0 kyro-desktop-nav-row" style="border-bottom: 1px solid #e5e7eb;">
+            <div class="d-flex gap-1 kyro-header-nav-wrap">
+                <a class="nav-link px-3 py-2" href="/dashboard" data-page="dashboard" style="font-size: 0.875rem; font-weight: 600; color: #6b7280; border-bottom: 2px solid transparent; text-decoration: none;">Dashboard</a>
+                <a class="nav-link px-3 py-2" href="/periodic-reviews" data-page="periodic-reviews" style="font-size: 0.875rem; font-weight: 600; color: #6b7280; border-bottom: 2px solid transparent; text-decoration: none;">Periodic Reviews</a>
+                <a class="nav-link px-3 py-2" href="/cases" data-page="cases" style="font-size: 0.875rem; font-weight: 600; color: #6b7280; border-bottom: 2px solid transparent; text-decoration: none;">Review Cases</a>
+                <a class="nav-link px-3 py-2" href="/patterns" data-page="patterns" style="font-size: 0.875rem; font-weight: 600; color: #6b7280; border-bottom: 2px solid transparent; text-decoration: none;">Patterns</a>
+                <a class="nav-link px-3 py-2" href="/kyrochat" data-page="kyrochat" style="font-size: 0.875rem; font-weight: 600; color: #6b7280; border-bottom: 2px solid transparent; text-decoration: none;">Kyro Chat</a>
+            </div>
+        </div>
+        <div style="display: none;">
+            <span id="sidebarAlertCount">0</span>
+            <div id="kyroNavbarLinks" class="collapse"></div>
+        </div>
+    </header>
+    
+    <!-- Main Layout -->
+    <div class="container-fluid main-layout-container">
+        <div class="row">
+            <!-- Main Content Area -->
+            <div class="col-12">
+                <div id="mainContent">
+                    <!-- Content will be loaded dynamically here -->
+                    <div class="d-flex justify-content-center align-items-center" style="height: 60vh;">
+                        <div class="text-center">
+                            <div class="spinner-border text-primary mb-3" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <p class="text-muted">Loading KYRO Dashboard...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Toast Container -->
+    <div class="toast-container position-fixed top-0 end-0 p-3" id="toastContainer"></div>
+    
+    <!-- Loading Overlay -->
+    <div class="loading-overlay d-none" id="loadingOverlay">
+        <div class="text-center">
+            <div class="spinner-border text-light mb-3" style="width: 3rem; height: 3rem;"></div>
+            <div class="text-light">Processing...</div>
+        </div>
+    </div>
+    
+    <!-- jQuery 3.7 -->
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <!-- Bootstrap 5.3 JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Chart.js 4.4 -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
+    <!-- DataTables JS -->
+    <script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
+    <!-- Flatpickr JS -->
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <!-- Dropzone JS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dropzone/5.9.3/dropzone.min.js"></script>
+    
+    <!-- KYRO Application Scripts -->
+    <script src="js/api.js?v=9999999991"></script>
+    <script src="js/auth.js?v=9999999999"></script>
+    <script src="js/utils.js?v=9999"></script>
+    <script src="js/real-time.js?v=2"></script>
+    <script src="js/dashboard.js?v=9999999999999999"></script>
+    <script src="js/customers.js?v=2"></script>
+    <script src="js/transactions.js?v=2"></script>
+    <script src="js/alerts.js?v=2"></script>
+    <script src="js/cases.js?v=1784288900"></script>
+    <script src="js/periodic-reviews.js?v=1784290300"></script>
+    <script src="js/patterns.js?v=1784300300"></script>
+    <script src="js/reports.js?v=2"></script>
+    <script src="js/kyroScripts.js?v=2"></script>
+    <script src="js/kyrochat.js?v=5"></script>
+    <script src="js/settings.js?v=2"></script>
+    <script src="js/profile.js?v=2"></script>
+    <script src="js/app.js?v=2"></script>
+    
+    <!-- Mobile Hamburger Offcanvas Drawer -->
+    <div class="kyro-mobile-drawer" id="kyroMobileDrawer">
+        <div class="d-flex align-items-center justify-content-between p-3 border-bottom" style="background: #ffffff;">
+            <div class="d-flex align-items-center gap-2">
+                <span class="fw-bold text-dark fs-5">KYRO Menu</span>
+            </div>
+            <button type="button" class="btn-close" id="closeMobileDrawerBtn" aria-label="Close"></button>
+        </div>
+        <div class="p-3 d-flex flex-column gap-2">
+            <a class="nav-link py-2.5 px-3 rounded-3 text-dark fw-semibold d-flex align-items-center gap-3" href="/dashboard" data-page="dashboard">
+                <i class="fas fa-chart-line text-primary" style="width: 20px;"></i>Dashboard
+            </a>
+            <a class="nav-link py-2.5 px-3 rounded-3 text-dark fw-semibold d-flex align-items-center gap-3" href="/periodic-reviews" data-page="periodic-reviews">
+                <i class="fas fa-calendar-check text-success" style="width: 20px;"></i>Periodic Reviews
+            </a>
+            <a class="nav-link py-2.5 px-3 rounded-3 text-dark fw-semibold d-flex align-items-center gap-3" href="/cases" data-page="cases">
+                <i class="fas fa-briefcase text-warning" style="width: 20px;"></i>Review Cases
+            </a>
+            <a class="nav-link py-2.5 px-3 rounded-3 text-dark fw-semibold d-flex align-items-center gap-3" href="/patterns" data-page="patterns">
+                <i class="fas fa-project-diagram text-info" style="width: 20px;"></i>Patterns
+            </a>
+            <a class="nav-link py-2.5 px-3 rounded-3 text-dark fw-semibold d-flex align-items-center gap-3" href="/kyrochat" data-page="kyrochat">
+                <i class="fas fa-robot text-danger" style="width: 20px;"></i>Kyro Chat
+            </a>
+        </div>
+    </div>
+    <div class="kyro-mobile-overlay" id="kyroMobileOverlay"></div>
+
+    <!-- Active Nav Link Handler -->
+    <script>
+        $(document).ready(function() {
+            // Handle nav link clicks
+            $('.nav-link[data-page]').on('click', function(e) {
+                // Remove active class from all nav links
+                $('.nav-link[data-page]').removeClass('active').css({
+                    'color': '#6b7280',
+                    'border-bottom': '2px solid transparent'
+                });
+                
+                // Add active class to clicked link
+                $(this).addClass('active').css({
+                    'color': '#f97316',
+                    'border-bottom': '2px solid #f97316'
+                });
+            });
+            
+            // Set active based on current page on load
+            const currentPath = window.location.pathname;
+            $('.nav-link[data-page]').each(function() {
+                const href = $(this).attr('href');
+                if (currentPath.includes(href) || (currentPath === '/' && href === '/dashboard')) {
+                    $(this).addClass('active').css({
+                        'color': '#f97316',
+                        'border-bottom': '2px solid #f97316'
+                    });
+                }
+            });
+        });
+    </script>
+</body>
+</html>

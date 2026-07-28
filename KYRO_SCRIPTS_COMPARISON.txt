@@ -1,0 +1,240 @@
+KYRO SCRIPTS - DIGITALWORKERS vs KYRO COMPARISON
+================================================
+
+DIGITALWORKERS KYROSCRIPTS.TS - KEY FEATURES:
+=============================================
+
+1. CENTRALIZED SCRIPT LIBRARY
+   - All agent dialogue pre-written in one place
+   - Consistent messaging across entire application
+   - Easy to update/maintain agent personality
+
+2. SCRIPT CATEGORIES:
+   ✓ welcome - First visit messages
+   ✓ autonomousHeartbeat - Agent activity status
+   ✓ riskIntelligence - Risk explanation & scoring
+   ✓ goalLifecycle - Goal state changes
+   ✓ actionExecution - 6 different action types
+   ✓ exceptionsAndRecovery - Error handling
+   ✓ handoff - Human escalation
+   ✓ evaluation - Self-assessment
+   ✓ overrideControls - Pause/resume/stop
+   ✓ endpointResponses - API call results
+   ✓ toolOutcomes - 11+ tool result messages
+
+3. DYNAMIC MESSAGE GENERATION:
+   - Functions that take parameters and return formatted text
+   - Example: monitoringGoals(goalCount: number)
+   - Contextual messaging based on actual data
+
+4. RICH CONTEXT FORMATTING:
+   - formatAutonomousCaseContext() - Case summaries with triggers, tiers, scores
+   - extractDrivers() - Identifies risk drivers from case data
+   - compactCaseRef() - Short case references (customer • case-id)
+   - formatCaseList() - Shows cases with "+N more" overflow
+
+5. RISK NARRATION SYSTEM:
+   - Explains why each case was flagged
+   - Shows score transparency (static/behavioral/composite)
+   - Tracks tier changes (LOW → MEDIUM → HIGH)
+   - Describes audit trail
+
+6. ACTION OUTCOME NARRATION:
+   - Success/failure messages for each action type
+   - Detailed results (e.g., "5 resolved, 3 escalated, 2 re-queued")
+   - Case-by-case breakdown with triggers and tiers
+   - EDD document request counts
+
+7. TOOL OUTCOME NARRATION:
+   - Standardized responses for 11+ tools
+   - search_cases, get_case_details, trigger_review, etc.
+   - Handles not_found, ambiguous, empty states
+
+8. TYPESCRIPT TYPE SAFETY:
+   - All functions are typed
+   - Outcome type: "SUCCESS" | "FAILURE" | "PARTIAL" | "PENDING"
+   - Interface definitions for data structures
+
+
+CURRENT KYRO IMPLEMENTATION:
+============================
+
+1. HARDCODED MESSAGES:
+   - Messages written inline in kyrochat.js
+   - No centralized script management
+   - Difficult to maintain consistency
+
+2. SIMPLE Q&A PATTERN:
+   ```javascript
+   if (q.includes("case")) {
+       response = "Currently there are 20 open cases...";
+   } else if (q.includes("transaction")) {
+       response = "Transaction monitoring is active...";
+   }
+   ```
+
+3. NO CONTEXT FORMATTING:
+   - Just returns static strings
+   - No case summaries or detailed breakdowns
+   - No score transparency
+
+4. NO NARRATION SYSTEM:
+   - Agent doesn't explain WHY actions are taken
+   - No audit trail messaging
+   - No risk driver extraction
+
+
+WHAT KYRO SHOULD ADOPT:
+========================
+
+HIGH PRIORITY - SCRIPT LIBRARY:
+--------------------------------
+Create kyroScripts.js with categories:
+- welcome messages
+- autonomous status updates
+- action execution narration (reduce_backlog, assign_cases, etc.)
+- error/exception handling
+- control responses (pause/resume/stop)
+
+EXAMPLE STRUCTURE:
+```javascript
+const kyroScripts = {
+    welcome: {
+        intro: "Hi, I'm Kyro, your AML autonomous agent.",
+        capabilities: "I monitor compliance, investigate cases, and execute approved actions.",
+        safety: "You can pause or stop me anytime."
+    },
+    
+    actions: {
+        reduce_backlog: {
+            start: "I detected case backlog. Analyzing cases via risk scoring.",
+            success: (count, resolved, escalated) => 
+                `Backlog analysis complete. Examined ${count} cases. ${resolved} resolved, ${escalated} escalated.`,
+            failure: "Couldn't complete backlog analysis. Will retry next cycle."
+        },
+        
+        assign_priority_cases: {
+            start: "Found unassigned high-risk cases. Assigning priority workload now.",
+            success: (count) => `Assigned ${count} high-risk cases.`,
+            failure: "Couldn't assign all priority cases. Will retry."
+        }
+    },
+    
+    status: {
+        monitoring: "I'm monitoring system state and checking for next best action.",
+        monitoringWithGoals: (count) => 
+            `I'm monitoring ${count} active goal${count === 1 ? '' : 's'}.`,
+        noGoals: "No active goals right now. Analyzing metrics to generate new goals."
+    }
+};
+```
+
+MEDIUM PRIORITY - CONTEXT FORMATTING:
+-------------------------------------
+Add helper functions:
+- formatCaseList(caseIds, maxCases=5)
+- compactCaseRef(customerId, caseId)
+- formatScore(value)
+- extractRiskDrivers(caseData)
+
+EXAMPLE:
+```javascript
+function formatCaseList(cases, maxShow = 5) {
+    if (!cases || cases.length === 0) return "none";
+    const shown = cases.slice(0, maxShow);
+    const remaining = cases.length - shown.length;
+    const list = shown.map(c => `${c.customer_id} • ${c.case_id.slice(0,8)}`).join(", ");
+    return remaining > 0 ? `${list} +${remaining} more` : list;
+}
+```
+
+LOW PRIORITY - RISK NARRATION:
+-------------------------------
+Add risk explanation functions:
+- getRiskExplanation(caseId, trigger, drivers)
+- getScoreTransparency(static, behavioral, composite, tier)
+- getTierChangeNarration(customerId, oldTier, newTier, reason)
+
+This makes agent more transparent and trustworthy.
+
+
+IMPLEMENTATION STEPS FOR KYRO:
+==============================
+
+STEP 1: Create kyroScripts.js
+------------------------------
+Location: KYRO_NEW/frontend/phase3/js/kyroScripts.js
+
+Start with basic categories:
+- welcome
+- status updates  
+- action responses
+- error messages
+
+STEP 2: Update kyrochat.js
+---------------------------
+Replace hardcoded strings with script references:
+```javascript
+// OLD
+this.addMessage("assistant", "System initialized. I am now running...");
+
+// NEW
+import { kyroScripts } from './kyroScripts.js';
+this.addMessage("assistant", kyroScripts.autonomous.start.success);
+```
+
+STEP 3: Add Context Formatting
+-------------------------------
+Create formatting utility functions for:
+- Case lists
+- Score displays
+- Risk tier badges
+- Action summaries
+
+STEP 4: Integrate with Backend
+-------------------------------
+When backend returns action results, use kyroScripts to narrate:
+```javascript
+const result = await API.post('/autonomous/reduce-backlog');
+const message = kyroScripts.actions.reduce_backlog.success(
+    result.total_processed,
+    result.resolved,
+    result.escalated
+);
+this.addMessage("assistant", message);
+```
+
+
+BENEFITS OF ADOPTING SCRIPTS:
+==============================
+
+1. CONSISTENCY - Same messaging everywhere
+2. MAINTAINABILITY - Update in one place
+3. LOCALIZATION - Easy to translate
+4. PERSONALITY - Define agent voice centrally
+5. TESTING - Test messages separately from logic
+6. DOCUMENTATION - Scripts serve as spec
+
+
+CURRENT STATUS:
+===============
+
+KYRO: ❌ No script system, hardcoded messages
+DIGITALWORKERS: ✅ Full production-grade script library
+
+EFFORT TO IMPLEMENT: 4-6 hours
+PRIORITY: HIGH (improves user experience significantly)
+
+
+RECOMMENDATION:
+===============
+
+Start with STEP 1 - create basic kyroScripts.js with:
+- Welcome messages
+- Status updates
+- Control responses (start/pause/resume/stop)
+- Simple action narration
+
+This will immediately improve consistency and make future
+updates much easier. The advanced risk narration and context
+formatting can be added later.
