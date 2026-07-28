@@ -1,0 +1,11 @@
+# ============================================================
+# KYRO Risk Assessment — Phase 2 ML Engine requirements
+# ============================================================
+
+scikit-learn>=1.4.0
+shap>=0.45.0
+pandas>=2.1.0
+numpy>=1.26.0
+
+# ── Synthetic training-data generation (scripts/seed_app_data.py) ──
+faker>=19.0.0

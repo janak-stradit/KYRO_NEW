@@ -1,0 +1,102 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
+
+permissions:
+  id-token: write   # required for AWS OIDC
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: kyro_aml_test
+          POSTGRES_USER: kyro_user
+          POSTGRES_PASSWORD: kyro_pass
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U kyro_user -d kyro_aml_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql+psycopg://kyro_user:kyro_pass@localhost:5432/kyro_aml_test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - run: pip install -r requirements-api.txt -r requirements-ml.txt
+
+      - name: Run DB migrations
+        run: alembic -c app/alembic.ini upgrade head
+
+      - name: Run API test suite
+        run: pytest tests/api --cov=app
+
+  build-and-push:
+    needs: test
+    runs-on: ubuntu-latest
+    environment: prod
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: aws-actions/amazon-ecr-login@v2
+        id: ecr-login
+
+      - name: Build and push kyro-api
+        run: |
+          docker build -f docker/Dockerfile.api -t $ECR_REGISTRY/kyro-api:${{ github.sha }} -t $ECR_REGISTRY/kyro-api:latest .
+          docker push $ECR_REGISTRY/kyro-api:${{ github.sha }}
+          docker push $ECR_REGISTRY/kyro-api:latest
+
+      - name: Build and push kyro-frontend
+        run: |
+          docker build -f docker/Dockerfile.frontend -t $ECR_REGISTRY/kyro-frontend:${{ github.sha }} -t $ECR_REGISTRY/kyro-frontend:latest .
+          docker push $ECR_REGISTRY/kyro-frontend:${{ github.sha }}
+          docker push $ECR_REGISTRY/kyro-frontend:latest
+
+      - name: Build and push kyro-pipeline
+        run: |
+          docker build -f docker/Dockerfile.pipeline -t $ECR_REGISTRY/kyro-pipeline:${{ github.sha }} -t $ECR_REGISTRY/kyro-pipeline:latest .
+          docker push $ECR_REGISTRY/kyro-pipeline:${{ github.sha }}
+          docker push $ECR_REGISTRY/kyro-pipeline:latest
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    environment: prod
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+          ELEVENLABS_VOICE_ID: ${{ secrets.ELEVENLABS_VOICE_ID }}
+          ELEVENLABS_MODEL_ID: ${{ secrets.ELEVENLABS_MODEL_ID }}
+          TTS_PROVIDER: ${{ secrets.TTS_PROVIDER }}
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_SSH_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          envs: AWS_REGION,ECR_REGISTRY,SECRET_KEY,DB_PASSWORD,ELEVENLABS_API_KEY,ELEVENLABS_VOICE_ID,ELEVENLABS_MODEL_ID,TTS_PROVIDER
+          script: /opt/kyro/deploy/deploy.sh ${{ github.sha }}

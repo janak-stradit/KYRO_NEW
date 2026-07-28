@@ -1,0 +1,259 @@
+# ============================================================
+# KYRO AML Data Pipeline — Master Configuration
+# ============================================================
+
+pipeline:
+  name: "kyro_aml_pipeline"
+  version: "1.0.0"
+  description: "Production AML ETL/ELT pipeline for ML feature store"
+  environment: "${PIPELINE_ENV:development}"
+  batch_size: 5000
+  max_retries: 3
+  retry_delay_seconds: 5
+  checkpoint_enabled: true
+  parallel_workers: 4
+
+# ──────────────────────────────────────────────
+# Database
+# ──────────────────────────────────────────────
+database:
+  host: "${DB_HOST:localhost}"
+  port: "${DB_PORT:5432}"
+  name: "${DB_NAME:kyro_aml}"
+  user: "${DB_USER:kyro_user}"
+  password: "${DB_PASSWORD:kyro_pass}"
+  ssl_mode: "${DB_SSL_MODE:prefer}"
+  pool_size: 10
+  max_overflow: 20
+  pool_timeout: 30
+  pool_recycle: 1800
+  echo_sql: false
+
+# ──────────────────────────────────────────────
+# Schemas
+# ──────────────────────────────────────────────
+schemas:
+  - raw_data
+  - staging
+  - cleaned
+  - warehouse
+  - feature_store
+  - metadata
+  - audit
+  - logs
+  - ml
+  - analytics
+
+# ──────────────────────────────────────────────
+# Ingestion
+# ──────────────────────────────────────────────
+ingestion:
+  supported_formats: [csv, excel, json, dict, api]
+  default_batch_size: 5000
+  encoding: "utf-8"
+  on_schema_mismatch: "warn"   # warn | error | drop_extra | add_missing
+  on_malformed_record: "quarantine"  # quarantine | skip | error
+
+# ──────────────────────────────────────────────
+# Validation
+# ──────────────────────────────────────────────
+validation:
+  fail_fast: false
+  quarantine_schema: "raw_data"
+  quarantine_table: "rejected_records"
+  generate_report: true
+
+  rules:
+    customers:
+      customer_id:
+        required: true
+        type: string
+        regex: "^CUST-\\d{6}$"
+      email:
+        required: true
+        type: string
+        format: email
+      risk_score:
+        required: true
+        type: float
+        min: 0.0
+        max: 100.0
+      risk_level:
+        required: true
+        type: string
+        allowed_values: [LOW, MEDIUM, HIGH]
+      kyc_status:
+        required: true
+        type: string
+        allowed_values: [COMPLETE, PENDING, EXPIRED, PARTIAL]
+      pep_flag:
+        required: true
+        type: boolean
+      sanctions_flag:
+        required: true
+        type: boolean
+
+    accounts:
+      account_id:
+        required: true
+        type: string
+        regex: "^ACC-CUST-\\d{6}-\\d{2}$"
+      balance:
+        required: true
+        type: float
+      account_status:
+        required: true
+        type: string
+        allowed_values: [ACTIVE, CLOSED, FROZEN, SUSPENDED]
+
+    transactions:
+      transaction_id:
+        required: true
+        type: string
+      amount:
+        required: true
+        type: float
+        min: 0.01
+      transaction_type:
+        required: true
+        type: string
+        allowed_values: [DEPOSIT, WITHDRAWAL, TRANSFER_IN, TRANSFER_OUT, BUY, SELL, PAYMENT, FEE, REFUND]
+
+# ──────────────────────────────────────────────
+# Missing Value Strategies
+# ──────────────────────────────────────────────
+missing_values:
+  customers:
+    full_name: {strategy: constant, fill_value: "UNKNOWN"}
+    email: {strategy: constant, fill_value: "unknown@placeholder.com"}
+    phone: {strategy: constant, fill_value: "UNKNOWN"}
+    country: {strategy: mode}
+    risk_score: {strategy: median}
+    risk_level: {strategy: mode}
+
+  accounts:
+    balance: {strategy: median}
+    account_status: {strategy: constant, fill_value: "ACTIVE"}
+
+  transactions:
+    amount: {strategy: median}
+    meta_counterparty: {strategy: constant, fill_value: "UNKNOWN"}
+    meta_location: {strategy: constant, fill_value: "UNKNOWN"}
+    meta_country: {strategy: constant, fill_value: "UNKNOWN"}
+
+# ──────────────────────────────────────────────
+# Outlier Detection
+# ──────────────────────────────────────────────
+outliers:
+  method: iqr          # iqr | zscore | modified_zscore | isolation_forest | percentile
+  iqr_multiplier: 3.0
+  zscore_threshold: 3.5
+  percentile_lower: 0.01
+  percentile_upper: 0.99
+  action: winsorize    # winsorize | remove | flag | store_separate
+  store_removed: true
+  columns:
+    transactions: [amount]
+    accounts: [balance]
+
+# ──────────────────────────────────────────────
+# Duplicate Handling
+# ──────────────────────────────────────────────
+duplicates:
+  customers:
+    strategy: keep_first     # keep_first | keep_last | remove_all
+    business_keys: [customer_id]
+  accounts:
+    strategy: keep_first
+    business_keys: [account_id]
+  transactions:
+    strategy: keep_first
+    business_keys: [transaction_id]
+
+# ──────────────────────────────────────────────
+# Transformations
+# ──────────────────────────────────────────────
+transformations:
+  encoding:
+    risk_level:
+      method: ordinal
+      categories: [LOW, MEDIUM, HIGH]
+    kyc_status:
+      method: label
+    customer_type:
+      method: onehot
+    account_type:
+      method: onehot
+    transaction_type:
+      method: onehot
+
+  scaling:
+    method: robust    # standard | minmax | robust | maxabs | normalizer
+    columns: [risk_score, amount, balance]
+
+  date_features:
+    transaction_date:
+      extract: [year, month, day, dayofweek, quarter, is_weekend]
+    kyc_last_review:
+      extract: [year, month, days_since]
+
+# ──────────────────────────────────────────────
+# Feature Engineering
+# ──────────────────────────────────────────────
+feature_engineering:
+  lag_features:
+    amount: [1, 3, 7]
+  rolling_features:
+    amount:
+      windows: [7, 30, 90]
+      agg: [mean, std, max, min, sum]
+  ratio_features:
+    - name: amount_to_balance_ratio
+      numerator: amount
+      denominator: balance
+  flag_features:
+    - name: is_high_risk_country
+      column: meta_country_code
+      condition: in_list
+      values: [KP, IR, SY, CU, VE, MM, BY, RU, SO, YE]
+    - name: is_high_value
+      column: amount
+      condition: gt
+      threshold: 10000
+    - name: is_pep_or_sanctioned
+      columns: [pep_flag, sanctions_flag]
+      condition: any_true
+
+# ──────────────────────────────────────────────
+# Data Quality
+# ──────────────────────────────────────────────
+data_quality:
+  completeness_threshold: 0.95
+  uniqueness_threshold: 1.0
+  validity_threshold: 0.98
+  drift_detection: true
+  drift_method: ks_test    # ks_test | psi | wasserstein
+  drift_threshold: 0.05
+  generate_score: true
+
+# ──────────────────────────────────────────────
+# Logging
+# ──────────────────────────────────────────────
+logging:
+  level: "${LOG_LEVEL:INFO}"
+  format: "json"
+  file: "logs/pipeline.log"
+  rotation: "daily"
+  retention_days: 30
+  log_to_db: true
+  db_schema: "logs"
+  db_table: "pipeline_logs"
+
+# ──────────────────────────────────────────────
+# Monitoring
+# ──────────────────────────────────────────────
+monitoring:
+  metrics_enabled: true
+  alert_on_quality_drop: true
+  quality_threshold: 0.90
+  alert_channels: [log]   # log | email | slack
