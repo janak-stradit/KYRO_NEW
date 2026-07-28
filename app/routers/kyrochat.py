@@ -484,22 +484,3 @@ def get_streaming_status() -> dict[str, Any]:
         "last_event_at": datetime.now(timezone.utc).isoformat() if agent_state.streaming_is_running else None,
         "processed_events_count": 142 if agent_state.streaming_is_running else 0
     }
-        "message": "Data stream ingestion initialized.",
-        "event_types": (req.event_types if req else None) or ["transaction", "kyc_update"],
-        "duration_minutes": (req.duration_minutes if req else None) or 60
-    }
-
-@router.post("/api/v1/streaming/stop")
-def stop_streaming() -> dict[str, Any]:
-    agent_state.streaming_is_running = False
-    agent_state.streaming_pulse_label = "Screening services are warming up."
-    return {"status": "stopped", "message": "Data stream ingestion stopped."}
-
-@router.get("/api/v1/streaming/status")
-def get_streaming_status() -> dict[str, Any]:
-    return {
-        "is_running": agent_state.streaming_is_running,
-        "source_type": "kafka" if agent_state.streaming_is_running else "snapshot",
-        "last_event_at": datetime.now(timezone.utc).isoformat() if agent_state.streaming_is_running else None,
-        "processed_events_count": 142 if agent_state.streaming_is_running else 0
-    }
