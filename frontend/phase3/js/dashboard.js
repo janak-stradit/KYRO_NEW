@@ -18,6 +18,11 @@ const Dashboard = {
         showLoading("#mainContent", "Loading dashboard...");
         
         try {
+            // Force clear API cache to get fresh data
+            if (API && API.clearCache) {
+                API.clearCache();
+            }
+            
             const dashboardHtml = await this.getDashboardHTML();
             $("#mainContent").html(dashboardHtml);
             
@@ -132,31 +137,31 @@ const Dashboard = {
                             <div class="mt-4">
                                 <div class="d-flex justify-content-between align-items-center mb-2 pb-2" style="border-bottom: 1px solid #F0F0F0;">
                                     <div class="d-flex align-items-center gap-2">
-                                        <span style="width: 8px; height: 8px; background-color: #22c55e; border-radius: 50%;"></span>
+                                        <span style="width: 8px; height: 8px; background-color: #06B6D4; border-radius: 50%;"></span>
                                         <span style="font-size: 11px; font-family: 'Plus Jakarta Sans', sans-serif; color: #1a1a1a;">Open cases</span>
                                     </div>
-                                    <span class="fw-bold" style="font-size: 13px; color: #1a1a1a;">106</span>
+                                    <span class="fw-bold" style="font-size: 13px; color: #1a1a1a;" id="caseStatusOpen">0</span>
                                 </div>
                                 <div class="d-flex justify-content-between align-items-center mb-2 pb-2" style="border-bottom: 1px solid #F0F0F0;">
                                     <div class="d-flex align-items-center gap-2">
-                                        <span style="width: 8px; height: 8px; background-color: #f59e0b; border-radius: 50%;"></span>
+                                        <span style="width: 8px; height: 8px; background-color: #F59E0B; border-radius: 50%;"></span>
                                         <span style="font-size: 11px; font-family: 'Plus Jakarta Sans', sans-serif; color: #1a1a1a;">In Review</span>
                                     </div>
-                                    <span class="fw-bold" style="font-size: 13px; color: #1a1a1a;">4</span>
+                                    <span class="fw-bold" style="font-size: 13px; color: #1a1a1a;" id="caseStatusReview">0</span>
                                 </div>
                                 <div class="d-flex justify-content-between align-items-center mb-2 pb-2" style="border-bottom: 1px solid #F0F0F0;">
                                     <div class="d-flex align-items-center gap-2">
-                                        <span style="width: 8px; height: 8px; background-color: #3b82f6; border-radius: 50%;"></span>
+                                        <span style="width: 8px; height: 8px; background-color: #10B981; border-radius: 50%;"></span>
                                         <span style="font-size: 11px; font-family: 'Plus Jakarta Sans', sans-serif; color: #1a1a1a;">Resolved</span>
                                     </div>
-                                    <span class="fw-bold" style="font-size: 13px; color: #1a1a1a;">311</span>
+                                    <span class="fw-bold" style="font-size: 13px; color: #1a1a1a;" id="caseStatusResolved">0</span>
                                 </div>
                                 <div class="d-flex justify-content-between align-items-center">
                                     <div class="d-flex align-items-center gap-2">
-                                        <span style="width: 8px; height: 8px; background-color: #ef4444; border-radius: 50%;"></span>
+                                        <span style="width: 8px; height: 8px; background-color: #EF4444; border-radius: 50%;"></span>
                                         <span style="font-size: 11px; font-family: 'Plus Jakarta Sans', sans-serif; color: #1a1a1a;">Escalated</span>
                                     </div>
-                                    <span class="fw-bold" style="font-size: 13px; color: #1a1a1a;">70</span>
+                                    <span class="fw-bold" style="font-size: 13px; color: #1a1a1a;" id="caseStatusEscalated">0</span>
                                 </div>
                             </div>
                         </div>
@@ -169,7 +174,7 @@ const Dashboard = {
                                 <h5 class="fw-bold mb-1" style="font-family: 'Plus Jakarta Sans', sans-serif; font-size: 1rem; color: #1a1a1a;">Behavioral Flags by Pattern Type</h5>
                                 <p class="text-xs text-muted mb-0" style="font-size: 11px; font-family: 'Plus Jakarta Sans', sans-serif; color: #888888;">Transaction-wise</p>
                             </div>
-                            <div class="mt-3">
+                            <div class="mt-3" id="behavioralFlagsList">
                                 <div class="d-flex justify-content-between align-items-center py-2" style="border-bottom: 1px solid #F0F0F0;">
                                     <span style="font-size: 12px; font-family: 'Plus Jakarta Sans', sans-serif; color: #1a1a1a;">Velocity Spike</span>
                                     <span class="fw-bold" style="font-size: 13px; color: #1a1a1a;">119</span>
@@ -302,7 +307,15 @@ const Dashboard = {
     
     async loadKPIs() {
         try {
+            // Show loading state
+            this.showKPILoading();
+            
+            console.log("📊 Fetching KPIs from API...");
             const data = await API.get(API.endpoints.kpis);
+            console.log("✅ KPI Data received:", data);
+            
+            // Hide loading state
+            this.hideKPILoading();
             
             // Keep notification updates intact
             $("#notificationBadge").text(data.pending_alerts);
@@ -312,6 +325,8 @@ const Dashboard = {
             const formattedTotalTx = Number(data.total_transactions || 0).toLocaleString();
             const formattedTotalVol = '$' + Number(data.total_volume || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
             const formattedAvgAmt = '$' + Number(data.avg_amount || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            
+            console.log("💰 Transaction Stats:", { formattedTotalTx, formattedTotalVol, formattedAvgAmt });
             
             $("#txOverviewCount").text(formattedTotalTx);
             $("#txOverviewVolume").text(formattedTotalVol);
@@ -326,7 +341,10 @@ const Dashboard = {
             
             // Load patterns data
             try {
+                console.log("🔍 Fetching patterns data...");
                 const patternData = await API.get("/dashboard/patterns");
+                console.log("✅ Pattern Data received:", patternData);
+                
                 if (patternData) {
                     // Update Behavioral Patterns Take Action count
                     $("#takeActionPatternsVal").text(`${patternData.total_pattern_hits || 0} Detected`);
@@ -372,7 +390,16 @@ const Dashboard = {
 
     async initializeCharts() {
         try {
-            const chartData = await API.get("/dashboard/charts");
+            // Show loading overlays
+            this.showChartLoading();
+            
+            console.log("📈 Fetching chart data from API...");
+            // Force fresh data with version timestamp
+            const chartData = await API.get("/dashboard/charts", { v: Date.now() });
+            console.log("✅ Chart Data received:", chartData);
+            
+            // Hide loading overlays
+            this.hideChartLoading();
             
             // Generate bar chart with real CSS data
             this.renderCSSBarChart(chartData);
@@ -385,6 +412,7 @@ const Dashboard = {
             
         } catch (error) {
             console.error("Charts initialization error:", error);
+            this.hideChartLoading();
             this.renderFallbackCharts();
         }
     },
@@ -554,6 +582,11 @@ const Dashboard = {
                 const resolvedVal = statusDist.RESOLVED || 0;
                 const escalatedVal = statusDist.ESCALATED || 0;
 
+                $("#caseStatusOpen").text(openVal);
+                $("#caseStatusReview").text(reviewVal);
+                $("#caseStatusResolved").text(resolvedVal);
+                $("#caseStatusEscalated").text(escalatedVal);
+
                 if (this.charts.caseStatus) {
                     this.charts.caseStatus.destroy();
                 }
@@ -638,6 +671,38 @@ const Dashboard = {
         // Instantly update KPIs and Charts on new alert events
         await this.loadKPIs();
         await this.initializeCharts();
+    },
+    
+    // Loading State Handlers
+    showKPILoading() {
+        // Add pulse animation to KPI cards
+        $('.figma-card').addClass('loading-pulse');
+    },
+    
+    hideKPILoading() {
+        $('.figma-card').removeClass('loading-pulse');
+    },
+    
+    showChartLoading() {
+        // Add loading overlays to chart containers
+        $('.chart-container, .bar-chart-kyro-container, .kyro-donut-container').each(function() {
+            if (!$(this).find('.chart-loading-overlay').length) {
+                $(this).css('position', 'relative').append(`
+                    <div class="chart-loading-overlay">
+                        <div>
+                            <div class="chart-spinner"></div>
+                            <div class="loading-text">Loading chart data...</div>
+                        </div>
+                    </div>
+                `);
+            }
+        });
+    },
+    
+    hideChartLoading() {
+        $('.chart-loading-overlay').fadeOut(300, function() {
+            $(this).remove();
+        });
     }
 };
 

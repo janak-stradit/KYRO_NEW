@@ -5,11 +5,11 @@
 
 const API = {
     baseUrl: (function() {
-        const isDev = window.location.port === '3000' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-        const port = isDev ? '8010' : (window.location.port || '8010');
+        // Always target the FastAPI backend on port 8010 using whatever
+        // hostname the browser resolved — works for localhost AND external IPs.
         const host = window.location.hostname || 'localhost';
-        const proto = window.location.protocol && window.location.protocol.startsWith('http') ? window.location.protocol : 'http:';
-        return `${proto}//${host}:${port}/api/v1`;
+        const proto = (window.location.protocol || 'http:');
+        return `${proto}//${host}:8010/api/v1`;
     })(),
     timeout: 30000,
     retryAttempts: 3,
@@ -73,32 +73,70 @@ const API = {
         }
     },
 
+    _cache: {},
+
+    /**
+     * Clear API cache
+     */
+    clearCache() {
+        this._cache = {};
+    },
+
     /**
      * GET request
      */
-    async get(endpoint, params = {}) {
-        return this.retryRequest(() => {
+    async get(endpoint, params = {}, options = {}) {
+        // Add cache busting timestamp to force fresh data
+        const cacheBuster = options.bustCache !== false ? { _t: Date.now() } : {};
+        const finalParams = { ...params, ...cacheBuster };
+        
+        const cacheKey = `${endpoint}?${JSON.stringify(params)}`;
+        
+        // Skip cache for dashboard/critical endpoints
+        const skipCache = endpoint.includes('/dashboard') || endpoint.includes('/kpis') || endpoint.includes('/charts');
+        
+        if (!skipCache && this._cache[cacheKey]) {
+            return this._cache[cacheKey];
+        }
+
+        const promise = this.retryRequest(() => {
             return new Promise((resolve, reject) => {
+                const headers = this.getHeaders();
+                // Add no-cache headers to prevent browser caching
+                headers['Cache-Control'] = 'no-cache, no-store, must-revalidate';
+                headers['Pragma'] = 'no-cache';
+                headers['Expires'] = '0';
+                
                 $.ajax({
                     url: `${this.baseUrl}${endpoint}`,
                     method: "GET",
-                    headers: this.getHeaders(),
-                    data: params,
+                    headers: headers,
+                    data: finalParams,
                     timeout: this.timeout,
-                    success: resolve,
+                    cache: false, // Disable jQuery cache
+                    success: (data) => {
+                        if (!skipCache) {
+                            this._cache[cacheKey] = data;
+                        }
+                        resolve(data);
+                    },
                     error: (xhr) => {
+                        delete this._cache[cacheKey];
                         this.handleError(xhr, endpoint);
                         reject(xhr);
                     }
                 });
             });
         });
+
+        return promise;
     },
 
     /**
      * POST request
      */
     async post(endpoint, data = {}) {
+        this.clearCache();
         return this.retryRequest(() => {
             return new Promise((resolve, reject) => {
                 $.ajax({
@@ -121,6 +159,7 @@ const API = {
      * PUT request
      */
     async put(endpoint, data = {}) {
+        this.clearCache();
         return this.retryRequest(() => {
             return new Promise((resolve, reject) => {
                 $.ajax({
@@ -143,6 +182,7 @@ const API = {
      * DELETE request
      */
     async delete(endpoint) {
+        this.clearCache();
         return this.retryRequest(() => {
             return new Promise((resolve, reject) => {
                 $.ajax({

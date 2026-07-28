@@ -9,6 +9,10 @@
     <title>KYRO - Login</title>
     <meta name="description" content="KYRO Risk Assessment Specialist - Secure Login">
     
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <link rel="alternate icon" href="favicon.ico">
+    
     <!-- Bootstrap 5.3 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Font Awesome 6 -->
@@ -18,48 +22,162 @@
     
     <style>
         body {
-            background: linear-gradient(135deg, var(--kyro-primary) 0%, var(--kyro-secondary) 100%);
+            background: #f8f9fa;
             min-height: 100vh;
+            margin: 0;
+            padding: 0;
         }
         .login-container {
             min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 1rem;
+            padding: 0;
         }
-        .login-card {
+        .login-wrapper {
+            display: flex;
+            width: 100%;
+            max-width: 100%;
+            min-height: 100vh;
+            height: 100%;
             background: white;
+            box-shadow: none;
+        }
+        
+        /* Left Side - Character/Brand Section */
+        .login-left {
+            flex: 1;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #FF8C42 0%, #ff6b35 100%);
+            padding: 4rem 3rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            overflow: hidden;
+        }
+        .login-left::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 1px, transparent 1px);
+            background-size: 50px 50px;
+            animation: float 20s linear infinite;
+        }
+        @keyframes float {
+            0% { transform: translate(0, 0); }
+            100% { transform: translate(50px, 50px); }
+        }
+        .character-image {
+            width: 100%;
+            max-width: 500px;
+            height: auto;
             border-radius: 24px;
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            overflow: hidden;
-            max-width: 420px;
-            width: 100%;
+            position: relative;
+            z-index: 2;
+            animation: floatCharacter 3s ease-in-out infinite;
+            object-fit: cover;
         }
-        .login-header {
-            background: linear-gradient(135deg, var(--kyro-primary), var(--kyro-secondary));
-            color: white;
-            padding: 2.5rem 2rem;
+        #characterVideo {
+            max-height: 600px;
+        }
+        @keyframes floatCharacter {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-20px); }
+        }
+        .brand-section {
             text-align: center;
+            color: white;
+            margin-bottom: 3rem;
+            position: relative;
+            z-index: 2;
         }
-        .login-body {
-            padding: 2.5rem 2rem 2rem;
+        .brand-logo-large {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 1.5rem;
+            animation: pulse 2s ease-in-out infinite;
         }
-        .brand-logo {
-            font-size: 4rem;
-            margin-bottom: 1rem;
-            filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.2));
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
         }
-        .brand-title {
-            font-size: 2rem;
-            font-weight: 700;
+        .brand-title-large {
+            font-size: 3rem;
+            font-weight: 800;
             margin-bottom: 0.5rem;
             letter-spacing: -0.02em;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
         }
-        .brand-subtitle {
-            font-size: 0.9rem;
+        .brand-subtitle-large {
+            font-size: 1.1rem;
+            opacity: 0.95;
+            font-weight: 400;
+            letter-spacing: 0.5px;
+        }
+        .features-list {
+            list-style: none;
+            padding: 0;
+            margin: 2rem 0 0 0;
+            text-align: left;
+            max-width: 400px;
+        }
+        .features-list li {
+            color: white;
+            padding: 0.75rem 0;
+            font-size: 1rem;
             opacity: 0.9;
-            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        .features-list li i {
+            color: #4caf50;
+            font-size: 1.2rem;
+        }
+        
+        /* Right Side - Login Form Section */
+        .login-right {
+            flex: 0 0 600px;
+            min-height: 100vh;
+            padding: 4rem 3rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            background: white;
+        }
+        .login-header {
+            margin-bottom: 2.5rem;
+        }
+        .login-header h2 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #FF8C42;
+            letter-spacing: -0.02em;
+        }
+        .login-logo-container {
+            animation: fadeInScale 0.6s ease-out;
+        }
+        @keyframes fadeInScale {
+            from {
+                opacity: 0;
+                transform: scale(0.8);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+        .login-header p {
+            font-size: 1rem;
+            color: #6c757d;
+            margin: 0;
         }
         .form-floating {
             margin-bottom: 1.5rem;
@@ -69,10 +187,11 @@
             border: 2px solid #e9ecef;
             padding: 1rem 0.75rem;
             height: auto;
+            font-size: 1rem;
         }
         .form-floating .form-control:focus {
-            border-color: var(--kyro-primary);
-            box-shadow: 0 0 0 0.2rem rgba(26, 35, 126, 0.25);
+            border-color: #FF8C42;
+            box-shadow: 0 0 0 0.2rem rgba(255, 140, 66, 0.15);
         }
         .form-floating label {
             padding: 1rem 0.75rem;
@@ -80,16 +199,17 @@
         }
         .btn-login {
             border-radius: 12px;
-            padding: 14px 24px;
+            padding: 16px 24px;
             font-weight: 600;
-            font-size: 1rem;
-            background: linear-gradient(135deg, var(--kyro-primary), var(--kyro-secondary));
+            font-size: 1.1rem;
+            background: linear-gradient(135deg, #FF8C42, #ff6b35);
             border: none;
             transition: all 0.3s ease;
         }
         .btn-login:hover {
             transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(26, 35, 126, 0.3);
+            box-shadow: 0 8px 25px rgba(255, 140, 66, 0.4);
+            background: linear-gradient(135deg, #ff7a2e, #ff5722);
         }
         .password-toggle {
             cursor: pointer;
@@ -102,127 +222,110 @@
             transition: color 0.2s ease;
         }
         .password-toggle:hover {
-            color: var(--kyro-primary);
+            color: #FF8C42;
         }
         .form-check-input:checked {
-            background-color: var(--kyro-primary);
-            border-color: var(--kyro-primary);
-        }
-        .demo-info {
-            background: rgba(3, 155, 229, 0.1);
-            border: 1px solid rgba(3, 155, 229, 0.3);
-            border-radius: 12px;
-            padding: 1rem;
-            margin-bottom: 1.5rem;
-        }
-        .demo-credentials {
-            font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
-            font-size: 0.85rem;
-        }
-        .loading-state .btn-login {
-            background: #6c757d;
+            background-color: #FF8C42;
+            border-color: #FF8C42;
         }
         .security-notice {
             text-align: center;
-            margin-top: 1.5rem;
+            margin-top: 2rem;
             padding: 1rem;
-            background: rgba(0, 0, 0, 0.02);
-            border-radius: 8px;
-        }
-        .floating-particles {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            overflow: hidden;
-            pointer-events: none;
-        }
-        .particle {
-            position: absolute;
-            width: 4px;
-            height: 4px;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 50%;
-            animation: float 15s infinite linear;
-        }
-        @keyframes float {
-            0% {
-                transform: translateY(100vh) rotate(0deg);
-                opacity: 0;
-            }
-            10% {
-                opacity: 1;
-            }
-            90% {
-                opacity: 1;
-            }
+            background: rgba(255, 140, 66, 0.05);
+            border-radius: 12px;
+            border: 1px solid rgba(255, 140, 66, 0.1);
         }
         
-        /* Dark Mode Overrides */
-        [data-theme="dark"] body {
-            background-color: #0b0e14;
-            color: #f1f5f9;
-        }
-        [data-theme="dark"] .login-card {
-            background: #131722;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-        }
-        [data-theme="dark"] .form-floating .form-control {
-            background-color: #1a202c;
-            border-color: #2d3748;
-            color: #f1f5f9;
-        }
-        [data-theme="dark"] .form-floating label {
-            color: #a0aec0;
-        }
-        [data-theme="dark"] .demo-info {
-            background: rgba(3, 155, 229, 0.15);
-            border-color: rgba(3, 155, 229, 0.4);
-            color: #e2e8f0;
-        }
-        [data-theme="dark"] .security-notice {
-            background: rgba(255, 255, 255, 0.02);
-            color: #a0aec0;
+        /* Responsive */
+        @media (max-width: 992px) {
+            .login-wrapper {
+                flex-direction: column;
+            }
+            .login-left {
+                min-height: 40vh;
+                padding: 2rem 1.5rem;
+            }
+            .character-image {
+                max-width: 250px;
+            }
+            .brand-title-large {
+                font-size: 2rem;
+            }
+            .login-right {
+                padding: 2rem 1.5rem;
+            }
+            .features-list {
+                display: none;
+            }
         }
     </style>
     
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡️</text></svg>">
 </head>
 <body>
-
-    <!-- Floating particles background -->
-    <div class="floating-particles">
-        <div class="particle" style="left: 10%; animation-delay: 0s;"></div>
-        <div class="particle" style="left: 20%; animation-delay: 2s;"></div>
-        <div class="particle" style="left: 30%; animation-delay: 4s;"></div>
-        <div class="particle" style="left: 40%; animation-delay: 6s;"></div>
-        <div class="particle" style="left: 50%; animation-delay: 8s;"></div>
-        <div class="particle" style="left: 60%; animation-delay: 10s;"></div>
-        <div class="particle" style="left: 70%; animation-delay: 12s;"></div>
-        <div class="particle" style="left: 80%; animation-delay: 14s;"></div>
-        <div class="particle" style="left: 90%; animation-delay: 16s;"></div>
-    </div>
-
     <div class="login-container">
-        <div class="login-card">
-            <div class="login-header">
-                <div class="brand-logo">🛡️</div>
-                <h1 class="brand-title">KYRO</h1>
-                <p class="brand-subtitle">Risk Assessment Specialist</p>
+        <div class="login-wrapper">
+            <!-- Left Side - Character & Branding -->
+            <div class="login-left">
+                <div class="brand-section">
+                    <div class="brand-logo-large">
+                        <svg width="44" height="52" viewBox="0 0 22 26" fill="none" xmlns="http://www.w3.org/2000/svg" style="filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.3));">
+                            <path d="M17.3573 25.4845C20.1188 25.4845 22.4006 23.2307 21.9439 20.5073C21.6589 18.808 21.228 17.142 20.6555 15.5347C19.5319 12.3802 17.8851 9.51402 15.809 7.0997C13.733 4.68537 11.2683 2.77023 8.55578 1.46361C7.38388 0.899101 6.17563 0.452955 4.94442 0.128265C2.27429 -0.575893 0 1.72305 0 4.48447V20.4845C0 23.2459 2.23858 25.4845 5 25.4845H17.3573Z" fill="white" fill-opacity="0.9"/>
+                        </svg>
+                        <svg width="44" height="52" viewBox="0 0 22 26" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin-left: -24px; filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.3));">
+                            <path d="M4.64504 25.4845C1.88362 25.4845 -0.39823 23.2307 0.0585117 20.5073C0.343506 18.808 0.774422 17.142 1.3469 15.5347C2.47046 12.3802 4.11729 9.51402 6.19336 7.0997C8.26943 4.68537 10.7341 2.77023 13.4466 1.46361C14.6185 0.899101 15.8267 0.452955 17.058 0.128265C19.7281 -0.575893 22.0024 1.72305 22.0024 4.48447V20.4845C22.0024 23.2459 19.7638 25.4845 17.0024 25.4845H4.64504Z" fill="white" fill-opacity="0.95"/>
+                        </svg>
+                    </div>
+                    <h1 class="brand-title-large">KYRO</h1>
+                    <p class="brand-subtitle-large">AI-Powered Risk Assessment Specialist</p>
+                </div>
+                
+                <img src="../assets/Character 01.webp" alt="KYRO Character" class="character-image" id="characterImage">
+                
+                <!-- Video Container (hidden initially) -->
+                <video class="character-image" id="characterVideo" style="display: none;" autoplay muted loop playsinline>
+                    <source src="../assets/envato_video_gen_Feb_27_2026_14_39_51.mp4" type="video/mp4">
+                </video>
+                
+                <ul class="features-list">
+                    <li>
+                        <i class="fas fa-shield-alt"></i>
+                        <span>Advanced AML Compliance</span>
+                    </li>
+                    <li>
+                        <i class="fas fa-brain"></i>
+                        <span>AI-Powered Detection</span>
+                    </li>
+                    <li>
+                        <i class="fas fa-chart-line"></i>
+                        <span>Real-Time Monitoring</span>
+                    </li>
+                    <li>
+                        <i class="fas fa-lock"></i>
+                        <span>Bank-Level Security</span>
+                    </li>
+                </ul>
             </div>
             
-            <div class="login-body">
-                <!-- Demo Credentials Info -->
-                <div class="demo-info">
-                    <div class="d-flex align-items-center mb-2">
-                        <i class="fas fa-info-circle text-info me-2"></i>
-                        <strong class="text-info">Demo Credentials</strong>
+            <!-- Right Side - Login Form -->
+            <div class="login-right">
+                <div class="login-header">
+                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 0.5rem;">
+                        <!-- Logo SVG - Same as Dashboard -->
+                        <div class="login-logo-container" style="display: flex; align-items: center; margin-left: -8px;">
+                            <!-- Left Dark Shape -->
+                            <svg width="22" height="26" viewBox="0 0 22 26" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M17.3573 25.4845C20.1188 25.4845 22.4006 23.2307 21.9439 20.5073C21.6589 18.808 21.228 17.142 20.6555 15.5347C19.5319 12.3802 17.8851 9.51402 15.809 7.0997C13.733 4.68537 11.2683 2.77023 8.55578 1.46361C7.38388 0.899101 6.17563 0.452955 4.94442 0.128265C2.27429 -0.575893 0 1.72305 0 4.48447V20.4845C0 23.2459 2.23858 25.4845 5 25.4845H17.3573Z" fill="black" fill-opacity="0.75"/>
+                            </svg>
+                            <!-- Right Orange Overlapping Shape -->
+                            <svg width="22" height="26" viewBox="0 0 22 26" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin-left: -12px;">
+                                <path d="M4.64504 25.4845C1.88362 25.4845 -0.39823 23.2307 0.0585117 20.5073C0.343506 18.808 0.774422 17.142 1.3469 15.5347C2.47046 12.3802 4.11729 9.51402 6.19336 7.0997C8.26943 4.68537 10.7341 2.77023 13.4466 1.46361C14.6185 0.899101 15.8267 0.452955 17.058 0.128265C19.7281 -0.575893 22.0024 1.72305 22.0024 4.48447V20.4845C22.0024 23.2459 19.7638 25.4845 17.0024 25.4845H4.64504Z" fill="#FF6A00" fill-opacity="0.75"/>
+                            </svg>
+                        </div>
+                        <h2 style="margin: 0;">Welcome Back</h2>
                     </div>
-                    <div class="demo-credentials">
-                        <div><strong>Username:</strong> analyst</div>
-                        <div><strong>Password:</strong> kyro123</div>
-                    </div>
+                    <p>Sign in to access your AML dashboard</p>
                 </div>
                 
                 <form id="loginForm">
@@ -243,7 +346,7 @@
                         </span>
                     </div>
                     
-                    <div class="form-check mb-3">
+                    <div class="form-check mb-4">
                         <input class="form-check-input" type="checkbox" id="rememberMe">
                         <label class="form-check-label" for="rememberMe">
                             Remember me for 30 days
@@ -256,9 +359,9 @@
                 </form>
                 
                 <div class="security-notice">
-                    <small class="text-muted d-flex align-items-center justify-content-center">
-                        <i class="fas fa-shield-alt me-2 text-success"></i>
-                        256-bit SSL encryption • SOC 2 compliant
+                    <small class="text-muted d-flex align-items-center justify-content-center gap-2">
+                        <i class="fas fa-shield-alt text-success"></i>
+                        256-bit SSL Encryption • SOC 2 Compliant • GDPR Ready
                     </small>
                 </div>
             </div>
@@ -288,10 +391,6 @@
     
     <script>
         $(document).ready(function() {
-            // Pre-fill demo credentials
-            $("#username").val("analyst");
-            $("#password").val("kyro123");
-            
             // Initialize login form
             LoginForm.init();
             
@@ -302,12 +401,46 @@
                 $(this).closest(".form-floating").removeClass("focused");
             });
             
-            // Handle demo credential clicks
-            $(".demo-credentials").on("click", function() {
-                $("#username").val("analyst").focus();
-                $("#password").val("kyro123");
-                showToast("info", "Demo credentials filled", "Ready to login");
-            });
+            // Media rotation: image + 4 videos
+            const mediaItems = [
+                { type: 'image', src: '../assets/Character 01.webp', duration: 5000 },
+                { type: 'video', src: '../assets/envato_video_gen_Feb_27_2026_14_39_51.mp4', duration: 10000 },
+                { type: 'video', src: '../assets/envato_video_gen_Feb_27_2026_15_00_51.mp4', duration: 10000 },
+                { type: 'video', src: '../assets/envato_video_gen_Feb_27_2026_15_03_30.mp4', duration: 10000 },
+                { type: 'video', src: '../assets/envato_video_gen_Feb_27_2026_15_06_12.mp4', duration: 10000 }
+            ];
+            
+            let currentIndex = 0;
+            const $image = $('#characterImage');
+            const $video = $('#characterVideo');
+            
+            function showNextMedia() {
+                currentIndex = (currentIndex + 1) % mediaItems.length;
+                const item = mediaItems[currentIndex];
+                
+                if (item.type === 'image') {
+                    // Show image, hide video
+                    $video.fadeOut(500, function() {
+                        $image.attr('src', item.src).fadeIn(500);
+                    });
+                    setTimeout(showNextMedia, item.duration);
+                } else {
+                    // Show video, hide image
+                    $image.fadeOut(500, function() {
+                        $video.find('source').attr('src', item.src);
+                        $video[0].load();
+                        $video[0].play();
+                        $video.fadeIn(500);
+                    });
+                    
+                    // Wait for video to end or use fixed duration
+                    $video[0].onended = showNextMedia;
+                    setTimeout(showNextMedia, item.duration); // Fallback
+                }
+            }
+            
+            // Start rotation after 5 seconds (after showing initial image)
+            setTimeout(showNextMedia, 5000);
         });
     </script>
 </body>

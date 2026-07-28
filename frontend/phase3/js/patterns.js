@@ -17,19 +17,66 @@ const Patterns = {
         patternType: 'all'
     },
     
-    init(params = {}) {
+    async init(params = {}) {
         console.log("Initializing Behavioral Patterns page...");
-        this.generateCustomerPatternData();
+        await this.fetchRealCustomersAndGeneratePatterns();
         this.loadDashboard();
     },
     
-    generateCustomerPatternData() {
-        // Generate comprehensive customer pattern data for all 200 customers
-        const allCustomers = [];
-        for (let i = 1; i <= 200; i++) {
-            allCustomers.push(`CUST-${String(i).padStart(3, '0')}`);
+    async fetchRealCustomersAndGeneratePatterns() {
+        try {
+            // Fetch real customers from API (max page_size: 10000)
+            const response = await API.get("/customers", { page_size: 10000 });
+            const customers = response.items || [];
+            
+            console.log(`✅ Fetched ${customers.length} real customers from API`);
+            
+            if (customers.length > 0) {
+                this.allCustomersList = customers.map((cust, idx) => {
+                    const code = `CUST-${String(idx + 1).padStart(3, '0')}`;
+                    const name = cust.full_name || `Customer ${idx + 1}`;
+                    return {
+                        id: code,
+                        name: name,
+                        displayName: `${name} (${code})`,
+                        uuid: cust.id,
+                        kycStatus: cust.kyc_status || 'VERIFIED'
+                    };
+                });
+            } else {
+                this.generateFallbackCustomers();
+            }
+        } catch (error) {
+            console.error("❌ Error fetching customers:", error);
+            this.generateFallbackCustomers();
         }
         
+        // Now generate pattern data using full customer list
+        this.generateCustomerPatternData();
+    },
+    
+    generateFallbackCustomers() {
+        const names = [
+            'Sarah Chen', 'Mike Rodriguez', 'Priya Patel', 'James Wilson', 'Alex Morgan',
+            'David Kim', 'Emma Watson', 'Robert Taylor', 'Linda Garcia', 'Michael Brown',
+            'Jennifer Martinez', 'William Davis', 'Elizabeth Miller', 'Christopher Wilson',
+            'Jessica Anderson', 'Thomas Thomas', 'Karen Jackson', 'Daniel White', 'Nancy Harris'
+        ];
+        this.allCustomersList = [];
+        for (let i = 1; i <= 100; i++) {
+            const code = `CUST-${String(i).padStart(3, '0')}`;
+            const name = `${names[i % names.length]} ${Math.floor(i / names.length) + 1}`;
+            this.allCustomersList.push({
+                id: code,
+                name: name,
+                displayName: `${name} (${code})`,
+                kycStatus: i % 5 === 0 ? 'UNDER_REVIEW' : 'VERIFIED'
+            });
+        }
+        console.log(`⚠️ Using fallback: ${this.allCustomersList.length} customers`);
+    },
+    
+    generateCustomerPatternData() {
         const patternTypes = [
             { name: 'Complexity Shift', value: 'complexity_shift', color: '#8b5cf6' },
             { name: 'Counterparty Changes', value: 'counterparty_changes', color: '#22c55e' },
@@ -40,44 +87,50 @@ const Patterns = {
         ];
         
         this.customerPatternData = [];
+        const customersToUse = this.allCustomersList || [];
         
-        // Generate data for 50 customers with patterns
-        const sampleSize = 50;
-        const usedCustomers = new Set();
-        
-        for (let i = 0; i < sampleSize; i++) {
-            // Pick random customer that hasn't been used
-            let custId;
-            do {
-                custId = allCustomers[Math.floor(Math.random() * allCustomers.length)];
-            } while (usedCustomers.has(custId) && usedCustomers.size < allCustomers.length);
-            usedCustomers.add(custId);
-            
-            // Assign random pattern
-            const pattern = patternTypes[Math.floor(Math.random() * patternTypes.length)];
-            
+        customersToUse.forEach((cust, idx) => {
+            // Assign patterns to customers
+            const pattern = patternTypes[idx % patternTypes.length];
             this.customerPatternData.push({
-                customerId: custId,
+                customerId: cust.id,
+                customerName: cust.name,
+                displayName: cust.displayName,
                 patternType: pattern.value,
                 patternName: pattern.name,
                 patternColor: pattern.color,
-                lastKyc: 'Not available',
-                baselineValue: (Math.random() * 20000).toFixed(2),
-                stdDeviation: (Math.random() * 1000).toFixed(2),
+                lastKyc: cust.kycStatus || 'VERIFIED',
+                baselineValue: (10000 + (idx * 137) % 45000).toFixed(2),
+                stdDeviation: (200 + (idx * 43) % 1200).toFixed(2),
                 lastUpdated: '7/7/2026'
             });
-        }
+            
+            // Add second pattern for subset of customers
+            if (idx % 3 === 0) {
+                const secPattern = patternTypes[(idx + 2) % patternTypes.length];
+                this.customerPatternData.push({
+                    customerId: cust.id,
+                    customerName: cust.name,
+                    displayName: cust.displayName,
+                    patternType: secPattern.value,
+                    patternName: secPattern.name,
+                    patternColor: secPattern.color,
+                    lastKyc: cust.kycStatus || 'VERIFIED',
+                    baselineValue: (15000 + (idx * 211) % 50000).toFixed(2),
+                    stdDeviation: (300 + (idx * 67) % 1500).toFixed(2),
+                    lastUpdated: '7/7/2026'
+                });
+            }
+        });
         
-        console.log(`Generated ${this.customerPatternData.length} pattern records for ${usedCustomers.size} customers`);
+        console.log(`Generated ${this.customerPatternData.length} pattern records for ${customersToUse.length} customers`);
     },
     
     async loadDashboard() {
-        // Generate unique customer list from pattern data
-        const uniqueCustomers = [...new Set(this.customerPatternData.map(d => d.customerId))].sort();
-        
-        // Build customer dropdown options
-        const customerOptions = uniqueCustomers.map(cust => 
-            `<option value="${cust}">${cust}</option>`
+        // Build customer dropdown options with ALL real database customers (Full Name + ID)
+        const customerList = this.allCustomersList || [];
+        const customerOptions = customerList.map(cust => 
+            `<option value="${cust.id}">${cust.displayName}</option>`
         ).join('');
         
         const html = `
@@ -155,7 +208,7 @@ const Patterns = {
                                 </div>
                                 <div class="flex-grow-1">
                                     <small class="text-muted d-block mb-1" style="font-size: 12px;">Customers</small>
-                                    <h2 class="mb-0" style="font-weight: 700; font-size: 2rem;" id="customersCount">200</h2>
+                                    <h2 class="mb-0" style="font-weight: 700; font-size: 2rem;" id="customersCount">1000</h2>
                                 </div>
                             </div>
                         </div>
@@ -484,22 +537,32 @@ const Patterns = {
         this.setupEventListeners();
     },
     
-    updateStats() {
+    async updateStats() {
         // Calculate real-time stats from customerPatternData
         const totalPatterns = this.customerPatternData.length;
         const uniqueCustomers = new Set(this.customerPatternData.map(d => d.customerId)).size;
         const patternTypes = 6; // Fixed: 6 canonical pattern types
         
         // For anomalies, we can use a multiplier (e.g., 500 total patterns across all time, with historical data)
-        // Current visible patterns are 50, so let's say total patterns detected = 500
         const totalPatternsAllTime = 500;
         const anomalies = Math.round(totalPatternsAllTime * 0.666); // ~66% are anomalies
         
-        // Update the DOM
-        $("#totalPatternsCount").text(totalPatternsAllTime);
-        $("#customersCount").text(200); // Total customers in system
-        $("#patternTypesCount").text(patternTypes);
-        $("#anomaliesCount").text(anomalies);
+        // Fetch actual customer count from API
+        let actualCustomerCount = 1000; // Default fallback
+        try {
+            const kpiData = await API.get(API.endpoints.kpis);
+            if (kpiData && kpiData.total_customers) {
+                actualCustomerCount = kpiData.total_customers;
+            }
+        } catch (e) {
+            console.error("Failed to fetch KPIs for customer count", e);
+        }
+
+        // Update the DOM with formatted numbers
+        $("#totalPatternsCount").text(totalPatternsAllTime.toLocaleString());
+        $("#customersCount").text(actualCustomerCount.toLocaleString()); // Dynamic from API with formatting
+        $("#patternTypesCount").text(patternTypes.toLocaleString());
+        $("#anomaliesCount").text(anomalies.toLocaleString());
     },
     
     renderTable() {
@@ -517,10 +580,11 @@ const Patterns = {
         const rows = filteredData.map(data => {
             const stdClass = parseFloat(data.stdDeviation) > 500 ? 'text-danger' : 'text-success';
             const bgColor = data.patternColor + '26'; // Add transparency
+            const displayName = data.customerName ? `<strong>${data.customerName}</strong><br><span class="text-muted" style="font-size: 11px;">${data.customerId}</span>` : `<strong>${data.customerId}</strong>`;
             
             return `
                 <tr class="pattern-table-row" data-customer="${data.customerId}" data-pattern="${data.patternType}">
-                    <td class="px-3 py-3">${data.customerId}</td>
+                    <td class="px-3 py-3">${displayName}</td>
                     <td class="px-3 py-3">
                         <span class="badge" style="background: ${bgColor}; color: ${data.patternColor}; font-size: 11px;">
                             ${data.patternName}
@@ -799,9 +863,11 @@ const Patterns = {
         const self = this;
         
         // Refresh button
-        $("#refreshPatternsBtn").on("click", () => {
-            Utils.showToast("Refreshing pattern data...", "info");
-            this.generateCustomerPatternData();
+        $("#refreshPatternsBtn").on("click", async () => {
+            if (typeof Utils !== 'undefined' && Utils.showToast) {
+                Utils.showToast("Refreshing pattern data...", "info");
+            }
+            await this.fetchRealCustomersAndGeneratePatterns();
             this.renderTable();
             this.updateChartsForPattern(this.currentFilters.patternType);
         });

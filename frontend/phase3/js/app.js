@@ -81,6 +81,65 @@ const App = {
         $(window).on("offline", () => {
             showToast("warning", "Connection lost", "Offline Mode");
         });
+        
+        // Fix profile dropdown visibility
+        this.setupProfileDropdown();
+    },
+    
+    setupProfileDropdown() {
+        // Let Bootstrap handle dropdown with data-bs-auto-close="true"
+        const dropdownButton = document.getElementById('userMenuDropdown');
+        if (dropdownButton) {
+            console.log('✅ Profile dropdown initialized');
+            
+            const dropdownMenu = dropdownButton.nextElementSibling;
+            
+            // Function to position dropdown
+            const positionDropdown = () => {
+                const buttonRect = dropdownButton.getBoundingClientRect();
+                dropdownMenu.style.position = 'fixed';
+                dropdownMenu.style.top = (buttonRect.bottom + 8) + 'px';
+                dropdownMenu.style.right = (window.innerWidth - buttonRect.right) + 'px';
+                dropdownMenu.style.left = 'auto';
+                dropdownMenu.style.zIndex = '9999';
+            };
+            
+            // Set fixed positioning when shown
+            dropdownButton.addEventListener('show.bs.dropdown', function() {
+                positionDropdown();
+            });
+            
+            // Reposition on scroll while dropdown is open
+            let isDropdownOpen = false;
+            
+            dropdownButton.addEventListener('shown.bs.dropdown', function() {
+                console.log('✅ Dropdown OPEN');
+                isDropdownOpen = true;
+                
+                // Add scroll listener
+                window.addEventListener('scroll', handleScroll, true);
+                window.addEventListener('resize', handleScroll);
+            });
+            
+            dropdownButton.addEventListener('hidden.bs.dropdown', function() {
+                console.log('❌ Dropdown CLOSED');
+                isDropdownOpen = false;
+                
+                // Remove scroll listener
+                window.removeEventListener('scroll', handleScroll, true);
+                window.removeEventListener('resize', handleScroll);
+            });
+            
+            // Handler to reposition dropdown on scroll
+            const handleScroll = () => {
+                if (isDropdownOpen) {
+                    positionDropdown();
+                }
+            };
+            
+        } else {
+            console.error('❌ Profile dropdown button not found');
+        }
     },
     
     setupRouting() {

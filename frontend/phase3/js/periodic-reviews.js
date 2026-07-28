@@ -19,7 +19,7 @@ const PeriodicReviews = {
             // Load customer lookup map to convert UUIDs to clean CUST-XXX format
             let customerMap = {};
             try {
-                const custResponse = await API.get("/customers", { page_size: 200 });
+                const custResponse = await API.get("/customers", { page_size: 10000 });
                 if (custResponse && custResponse.items) {
                     custResponse.items.forEach((c, idx) => {
                         const code = `CUST-${String(idx + 1).padStart(3, '0')}`;
@@ -49,7 +49,7 @@ const PeriodicReviews = {
                         if (typeof review.customer_id === 'string' && review.customer_id.startsWith('CUST-')) {
                             displayCode = review.customer_id;
                         } else {
-                            const num = (idx % 200) + 1;
+                            const num = (idx % 1000) + 1;
                             displayCode = `CUST-${String(num).padStart(3, '0')}`;
                         }
                     }
@@ -188,10 +188,10 @@ const PeriodicReviews = {
                             <span class="aml-freq-x" style="left: 53%;">6 Months</span>
                             <span class="aml-freq-x" style="left: 86%;">12 Months</span>
                             
-                            <!-- Bar chart bars - dynamically updated -->
-                            <div id="freqBar3M" style="position: absolute; bottom: 0; left: 13%; width: 14%; height: 31%; background: #ee4444; border-radius: 6px 6px 0 0; transition: height 0.3s ease;"></div>
-                            <div id="freqBar6M" style="position: absolute; bottom: 0; left: 46%; width: 14%; height: 75%; background: #f5a623; border-radius: 6px 6px 0 0; transition: height 0.3s ease;"></div>
-                            <div id="freqBar12M" style="position: absolute; bottom: 0; left: 79%; width: 14%; height: 81%; background: #1fb877; border-radius: 6px 6px 0 0; transition: height 0.3s ease;"></div>
+                            <!-- Bar chart bars - dynamically updated with animation -->
+                            <div id="freqBar3M" class="freq-bar-animated" style="position: absolute; bottom: 0; left: 13%; width: 14%; height: 0%; background: #ee4444; border-radius: 6px 6px 0 0; transition: height 0.8s cubic-bezier(0.4, 0, 0.2, 1);"></div>
+                            <div id="freqBar6M" class="freq-bar-animated" style="position: absolute; bottom: 0; left: 46%; width: 14%; height: 0%; background: #f5a623; border-radius: 6px 6px 0 0; transition: height 0.8s cubic-bezier(0.4, 0, 0.2, 1) 0.15s;"></div>
+                            <div id="freqBar12M" class="freq-bar-animated" style="position: absolute; bottom: 0; left: 79%; width: 14%; height: 0%; background: #1fb877; border-radius: 6px 6px 0 0; transition: height 0.8s cubic-bezier(0.4, 0, 0.2, 1) 0.3s;"></div>
                         </div>
                     </section>
                     
@@ -207,7 +207,7 @@ const PeriodicReviews = {
                         </div>
                         
                         <div class="aml-pr-donut-wrap">
-                            <div class="aml-pr-donut" id="scheduleDonut" role="img" aria-label="Active schedules"></div>
+                            <div class="aml-pr-donut donut-animated" id="scheduleDonut" role="img" aria-label="Active schedules"></div>
                         </div>
                         
                         <div class="aml-pr-status-legend">
@@ -354,9 +354,10 @@ const PeriodicReviews = {
         const dueSoon = this.reviewsData.filter(r => !r.overdue && r.dueIn <= 7).length;
         const future = this.reviewsData.filter(r => !r.overdue && r.dueIn > 7).length;
         
-        $("#overdueCount").text(overdue);
-        $("#dueSoonCount").text(dueSoon);
-        $("#futureCount").text(future);
+        // Animate count updates
+        this.animateCount("#overdueCount", 0, overdue, 600);
+        this.animateCount("#dueSoonCount", 0, dueSoon, 600);
+        this.animateCount("#futureCount", 0, future, 600);
         
         const active = this.reviewsData.filter(r => r.status === 'Active').length;
         const inactive = this.reviewsData.filter(r => r.status === 'Inactive').length;
@@ -375,20 +376,36 @@ const PeriodicReviews = {
         this.updateFrequencyChart();
     },
     
+    animateCount(selector, start, end, duration) {
+        const $el = $(selector);
+        const range = end - start;
+        const increment = range / (duration / 16); // 60fps
+        let current = start;
+        
+        const timer = setInterval(() => {
+            current += increment;
+            if ((increment > 0 && current >= end) || (increment < 0 && current <= end)) {
+                current = end;
+                clearInterval(timer);
+            }
+            $el.text(Math.floor(current));
+        }, 16);
+    },
+    
     updateFrequencyChart() {
         // Count reviews by frequency
         const freq3Months = this.reviewsData.filter(r => r.frequency === '3 months').length;
         const freq6Months = this.reviewsData.filter(r => r.frequency === '6 months').length;
         const freq12Months = this.reviewsData.filter(r => r.frequency === '12 months').length;
         
-        // Find max for scaling
-        const maxCount = Math.max(freq3Months, freq6Months, freq12Months, 1);
-        const scale = maxCount > 16 ? 16 : maxCount;
+        // Find max for scaling dynamically
+        const maxVal = Math.max(freq3Months, freq6Months, freq12Months, 1);
+        const scale = maxVal <= 16 ? 16 : Math.ceil(maxVal / 10) * 10;
         
-        // Calculate heights as percentages
-        const height3M = (freq3Months / scale) * 100;
-        const height6M = (freq6Months / scale) * 100;
-        const height12M = (freq12Months / scale) * 100;
+        // Calculate heights as percentages (bounded strictly 0-100%)
+        const height3M = Math.min(100, Math.max(0, (freq3Months / scale) * 100));
+        const height6M = Math.min(100, Math.max(0, (freq6Months / scale) * 100));
+        const height12M = Math.min(100, Math.max(0, (freq12Months / scale) * 100));
         
         // Update Y-axis labels
         $("#freqYAxis0").text(Math.round(scale));
@@ -396,10 +413,17 @@ const PeriodicReviews = {
         $("#freqYAxis50").text(Math.round(scale * 0.5));
         $("#freqYAxis75").text(Math.round(scale * 0.25));
         
-        // Update bar heights
-        $("#freqBar3M").css('height', `${height3M}%`);
-        $("#freqBar6M").css('height', `${height6M}%`);
-        $("#freqBar12M").css('height', `${height12M}%`);
+        // Reset heights to 0 first for animation
+        $("#freqBar3M").css('height', '0%');
+        $("#freqBar6M").css('height', '0%');
+        $("#freqBar12M").css('height', '0%');
+        
+        // Trigger animation after a small delay
+        setTimeout(() => {
+            $("#freqBar3M").css('height', `${height3M}%`);
+            $("#freqBar6M").css('height', `${height6M}%`);
+            $("#freqBar12M").css('height', `${height12M}%`);
+        }, 100);
     },
     
     renderScheduleDonut() {
@@ -427,7 +451,17 @@ const PeriodicReviews = {
         }
         
         console.log("Applying donut style:", donutStyle);
-        $("#scheduleDonut").attr("style", donutStyle);
+        
+        // Reset and animate
+        const $donut = $("#scheduleDonut");
+        $donut.css({
+            'transform': 'scale(0)',
+            'opacity': '0'
+        });
+        
+        setTimeout(() => {
+            $donut.attr("style", donutStyle + " transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.6s ease; transform: scale(1); opacity: 1;");
+        }, 200);
     },
     
     initializeTable() {
@@ -462,7 +496,7 @@ const PeriodicReviews = {
             // Format Customer ID (e.g. CUST-180) and prevent displaying raw UUIDs
             let displayCode = review.customerId || 'CUST-000';
             if (typeof displayCode === 'string' && displayCode.length > 20 && displayCode.includes('-')) {
-                const num = Math.abs(displayCode.split('-').reduce((acc, part) => acc + (parseInt(part, 16) || 0), 0)) % 200 + 1;
+                const num = Math.abs(displayCode.split('-').reduce((acc, part) => acc + (parseInt(part, 16) || 0), 0)) % 1000 + 1;
                 displayCode = `CUST-${String(num).padStart(3, '0')}`;
             }
             const custNumber = displayCode.startsWith('CUST-') ? (displayCode.split('-')[1] || '000') : '000';
@@ -529,7 +563,7 @@ const PeriodicReviews = {
     async showScheduleReviewModal() {
         try {
             // Fetch real customers from API
-            const customersResponse = await API.get("/customers", { page_size: 200 });
+            const customersResponse = await API.get("/customers", { page_size: 10000 });
             const customers = customersResponse.items || [];
             
             const customerOptions = customers.map((cust, idx) => {

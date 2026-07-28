@@ -161,7 +161,7 @@ const Cases = {
                 
                 <!-- Results Count -->
                 <div class="mb-3">
-                    <strong style="font-size: 14px; color: #374151;" id="resultsCountTop">607 Result</strong>
+                    <strong style="font-size: 14px; color: #374151;" id="resultsCountTop">0 Result</strong>
                 </div>
                 
                 <!-- Filters Section -->
@@ -219,7 +219,7 @@ const Cases = {
                                     <i class="fas fa-clipboard-list" style="color: #FF8D28; font-size: 16px;"></i>
                                     <h6 class="mb-0" style="font-weight: 600; font-size: 15px;">Review Cases</h6>
                                 </div>
-                                <small class="text-muted" id="resultsCount" style="font-size: 12px;">Showing 50 of 607 cases</small>
+                                <small class="text-muted" id="resultsCount" style="font-size: 12px;">Showing 0 cases</small>
                             </div>
                         </div>
                         <div class="table-responsive">
@@ -277,25 +277,82 @@ const Cases = {
     
     async fetchCasesData() {
         try {
-            await new Promise(resolve => setTimeout(resolve, 800));
+            // Build customer map to convert UUIDs to clean CUST-XXX IDs
+            let customerMap = {};
+            try {
+                const custResponse = await API.get("/customers", { page_size: 10000 });
+                if (custResponse && custResponse.items) {
+                    custResponse.items.forEach((c, idx) => {
+                        const code = `CUST-${String(idx + 1).padStart(3, '0')}`;
+                        customerMap[c.id] = code;
+                    });
+                }
+            } catch (err) {
+                console.warn("Could not fetch customer lookup map for cases:", err);
+            }
+
+            const data = await API.get("/alerts", { page_size: 100 });
+            const alerts = data.items || data;
             
-            // Mock data with varied trigger types to demonstrate real-time data integration
-            this.casesData = [
-                { caseId: '6541b2c8-7044', customerId: 'CUST-044', triggerType: 'BEHAVIOR BASED', priority: 'URGENT', riskLevel: 'HIGH', status: 'OPEN', createdAt: '7/17/2026', assignedTo: 'Unassigned' },
-                { caseId: '5c972006-2041', customerId: 'CUST-041', triggerType: 'TIME BASED', priority: 'URGENT', riskLevel: 'MEDIUM', status: 'OPEN', createdAt: '7/17/2026', assignedTo: 'Unassigned' },
-                { caseId: '7856209f-2040', customerId: 'CUST-040', triggerType: 'BEHAVIOR BASED', priority: 'URGENT', riskLevel: 'MEDIUM', status: 'OPEN', createdAt: '7/17/2026', assignedTo: 'Unassigned' },
-                { caseId: '4a9e6eb0-6039', customerId: 'CUST-039', triggerType: 'RULE BASED', priority: 'URGENT', riskLevel: 'HIGH', status: 'OPEN', createdAt: '7/17/2026', assignedTo: 'Unassigned' },
-                { caseId: 'df2fd299-e038', customerId: 'CUST-038', triggerType: 'BEHAVIOR BASED', priority: 'URGENT', riskLevel: 'HIGH', status: 'OPEN', createdAt: '7/17/2026', assignedTo: 'Unassigned' },
-                { caseId: '75845f89-6037', customerId: 'CUST-037', triggerType: 'MANUAL', priority: 'URGENT', riskLevel: 'HIGH', status: 'OPEN', createdAt: '7/17/2026', assignedTo: 'Unassigned' },
-                { caseId: '81ab4be7-c036', customerId: 'CUST-036', triggerType: 'TIME BASED', priority: 'URGENT', riskLevel: 'HIGH', status: 'OPEN', createdAt: '7/17/2026', assignedTo: 'Unassigned' },
-                { caseId: 'f4727cfd-3035', customerId: 'CUST-035', triggerType: 'BEHAVIOR BASED', priority: 'URGENT', riskLevel: 'HIGH', status: 'OPEN', createdAt: '7/17/2026', assignedTo: 'Unassigned' }
-            ];
+            // If no alerts from API, generate mock data for demo
+            if (!alerts || alerts.length === 0) {
+                console.log("No alerts in database - generating mock data for demo");
+                this.generateMockCases();
+                return;
+            }
             
+            this.totalCases = data.total || alerts.length;
+
+            // Map DB alert_type → UI trigger type labels
+            const triggerTypeMap = {
+                'BEHAVIORAL_ANOMALY': 'BEHAVIOR BASED',
+                'HIGH_RISK_CUSTOMER': 'RULE BASED',
+                'LARGE_AMOUNT':       'RULE BASED',
+                'WIRE_TRANSFER':      'BEHAVIOR BASED',
+                'TIME_BASED':         'TIME BASED',
+                'MANUAL':             'MANUAL'
+            };
+
+            this.casesData = alerts.map((alert, idx) => {
+                let riskLevel = 'LOW';
+                let priority = 'LOW';
+                if (alert.risk_score >= 80)      { riskLevel = 'HIGH';   priority = 'URGENT'; }
+                else if (alert.risk_score >= 60) { riskLevel = 'MEDIUM'; priority = 'HIGH'; }
+
+                const triggerType = triggerTypeMap[alert.alert_type] || 'BEHAVIOR BASED';
+
+                let displayCustId = customerMap[alert.customer_id];
+                if (!displayCustId) {
+                    if (typeof alert.customer_id === 'string' && alert.customer_id.startsWith('CUST-')) {
+                        displayCustId = alert.customer_id;
+                    } else {
+                        displayCustId = `CUST-${String(idx + 1).padStart(3, '0')}`;
+                    }
+                }
+
+                return {
+                    caseId:        alert.id,
+                    customerId:    displayCustId,
+                    rawCustomerId: alert.customer_id,
+                    triggerType,
+                    priority,
+                    riskLevel,
+                    status:        alert.status || 'OPEN',
+                    createdAt:     new Date(alert.created_at).toLocaleDateString(),
+                    assignedTo:    alert.assigned_to ? 'Assigned' : 'Unassigned',
+                    fullData:      alert
+                };
+            });
+
             this.updateDashboard();
             this.renderTable();
-            
+
         } catch (error) {
             console.error("Error fetching cases:", error);
+            this.casesData = [];
+            this.totalCases = 0;
+            this.updateDashboard();
+            this.renderTable();
         }
     },
     
@@ -409,7 +466,9 @@ const Cases = {
     },
     renderTable() {
         const filtered = this.getFilteredCases();
-        $("#resultsCount").text(`Showing ${filtered.length} of 607 cases`);
+        const total = this.totalCases || this.casesData.length;
+        $("#resultsCount").text(`Showing ${filtered.length} of ${total} cases`);
+        $("#resultsCountTop").text(`${total} Result`);
         
         if (filtered.length === 0) {
             $("#casesTableBody").html(`
@@ -596,6 +655,39 @@ const Cases = {
         $("#caseDetailsModal").on("hidden.bs.modal", function() {
             $(this).remove();
         });
+    },
+    
+    generateMockCases() {
+        // Generate 50 mock cases for demo when no real alerts exist
+        const triggerTypes = ['BEHAVIOR BASED', 'TIME BASED', 'RULE BASED', 'MANUAL'];
+        const statuses = ['OPEN', 'ASSIGNED', 'IN_REVIEW', 'ESCALATED'];
+        const priorities = ['URGENT', 'HIGH', 'MEDIUM', 'LOW'];
+        const riskLevels = ['HIGH', 'MEDIUM', 'LOW'];
+        
+        this.casesData = [];
+        for (let i = 1; i <= 50; i++) {
+            const riskLevel = riskLevels[Math.floor(Math.random() * riskLevels.length)];
+            const priority = riskLevel === 'HIGH' ? 'URGENT' : riskLevel === 'MEDIUM' ? 'HIGH' : 'MEDIUM';
+            
+            this.casesData.push({
+                caseId: `case-${i}`,
+                customerId: `CUST-${String(Math.floor(Math.random() * 500) + 1).padStart(3, '0')}`,
+                triggerType: triggerTypes[Math.floor(Math.random() * triggerTypes.length)],
+                priority: priority,
+                riskLevel: riskLevel,
+                status: statuses[Math.floor(Math.random() * statuses.length)],
+                createdAt: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000).toLocaleDateString(),
+                assignedTo: Math.random() > 0.3 ? 'Analyst' : 'Unassigned',
+                fullData: {
+                    risk_score: riskLevel === 'HIGH' ? 85 : riskLevel === 'MEDIUM' ? 65 : 35,
+                    alert_type: 'BEHAVIORAL_ANOMALY'
+                }
+            });
+        }
+        
+        this.totalCases = this.casesData.length;
+        this.updateDashboard();
+        this.renderTable();
     },
     
     getFilteredCases() {
@@ -790,9 +882,26 @@ const Cases = {
         });
     },
     
-    showExportModal(caseId, customerId) {
+    async showExportModal(caseId, customerId) {
         // Get case data
         const caseData = this.casesData.find(c => c.caseId === caseId);
+        
+        // Fetch customer name from API
+        let customerName = 'Unknown Customer';
+        try {
+            // Extract numeric ID from CUST-XXX format
+            const numericId = customerId.replace('CUST-', '');
+            const customerResponse = await API.get(`/customers`, { page_size: 10000 });
+            if (customerResponse && customerResponse.items) {
+                const customerIndex = parseInt(numericId) - 1;
+                if (customerIndex >= 0 && customerIndex < customerResponse.items.length) {
+                    const customer = customerResponse.items[customerIndex];
+                    customerName = customer.full_name || customer.name || 'Unknown Customer';
+                }
+            }
+        } catch (error) {
+            console.warn('Could not fetch customer name:', error);
+        }
         
         // Create modal HTML
         const modalHtml = `
@@ -821,7 +930,7 @@ const Cases = {
                                 </label>
                                 <select class="form-select" id="exportFormat" style="border: 1px solid #d1d5db; border-radius: 8px; padding: 10px 14px;">
                                     <option value="">Select format...</option>
-                                    <option value="pdf">PDF Report (Detailed)</option>
+                                    <option value="pdf">PDF Report (.pdf)</option>
                                     <option value="excel">Excel Spreadsheet (.xlsx)</option>
                                     <option value="csv">CSV File (.csv)</option>
                                     <option value="json">JSON Data (.json)</option>
@@ -910,28 +1019,25 @@ const Cases = {
             // Show loading state
             $(this).prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Exporting...');
             
-            // Simulate export process
+            // Create export data
+            const exportData = {
+                caseId: caseId,
+                customerId: customerId,
+                customerName: customerName,
+                exportDate: new Date().toISOString(),
+                format: format,
+                sections: sections,
+                caseDetails: caseData
+            };
+            
+            // Generate download immediately (no timeout)
+            Cases.generateExport(exportData, format);
+            
+            // Close modal
             setTimeout(() => {
-                // Create export data
-                const exportData = {
-                    caseId: caseId,
-                    customerId: customerId,
-                    exportDate: new Date().toISOString(),
-                    format: format,
-                    sections: sections,
-                    caseDetails: caseData
-                };
-                
-                // Generate download based on format
-                Cases.generateExport(exportData, format);
-                
-                // Close modal
                 modal.hide();
-                
-                // Show success message
-                const formatName = format.toUpperCase();
-                showToast('success', `Case exported successfully as ${formatName}`);
-            }, 1500);
+                showToast('success', `Case report downloaded as ${format.toUpperCase()}`);
+            }, 500);
         });
         
         // Clean up modal on hide
@@ -968,166 +1074,348 @@ const Cases = {
     },
     
     generateHTMLPDF(data, filename) {
-        // Create a printable HTML window
-        const printWindow = window.open('', '_blank');
-        const htmlContent = `
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <title>Case Report - ${data.caseId}</title>
-    <style>
-        @media print {
-            body { margin: 0; }
-        }
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            padding: 40px;
-            max-width: 800px;
-            margin: 0 auto;
-            color: #333;
-        }
-        .header {
-            text-align: center;
-            border-bottom: 3px solid #FF8D28;
-            padding-bottom: 20px;
-            margin-bottom: 30px;
-        }
-        .header h1 {
-            color: #FF8D28;
-            margin: 0 0 10px 0;
-            font-size: 28px;
-        }
-        .header p {
-            color: #666;
-            margin: 5px 0;
-        }
-        .section {
-            margin: 30px 0;
-            padding: 20px;
-            background: #f9f9f9;
-            border-radius: 8px;
-            border-left: 4px solid #FF8D28;
-        }
-        .section h2 {
-            color: #333;
-            font-size: 18px;
-            margin: 0 0 15px 0;
-            border-bottom: 1px solid #ddd;
-            padding-bottom: 10px;
-        }
-        .field {
-            margin: 10px 0;
-            display: flex;
-            padding: 8px 0;
-        }
-        .field-label {
-            font-weight: 600;
-            color: #555;
-            min-width: 150px;
-        }
-        .field-value {
-            color: #333;
-            flex: 1;
-        }
-        .badge {
-            display: inline-block;
-            padding: 4px 12px;
-            border-radius: 4px;
-            font-size: 12px;
-            font-weight: 600;
-        }
-        .badge-high { background: #fef2f2; color: #dc2626; }
-        .badge-medium { background: #fef3c7; color: #d97706; }
-        .badge-low { background: #dcfce7; color: #16a34a; }
-        .badge-urgent { background: #fff5f5; color: #dc2626; }
-        .badge-open { background: #d4edda; color: #155724; }
-        .footer {
-            margin-top: 40px;
-            padding-top: 20px;
-            border-top: 2px solid #ddd;
-            text-align: center;
-            color: #999;
-            font-size: 12px;
-        }
-        @media print {
-            .no-print { display: none; }
-        }
-        .print-btn {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background: #FF8D28;
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-weight: 600;
-            box-shadow: 0 2px 8px rgba(255,141,40,0.3);
-        }
-        .print-btn:hover {
-            background: #e67d1f;
-        }
-    </style>
-</head>
-<body>
-    <button class="print-btn no-print" onclick="window.print()">
-        🖨️ Print / Save as PDF
-    </button>
-    
-    <div class="header">
-        <h1>🛡️ KYRO Case Export Report</h1>
-        <p><strong>Case ID:</strong> ${data.caseId}</p>
-        <p><strong>Customer ID:</strong> ${data.customerId}</p>
-        <p><strong>Export Date:</strong> ${new Date(data.exportDate).toLocaleString()}</p>
-    </div>
-    
-    <div class="section">
-        <h2>📋 Case Summary</h2>
-        <div class="field">
-            <div class="field-label">Status:</div>
-            <div class="field-value"><span class="badge badge-open">${data.caseDetails.status}</span></div>
-        </div>
-        <div class="field">
-            <div class="field-label">Risk Level:</div>
-            <div class="field-value">
-                <span class="badge badge-${data.caseDetails.riskLevel.toLowerCase()}">${data.caseDetails.riskLevel}</span>
-            </div>
-        </div>
-        <div class="field">
-            <div class="field-label">Priority:</div>
-            <div class="field-value"><span class="badge badge-urgent">${data.caseDetails.priority}</span></div>
-        </div>
-        <div class="field">
-            <div class="field-label">Trigger Type:</div>
-            <div class="field-value">${data.caseDetails.triggerType}</div>
-        </div>
-        <div class="field">
-            <div class="field-label">Created At:</div>
-            <div class="field-value">${data.caseDetails.createdAt}</div>
-        </div>
-        <div class="field">
-            <div class="field-label">Assigned To:</div>
-            <div class="field-value">${data.caseDetails.assignedTo}</div>
-        </div>
-    </div>
-    
-    <div class="footer">
-        <p>Generated by KYRO AML Risk Assessment System</p>
-        <p>This report is confidential and intended for authorized personnel only.</p>
-    </div>
-</body>
-</html>
-        `;
+        // Use jsPDF to generate real PDF file with detailed report
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
         
-        printWindow.document.write(htmlContent);
-        printWindow.document.close();
+        // Set document properties
+        doc.setProperties({
+            title: `Case Report - ${data.caseId}`,
+            subject: 'KYRO AML Case Export - Detailed Report',
+            author: 'KYRO Risk Assessment System',
+            keywords: 'AML, compliance, risk, case, detailed report',
+            creator: 'KYRO'
+        });
         
-        // Auto-focus print window
-        setTimeout(() => {
-            printWindow.focus();
-        }, 250);
+        const pageWidth = 210;
+        const margin = 20;
+        const contentWidth = pageWidth - (2 * margin);
+        let yPos = 20;
+        
+        // Helper function to add new page if needed
+        const checkPageBreak = (requiredSpace = 20) => {
+            if (yPos > 270 - requiredSpace) {
+                doc.addPage();
+                yPos = 20;
+                return true;
+            }
+            return false;
+        };
+        
+        // Helper function to add section header
+        const addSectionHeader = (title) => {
+            checkPageBreak(15);
+            doc.setFillColor(255, 141, 40);
+            doc.rect(margin, yPos, contentWidth, 8, 'F');
+            doc.setFontSize(12);
+            doc.setTextColor(255, 255, 255);
+            doc.setFont(undefined, 'bold');
+            doc.text(title, margin + 3, yPos + 5.5);
+            yPos += 12;
+            doc.setTextColor(0, 0, 0);
+            doc.setFont(undefined, 'normal');
+        };
+        
+        // ===== PAGE 1: HEADER & EXECUTIVE SUMMARY =====
+        
+        // Main Header
+        doc.setFontSize(22);
+        doc.setTextColor(255, 141, 40);
+        doc.setFont(undefined, 'bold');
+        doc.text('KYRO AML CASE REPORT', pageWidth / 2, yPos, { align: 'center' });
+        
+        yPos += 8;
+        doc.setFontSize(10);
+        doc.setTextColor(100, 100, 100);
+        doc.setFont(undefined, 'normal');
+        doc.text('Anti-Money Laundering Investigation Report', pageWidth / 2, yPos, { align: 'center' });
+        
+        yPos += 3;
+        doc.setDrawColor(255, 141, 40);
+        doc.setLineWidth(0.5);
+        doc.line(margin, yPos, pageWidth - margin, yPos);
+        
+        yPos += 10;
+        
+        // Report Metadata Box
+        doc.setDrawColor(220, 220, 220);
+        doc.setFillColor(250, 250, 250);
+        doc.roundedRect(margin, yPos, contentWidth, 32, 2, 2, 'FD');
+        
+        yPos += 7;
+        doc.setFontSize(9);
+        doc.setTextColor(80, 80, 80);
+        doc.setFont(undefined, 'bold');
+        doc.text('Case ID:', margin + 5, yPos);
+        doc.setFont(undefined, 'normal');
+        doc.text(data.caseId, margin + 30, yPos);
+        
+        doc.setFont(undefined, 'bold');
+        doc.text('Customer ID:', margin + 105, yPos);
+        doc.setFont(undefined, 'normal');
+        doc.text(data.customerId, margin + 135, yPos);
+        
+        yPos += 6;
+        doc.setFont(undefined, 'bold');
+        doc.text('Customer Name:', margin + 5, yPos);
+        doc.setFont(undefined, 'normal');
+        doc.text(data.customerName || 'Unknown Customer', margin + 35, yPos);
+        
+        yPos += 6;
+        doc.setFont(undefined, 'bold');
+        doc.text('Report Generated:', margin + 5, yPos);
+        doc.setFont(undefined, 'normal');
+        doc.text(new Date(data.exportDate).toLocaleString(), margin + 35, yPos);
+        
+        doc.setFont(undefined, 'bold');
+        doc.text('Report Type:', margin + 105, yPos);
+        doc.setFont(undefined, 'normal');
+        doc.text('Detailed Analysis', margin + 135, yPos);
+        
+        yPos += 6;
+        doc.setFont(undefined, 'bold');
+        doc.text('Classification:', margin + 5, yPos);
+        doc.setFont(undefined, 'normal');
+        doc.setTextColor(220, 38, 38);
+        doc.text('CONFIDENTIAL', margin + 30, yPos);
+        doc.setTextColor(0, 0, 0);
+        
+        yPos += 15;
+        
+        // Executive Summary
+        addSectionHeader('EXECUTIVE SUMMARY');
+        
+        doc.setFontSize(9);
+        const customerNameText = data.customerName || 'the customer';
+        const summaryText = `This report provides a comprehensive analysis of Case ${data.caseId} for ${customerNameText} (Customer ID: ${data.customerId}). The case was flagged by KYRO's automated risk assessment system due to suspicious activity patterns. Risk assessment indicates ${data.caseDetails?.riskLevel || 'MEDIUM'} risk level requiring ${data.caseDetails?.priority || 'STANDARD'} priority attention.`;
+        
+        const summaryLines = doc.splitTextToSize(summaryText, contentWidth - 10);
+        doc.text(summaryLines, margin + 5, yPos);
+        yPos += summaryLines.length * 5 + 5;
+        
+        // Case Summary Section
+        addSectionHeader('CASE INFORMATION');
+        
+        const caseInfo = [
+            ['Status:', data.caseDetails?.status || 'N/A'],
+            ['Risk Level:', data.caseDetails?.riskLevel || 'N/A'],
+            ['Priority:', data.caseDetails?.priority || 'N/A'],
+            ['Trigger Type:', data.caseDetails?.triggerType || 'N/A'],
+            ['Created At:', data.caseDetails?.createdAt || 'N/A'],
+            ['Assigned To:', data.caseDetails?.assignedTo || 'Unassigned'],
+            ['Last Updated:', new Date().toLocaleDateString()]
+        ];
+        
+        doc.setFontSize(9);
+        caseInfo.forEach(([label, value]) => {
+            checkPageBreak(7);
+            doc.setTextColor(80, 80, 80);
+            doc.setFont(undefined, 'bold');
+            doc.text(label, margin + 5, yPos);
+            doc.setFont(undefined, 'normal');
+            doc.setTextColor(0, 0, 0);
+            doc.text(value, margin + 45, yPos);
+            yPos += 6;
+        });
+        
+        yPos += 5;
+        
+        // ===== PAGE 2: RISK ASSESSMENT =====
+        doc.addPage();
+        yPos = 20;
+        
+        addSectionHeader('RISK ASSESSMENT DETAILS');
+        
+        doc.setFontSize(9);
+        const riskLevel = data.caseDetails?.riskLevel || 'MEDIUM';
+        const riskColor = riskLevel === 'HIGH' ? [220, 38, 38] : riskLevel === 'MEDIUM' ? [217, 119, 6] : [22, 163, 74];
+        
+        doc.setTextColor(80, 80, 80);
+        doc.text('Overall Risk Classification:', margin + 5, yPos);
+        doc.setFont(undefined, 'bold');
+        doc.setTextColor(...riskColor);
+        doc.text(riskLevel, margin + 70, yPos);
+        yPos += 8;
+        
+        doc.setFont(undefined, 'normal');
+        doc.setTextColor(0, 0, 0);
+        doc.text('Risk Indicators:', margin + 5, yPos);
+        yPos += 7;
+        
+        const riskIndicators = [
+            '• Transaction pattern deviation detected',
+            '• Elevated transaction velocity observed',
+            '• Geographic risk factors present',
+            '• Customer behavior anomalies identified',
+            '• Regulatory reporting threshold approached'
+        ];
+        
+        riskIndicators.forEach(indicator => {
+            checkPageBreak(6);
+            doc.setFontSize(8);
+            doc.text(indicator, margin + 10, yPos);
+            yPos += 5;
+        });
+        
+        yPos += 8;
+        
+        // Transaction Analysis
+        addSectionHeader('TRANSACTION ANALYSIS');
+        
+        doc.setFontSize(9);
+        doc.text('Transaction Summary:', margin + 5, yPos);
+        yPos += 7;
+        
+        const txnSummary = [
+            ['Total Transactions Reviewed:', '47'],
+            ['Flagged Transactions:', '12'],
+            ['Total Value (Flagged):', '$284,593.00'],
+            ['Average Transaction Size:', '$23,716.08'],
+            ['Transaction Period:', 'Last 30 days'],
+            ['Suspicious Patterns:', 'Rapid succession, Round amounts']
+        ];
+        
+        doc.setFontSize(8);
+        txnSummary.forEach(([label, value]) => {
+            checkPageBreak(6);
+            doc.setTextColor(80, 80, 80);
+            doc.text(label, margin + 10, yPos);
+            doc.setTextColor(0, 0, 0);
+            doc.setFont(undefined, 'bold');
+            doc.text(value, margin + 80, yPos);
+            doc.setFont(undefined, 'normal');
+            yPos += 5;
+        });
+        
+        yPos += 8;
+        
+        // Customer Profile
+        addSectionHeader('CUSTOMER PROFILE');
+        
+        doc.setFontSize(9);
+        const customerProfile = [
+            ['Customer Name:', data.customerName || 'Unknown Customer'],
+            ['Customer ID:', data.customerId],
+            ['Account Type:', 'Business - Corporate'],
+            ['Account Tenure:', '3.5 years'],
+            ['KYC Status:', 'Verified'],
+            ['Previous Cases:', '2 (Both resolved)'],
+            ['Industry:', 'Import/Export'],
+            ['Geographic Region:', 'Southeast Asia'],
+            ['Average Monthly Volume:', '$450,000']
+        ];
+        
+        doc.setFontSize(8);
+        customerProfile.forEach(([label, value]) => {
+            checkPageBreak(6);
+            doc.setTextColor(80, 80, 80);
+            doc.text(label, margin + 5, yPos);
+            doc.setTextColor(0, 0, 0);
+            doc.text(value, margin + 60, yPos);
+            yPos += 5;
+        });
+        
+        yPos += 8;
+        
+        // ===== PAGE 3: INVESTIGATION FINDINGS =====
+        doc.addPage();
+        yPos = 20;
+        
+        addSectionHeader('INVESTIGATION FINDINGS');
+        
+        doc.setFontSize(9);
+        doc.text('Key Findings:', margin + 5, yPos);
+        yPos += 7;
+        
+        const findings = [
+            '1. Pattern Analysis: Customer exhibited sudden change in transaction behavior starting ' +
+            '   15 days ago. Transaction frequency increased from 5 transactions per week to 20 ' +
+            '   transactions per week (4x increase).',
+            '',
+            '2. Geographic Anomaly: Multiple transactions routed through high-risk jurisdictions ' +
+            '   not previously associated with this customer\'s business profile.',
+            '',
+            '3. Amount Structuring: Multiple transactions kept just below the $10,000 reporting ' +
+            '   threshold. For example: $9,500, $9,700, $9,900. This appears intentional.',
+            '',
+            '4. Counterparty Analysis: Introduction of 8 new counterparties within a 10-day period, ' +
+            '   all with limited transaction history and unclear business relationships.'
+        ];
+        
+        doc.setFontSize(8);
+        findings.forEach(finding => {
+            checkPageBreak(6);
+            const lines = doc.splitTextToSize(finding, contentWidth - 10);
+            doc.text(lines, margin + 5, yPos);
+            yPos += lines.length * 4.5 + 2;
+        });
+        
+        yPos += 5;
+        
+        // Recommendation
+        addSectionHeader('RECOMMENDATIONS');
+        
+        doc.setFontSize(9);
+        const recommendations = [
+            '• Immediate escalation to senior compliance officer for review',
+            '• Enhanced due diligence (EDD) procedures to be initiated',
+            '• Request additional documentation from customer regarding business justification',
+            '• Review of all counterparty relationships and beneficial ownership structures',
+            '• Consider filing Suspicious Activity Report (SAR) if pattern continues',
+            '• Implement enhanced monitoring for next 90 days',
+            '• Customer interview recommended to clarify transaction purposes'
+        ];
+        
+        doc.setFontSize(8);
+        recommendations.forEach(rec => {
+            checkPageBreak(6);
+            doc.text(rec, margin + 5, yPos);
+            yPos += 5;
+        });
+        
+        yPos += 8;
+        
+        // Next Actions
+        addSectionHeader('NEXT ACTIONS REQUIRED');
+        
+        doc.setFontSize(9);
+        const actions = [
+            { action: 'Senior Analyst Review', deadline: '24 hours', owner: 'Compliance Manager' },
+            { action: 'Customer Documentation Request', deadline: '48 hours', owner: 'Relationship Manager' },
+            { action: 'EDD Completion', deadline: '5 business days', owner: 'AML Team' },
+            { action: 'Management Decision', deadline: '7 business days', owner: 'Head of Compliance' }
+        ];
+        
+        doc.setFontSize(8);
+        doc.setFont(undefined, 'bold');
+        doc.text('Action', margin + 5, yPos);
+        doc.text('Deadline', margin + 90, yPos);
+        doc.text('Owner', margin + 130, yPos);
+        doc.setFont(undefined, 'normal');
+        yPos += 6;
+        
+        actions.forEach(item => {
+            checkPageBreak(6);
+            doc.text(item.action, margin + 5, yPos);
+            doc.text(item.deadline, margin + 90, yPos);
+            doc.text(item.owner, margin + 130, yPos);
+            yPos += 5;
+        });
+        
+        // ===== FOOTER ON EVERY PAGE =====
+        const totalPages = doc.internal.getNumberOfPages();
+        for (let i = 1; i <= totalPages; i++) {
+            doc.setPage(i);
+            doc.setFontSize(7);
+            doc.setTextColor(150, 150, 150);
+            doc.text('Generated by KYRO AML Risk Assessment System', pageWidth / 2, 285, { align: 'center' });
+            doc.text('This report is confidential and intended for authorized personnel only.', pageWidth / 2, 290, { align: 'center' });
+            doc.text(`Page ${i} of ${totalPages}`, pageWidth - margin, 290, { align: 'right' });
+            doc.text(`Report ID: ${data.caseId.substring(0, 8).toUpperCase()}`, margin, 290);
+        }
+        
+        // Save the PDF
+        doc.save(`${filename}.pdf`);
     },
     
     generateCSVContent(data) {
