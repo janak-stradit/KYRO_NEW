@@ -4,13 +4,10 @@
  */
 
 const API = {
-    baseUrl: (function() {
-        // Always target the FastAPI backend on port 8010 using whatever
-        // hostname the browser resolved — works for localhost AND external IPs.
-        const host = window.location.hostname || 'localhost';
-        const proto = (window.location.protocol || 'http:');
-        return `${proto}//${host}:8010/api/v1`;
-    })(),
+    // Relative path — nginx (docker/nginx.frontend.conf) proxies /api/ to the
+    // API container on the same origin/port the page was loaded from, so this
+    // works unchanged for localhost, external IPs, and any domain.
+    baseUrl: "/api/v1",
     timeout: 30000,
     retryAttempts: 3,
     retryDelay: 1000,
