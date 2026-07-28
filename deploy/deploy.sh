@@ -16,6 +16,17 @@ echo "==> Pulling latest compose/deploy config from git"
 git fetch origin main
 git reset --hard origin/main
 
+echo "==> Writing .env from CI secrets"
+umask 077
+cat > "$APP_DIR/.env" <<EOF
+SECRET_KEY=${SECRET_KEY:?SECRET_KEY not set}
+DB_PASSWORD=${DB_PASSWORD:?DB_PASSWORD not set}
+ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY:-}
+ELEVENLABS_VOICE_ID=${ELEVENLABS_VOICE_ID:-}
+ELEVENLABS_MODEL_ID=${ELEVENLABS_MODEL_ID:-eleven_turbo_v2}
+TTS_PROVIDER=${TTS_PROVIDER:-elevenlabs}
+EOF
+
 echo "==> Logging in to ECR"
 aws ecr get-login-password --region "$AWS_REGION" \
   | docker login --username AWS --password-stdin "$ECR_REGISTRY"
