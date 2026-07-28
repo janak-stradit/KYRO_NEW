@@ -57,7 +57,7 @@ if [ "$healthy" != "true" ]; then
   exit 1
 fi
 
-echo "==> Pruning old images"
-docker image prune -f
+echo "==> Pruning unused images"
+docker image prune -a -f
 
 echo "==> Deploy complete (tag: $IMAGE_TAG)"
