@@ -5,6 +5,8 @@
 # - Swaps local `build:` for pre-built images pulled from ECR
 # - Drops pgadmin (dev-only)
 # - Stops publishing postgres/redis ports to the host
+# - Forces frontend (nginx) onto host port 80, matching the security
+#   group and deploy.sh's health check (base file defaults it to 3000)
 # ============================================================
 
 services:
@@ -30,6 +32,7 @@ services:
     build: !reset null
     image: ${ECR_REGISTRY}/kyro-frontend:${IMAGE_TAG:-latest}
     volumes: !reset []
+    ports: !override ["80:80"]
 
   celery_worker:
     build: !reset null
