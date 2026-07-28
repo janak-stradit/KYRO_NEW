@@ -92,9 +92,11 @@ jobs:
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
           ELEVENLABS_VOICE_ID: ${{ secrets.ELEVENLABS_VOICE_ID }}
+          ELEVENLABS_MODEL_ID: ${{ secrets.ELEVENLABS_MODEL_ID }}
+          TTS_PROVIDER: ${{ secrets.TTS_PROVIDER }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_SSH_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          envs: AWS_REGION,ECR_REGISTRY,SECRET_KEY,DB_PASSWORD,ELEVENLABS_API_KEY,ELEVENLABS_VOICE_ID
+          envs: AWS_REGION,ECR_REGISTRY,SECRET_KEY,DB_PASSWORD,ELEVENLABS_API_KEY,ELEVENLABS_VOICE_ID,ELEVENLABS_MODEL_ID,TTS_PROVIDER
           script: /opt/kyro/deploy/deploy.sh ${{ github.sha }}
