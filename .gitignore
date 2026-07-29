@@ -31,6 +31,9 @@ pyrightconfig.json
 # ── IDE ───────────────────────────────────────────────────────
 .idea/
 
+# ── Let's Encrypt certs (host-only, never committed) ────────────
+certbot/
+
 # ── Test files ─────────────────────────────────────────────────
 tests/
 **/tests/
