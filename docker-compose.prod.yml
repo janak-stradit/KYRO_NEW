@@ -7,6 +7,8 @@
 # - Stops publishing postgres/redis ports to the host
 # - Forces frontend (nginx) onto host port 80, matching the security
 #   group and deploy.sh's health check (base file defaults it to 3000)
+# - Adds HTTPS (443) via Let's Encrypt -- see deploy/init-letsencrypt.sh
+#   for the one-time bootstrap
 # ============================================================
 
 services:
@@ -31,8 +33,18 @@ services:
   frontend:
     build: !reset null
     image: ${ECR_REGISTRY}/kyro-frontend:${IMAGE_TAG:-latest}
-    volumes: !reset []
-    ports: !override ["80:80"]
+    volumes: !override
+      - ./docker/nginx.frontend.prod.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./certbot/conf:/etc/letsencrypt:ro
+      - ./certbot/www:/var/www/certbot:ro
+    ports: !override ["80:80", "443:443"]
+
+  certbot:
+    image: certbot/certbot
+    profiles: ["certbot"]   # never auto-starts with `up`; run explicitly
+    volumes:
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
 
   celery_worker:
     build: !reset null
