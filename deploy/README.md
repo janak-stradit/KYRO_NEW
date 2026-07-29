@@ -13,7 +13,7 @@ every subsequent deploy.
 - gp3 root volume, ≥50GB.
 - Allocate and associate an **Elastic IP** so the address survives restarts.
 - Security group: inbound `22/tcp` (SSH — restrict to a known IP if
-  possible), `80/tcp` (`0.0.0.0/0`). Nothing else public.
+  possible), `80/tcp` and `443/tcp` (`0.0.0.0/0`). Nothing else public.
 
 ### IAM instance profile (attach to the EC2 instance)
 - Policy: `AmazonEC2ContainerRegistryReadOnly` (lets the box `docker pull`
@@ -125,13 +125,42 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml run --rm pipelin
   IMAGE_TAG=<previous-good-sha> docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d api frontend celery_worker celery_beat
   ```
 
-## 5. Explicitly out of scope for now
+## 5. Enable HTTPS
+
+Let's Encrypt won't issue a certificate for a bare IP, so this needs a
+hostname. If you don't own a domain, a free IP-based hostname works fine:
+for Elastic IP `1.2.3.4`, `1-2-3-4.sslip.io` automatically resolves back to
+`1.2.3.4` — no purchase, no DNS setup.
+
+One-time bootstrap (run once, on the instance, from `/opt/kyro`):
+```bash
+chmod +x deploy/init-letsencrypt.sh
+./deploy/init-letsencrypt.sh 1-2-3-4.sslip.io you@example.com
+```
+This creates a throwaway self-signed cert so nginx can start, requests the
+real certificate from Let's Encrypt via the HTTP-01 webroot challenge, then
+reloads nginx with it. The cert lives in `./certbot/conf` on the host
+(gitignored, untouched by `deploy.sh`'s `git reset --hard`), so every
+future CI deploy keeps serving HTTPS automatically — no changes to the
+normal deploy flow needed.
+
+**Renewal** (certs expire after 90 days) — add a daily cron job on the
+instance:
+```bash
+crontab -e
+# add this line:
+0 3 * * * cd /opt/kyro && docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile certbot run --rm certbot renew --webroot -w /var/www/certbot && docker compose -f docker-compose.yml -f docker-compose.prod.yml exec frontend nginx -s reload
+```
+`certbot renew` only actually renews within 30 days of expiry, so this is
+a safe no-op most days.
+
+Once HTTPS is live, remember to update the `EC2_HOST` GitHub secret's
+usage in your head (SSH still uses the raw IP — that's unaffected) and
+just bookmark `https://<your-hostname>` for the app itself.
+
+## 6. Explicitly out of scope for now
 
 - Managed RDS/ElastiCache — Postgres and Redis run as containers on the
   same instance.
 - Terraform/CDK — these steps are the infra definition.
 - Staging environment — production only.
-- Custom domain + HTTPS — served over plain HTTP on the instance's IP.
-  When a domain is available: point DNS at the Elastic IP, terminate TLS
-  with `certbot` in the `frontend` Nginx container (or front the instance
-  with an ALB + ACM cert), and open `443/tcp` in the security group.
