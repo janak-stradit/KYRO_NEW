@@ -1,0 +1,55 @@
+# ============================================================
+# KYRO — Production overlay for docker-compose.yml
+# Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml <cmd>
+#
+# - Swaps local `build:` for pre-built images pulled from ECR
+# - Drops pgadmin (dev-only)
+# - Stops publishing postgres/redis ports to the host
+# - Forces frontend (nginx) onto host port 80, matching the security
+#   group and deploy.sh's health check (base file defaults it to 3000)
+# - Adds HTTPS (443) via Let's Encrypt -- see deploy/init-letsencrypt.sh
+#   for the one-time bootstrap
+# ============================================================
+
+services:
+
+  postgres:
+    ports: !reset []
+
+  pgadmin:
+    profiles: ["disabled"]
+
+  pipeline:
+    build: !reset null
+    image: ${ECR_REGISTRY}/kyro-pipeline:${IMAGE_TAG:-latest}
+
+  redis:
+    ports: !reset []
+
+  api:
+    build: !reset null
+    image: ${ECR_REGISTRY}/kyro-api:${IMAGE_TAG:-latest}
+
+  frontend:
+    build: !reset null
+    image: ${ECR_REGISTRY}/kyro-frontend:${IMAGE_TAG:-latest}
+    volumes: !override
+      - ./docker/nginx.frontend.prod.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./certbot/conf:/etc/letsencrypt:ro
+      - ./certbot/www:/var/www/certbot:ro
+    ports: !override ["80:80", "443:443"]
+
+  certbot:
+    image: certbot/certbot
+    profiles: ["certbot"]   # never auto-starts with `up`; run explicitly
+    volumes:
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
+
+  celery_worker:
+    build: !reset null
+    image: ${ECR_REGISTRY}/kyro-api:${IMAGE_TAG:-latest}
+
+  celery_beat:
+    build: !reset null
+    image: ${ECR_REGISTRY}/kyro-api:${IMAGE_TAG:-latest}

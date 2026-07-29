@@ -3,9 +3,8 @@
  * Handles login, logout, token management, and session persistence
  */
 
-console.log("🔧 KYRO Auth.js loaded - API Port: 8000");
+console.log("🔧 KYRO Auth.js loaded");
 console.log("🔧 Current location:", window.location.href);
-console.log("🔧 Script version: 9999999999");
 
 const Auth = {
     tokenKey: "access_token",
@@ -18,11 +17,9 @@ const Auth = {
     },
     
     getApiUrl(path) {
-        // Always point to the API on port 8000 using whatever hostname
-        // the browser is currently using. This works for localhost AND
-        // external IPs / remote access without any hardcoding.
-        const apiHost = window.location.hostname;
-        return `http://${apiHost}:8000${path}`;
+        // Relative path — nginx (docker/nginx.frontend.conf) proxies /api/ to
+        // the API container on the same origin the page was loaded from.
+        return path;
     },
     
     /**

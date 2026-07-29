@@ -35,6 +35,7 @@ ENV PATH="/opt/venv/bin:$PATH"
 
 COPY app/         ./app/
 COPY app/alembic.ini ./alembic.ini
+COPY scripts/     ./scripts/
 
 RUN useradd --create-home --shell /bin/bash kyro && \
     chown -R kyro:kyro /app
