@@ -33,6 +33,9 @@ aws ecr get-login-password --region "$AWS_REGION" \
 
 export IMAGE_TAG ECR_REGISTRY
 
+echo "==> Pruning unused images before pulling (frees space even if a previous deploy failed mid-pull)"
+docker system prune -a -f
+
 echo "==> Pulling images (tag: $IMAGE_TAG)"
 $COMPOSE pull api frontend celery_worker celery_beat pipeline
 
@@ -58,6 +61,6 @@ if [ "$healthy" != "true" ]; then
 fi
 
 echo "==> Pruning unused images"
-docker image prune -a -f
+docker system prune -a -f
 
 echo "==> Deploy complete (tag: $IMAGE_TAG)"
