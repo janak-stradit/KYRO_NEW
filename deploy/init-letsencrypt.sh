@@ -18,7 +18,7 @@ EMAIL="${2:?usage: init-letsencrypt.sh <domain> <email>}"
 : "${ECR_REGISTRY:?ECR_REGISTRY not set. Export it first, e.g.:
   export ECR_REGISTRY=<account-id>.dkr.ecr.<region>.amazonaws.com
 (same value as the ECR_REGISTRY GitHub secret -- this script is run
-manually, so it doesn't get it from CI like deploy.sh does)}"
+manually, so it does not get it from CI the way deploy.sh does)}"
 COMPOSE="docker compose -f docker-compose.yml -f docker-compose.prod.yml"
 
 mkdir -p certbot/conf/live/kyro certbot/www
