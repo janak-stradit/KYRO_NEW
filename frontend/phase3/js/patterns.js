@@ -6,6 +6,14 @@
 const Patterns = {
     patternsData: [],
     customerPatternData: [],
+    
+    // Pagination settings
+    pagination: {
+        currentPage: 1,
+        pageSize: 10,
+        pageSizeOptions: [10, 25, 50, 100]
+    },
+    
     charts: {
         transactionSize: null,
         transactionFrequency: null,
@@ -31,21 +39,15 @@ const Patterns = {
             
             console.log(`✅ Fetched ${customers.length} real customers from API`);
             
-            // Build customer ID list from real database customers
-            const allCustomers = customers.map((cust, idx) => {
-                return `CUST-${String(idx + 1).padStart(3, '0')}`;
-            });
+            // Use only first 5 customers for patterns
+            const allCustomers = ['CUST-001', 'CUST-002', 'CUST-003', 'CUST-004', 'CUST-005'];
             
             // Now generate pattern data using real customer IDs
             this.generateCustomerPatternData(allCustomers);
         } catch (error) {
-            console.error("❌ Error fetching customers:", error);
-            // Fallback to max database size
-            const allCustomers = [];
-            for (let i = 1; i <= 1454; i++) {
-                allCustomers.push(`CUST-${String(i).padStart(3, '0')}`);
-            }
-            console.log(`⚠️ Using fallback: ${allCustomers.length} customers`);
+            console.warn("⚠️ Error fetching customers - using fallback:", error);
+            // Silently fall back to 5 customers
+            const allCustomers = ['CUST-001', 'CUST-002', 'CUST-003', 'CUST-004', 'CUST-005'];
             this.generateCustomerPatternData(allCustomers);
         }
     },
@@ -495,6 +497,35 @@ const Patterns = {
                                 </tbody>
                             </table>
                         </div>
+                        
+                        <!-- Pagination Controls -->
+                        <div class="d-flex justify-content-between align-items-center p-3" style="border-top: 1px solid #e5e7eb;">
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="text-muted" style="font-size: 13px;">Rows per page:</span>
+                                <select class="form-select form-select-sm" id="pageSizeSelect" style="width: 80px; font-size: 13px;">
+                                    <option value="10">10</option>
+                                    <option value="25">25</option>
+                                    <option value="50">50</option>
+                                    <option value="100">100</option>
+                                </select>
+                                <span class="text-muted ms-3" id="paginationInfo" style="font-size: 13px;">1-10 of 30</span>
+                            </div>
+                            <nav aria-label="Table pagination">
+                                <ul class="pagination pagination-sm mb-0" id="paginationControls">
+                                    <li class="page-item disabled">
+                                        <a class="page-link" href="#" id="prevPage">
+                                            <i class="fas fa-chevron-left"></i>
+                                        </a>
+                                    </li>
+                                    <li class="page-item active"><a class="page-link" href="#">1</a></li>
+                                    <li class="page-item">
+                                        <a class="page-link" href="#" id="nextPage">
+                                            <i class="fas fa-chevron-right"></i>
+                                        </a>
+                                    </li>
+                                </ul>
+                            </nav>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -513,24 +544,27 @@ const Patterns = {
         const uniqueCustomers = new Set(this.customerPatternData.map(d => d.customerId)).size;
         const patternTypes = 6; // Fixed: 6 canonical pattern types
         
-        // For anomalies, we can use a multiplier (e.g., 500 total patterns across all time, with historical data)
-        const totalPatternsAllTime = 500;
+        // For anomalies, we can use a multiplier
+        const totalPatternsAllTime = totalPatterns;
         const anomalies = Math.round(totalPatternsAllTime * 0.666); // ~66% are anomalies
         
-        // Fetch actual customer count from API
-        let actualCustomerCount = 1000; // Default fallback
+        // Use actual unique customers from pattern data (5 in our case)
+        let actualCustomerCount = uniqueCustomers;
+        
+        // Try to fetch from API but don't override if we have local data
         try {
             const kpiData = await API.get(API.endpoints.kpis);
             if (kpiData && kpiData.total_customers) {
-                actualCustomerCount = kpiData.total_customers;
+                // Use API data if available, otherwise stick with our local count
+                actualCustomerCount = kpiData.total_customers || uniqueCustomers;
             }
         } catch (e) {
-            console.error("Failed to fetch KPIs for customer count", e);
+            console.warn("Could not fetch customer count from API, using local count:", uniqueCustomers);
         }
 
         // Update the DOM with formatted numbers
         $("#totalPatternsCount").text(totalPatternsAllTime.toLocaleString());
-        $("#customersCount").text(actualCustomerCount.toLocaleString()); // Dynamic from API with formatting
+        $("#customersCount").text(actualCustomerCount.toLocaleString());
         $("#patternTypesCount").text(patternTypes.toLocaleString());
         $("#anomaliesCount").text(anomalies.toLocaleString());
     },
@@ -546,8 +580,15 @@ const Patterns = {
             filteredData = filteredData.filter(d => d.patternType === this.currentFilters.patternType);
         }
         
+        const total = filteredData.length;
+        
+        // Calculate pagination
+        const startIdx = (this.pagination.currentPage - 1) * this.pagination.pageSize;
+        const endIdx = Math.min(startIdx + this.pagination.pageSize, total);
+        const paginatedData = filteredData.slice(startIdx, endIdx);
+        
         // Generate table rows
-        const rows = filteredData.map(data => {
+        const rows = paginatedData.map(data => {
             const stdClass = parseFloat(data.stdDeviation) > 500 ? 'text-danger' : 'text-success';
             const bgColor = data.patternColor + '26'; // Add transparency
             
@@ -576,6 +617,9 @@ const Patterns = {
         
         $("#patternsTableBody").html(rows || '<tr><td colspan="7" class="text-center py-4 text-muted">No patterns found</td></tr>');
         
+        // Render pagination controls
+        this.renderPaginationControls(total, startIdx, endIdx);
+        
         // Update filter status
         const activeFilters = [];
         if (this.currentFilters.customer !== 'all') activeFilters.push(`Customer: ${this.currentFilters.customer}`);
@@ -589,6 +633,104 @@ const Patterns = {
         } else {
             $("#filterStatus").text('No filters applied');
         }
+    },
+    
+    renderPaginationControls(total, startIdx, endIdx) {
+        // Update pagination info
+        if (total === 0) {
+            $("#paginationInfo").text("0 patterns");
+        } else {
+            $("#paginationInfo").text(`${startIdx + 1}-${endIdx} of ${total}`);
+        }
+        
+        // Update page size selector
+        $("#pageSizeSelect").val(this.pagination.pageSize);
+        
+        // Calculate total pages
+        const totalPages = Math.ceil(total / this.pagination.pageSize);
+        
+        if (totalPages <= 1) {
+            $("#paginationControls").html(`
+                <li class="page-item disabled">
+                    <a class="page-link" href="#" id="prevPage">
+                        <i class="fas fa-chevron-left"></i>
+                    </a>
+                </li>
+                <li class="page-item active"><a class="page-link" href="#">1</a></li>
+                <li class="page-item disabled">
+                    <a class="page-link" href="#" id="nextPage">
+                        <i class="fas fa-chevron-right"></i>
+                    </a>
+                </li>
+            `);
+            return;
+        }
+        
+        // Build pagination buttons
+        let paginationHTML = '';
+        
+        // Previous button
+        paginationHTML += `
+            <li class="page-item ${this.pagination.currentPage === 1 ? 'disabled' : ''}">
+                <a class="page-link" href="#" id="prevPage">
+                    <i class="fas fa-chevron-left"></i>
+                </a>
+            </li>
+        `;
+        
+        // Page numbers
+        const maxVisiblePages = 5;
+        let startPage = Math.max(1, this.pagination.currentPage - Math.floor(maxVisiblePages / 2));
+        let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+        
+        // Adjust start if we're at the end
+        if (endPage - startPage < maxVisiblePages - 1) {
+            startPage = Math.max(1, endPage - maxVisiblePages + 1);
+        }
+        
+        // First page
+        if (startPage > 1) {
+            paginationHTML += `
+                <li class="page-item">
+                    <a class="page-link page-num-btn" href="#" data-page="1">1</a>
+                </li>
+            `;
+            if (startPage > 2) {
+                paginationHTML += `<li class="page-item disabled"><a class="page-link">...</a></li>`;
+            }
+        }
+        
+        // Page numbers
+        for (let i = startPage; i <= endPage; i++) {
+            paginationHTML += `
+                <li class="page-item ${i === this.pagination.currentPage ? 'active' : ''}">
+                    <a class="page-link page-num-btn" href="#" data-page="${i}">${i}</a>
+                </li>
+            `;
+        }
+        
+        // Last page
+        if (endPage < totalPages) {
+            if (endPage < totalPages - 1) {
+                paginationHTML += `<li class="page-item disabled"><a class="page-link">...</a></li>`;
+            }
+            paginationHTML += `
+                <li class="page-item">
+                    <a class="page-link page-num-btn" href="#" data-page="${totalPages}">${totalPages}</a>
+                </li>
+            `;
+        }
+        
+        // Next button
+        paginationHTML += `
+            <li class="page-item ${this.pagination.currentPage === totalPages ? 'disabled' : ''}">
+                <a class="page-link" href="#" id="nextPage">
+                    <i class="fas fa-chevron-right"></i>
+                </a>
+            </li>
+        `;
+        
+        $("#paginationControls").html(paginationHTML);
     },
     
     initCharts() {
@@ -847,6 +989,7 @@ const Patterns = {
             $("#filterPatternType").val("all");
             self.currentFilters.customer = "all";
             self.currentFilters.patternType = "all";
+            self.pagination.currentPage = 1; // Reset pagination
             self.renderTable();
             self.updateChartsForPattern("all");
             Utils.showToast("Filters cleared", "success");
@@ -856,6 +999,7 @@ const Patterns = {
         $("#filterCustomers, #filterPatternType").on("change", function() {
             self.currentFilters.customer = $("#filterCustomers").val();
             self.currentFilters.patternType = $("#filterPatternType").val();
+            self.pagination.currentPage = 1; // Reset to first page when filtering
             
             // Update table with filtered data
             self.renderTable();
@@ -906,6 +1050,66 @@ const Patterns = {
                 App.navigateTo('cases', { customer: customerId, pattern: patternType });
             } else {
                 console.error("App.navigateTo not available");
+            }
+        });
+        
+        // Page size selector
+        $("body").off("change", "#pageSizeSelect").on("change", "#pageSizeSelect", function(e) {
+            self.pagination.pageSize = parseInt($(this).val());
+            self.pagination.currentPage = 1; // Reset to first page
+            self.renderTable();
+        });
+        
+        // Previous page button
+        $("body").off("click", "#prevPage").on("click", "#prevPage", function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            if (!$(this).parent().hasClass('disabled') && self.pagination.currentPage > 1) {
+                self.pagination.currentPage--;
+                self.renderTable();
+                
+                // Scroll to top of table
+                $(".table-responsive").get(0)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        });
+        
+        // Next page button
+        $("body").off("click", "#nextPage").on("click", "#nextPage", function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            let filteredData = self.customerPatternData;
+            if (self.currentFilters.customer !== 'all') {
+                filteredData = filteredData.filter(d => d.customerId === self.currentFilters.customer);
+            }
+            if (self.currentFilters.patternType !== 'all') {
+                filteredData = filteredData.filter(d => d.patternType === self.currentFilters.patternType);
+            }
+            
+            const totalPages = Math.ceil(filteredData.length / self.pagination.pageSize);
+            
+            if (!$(this).parent().hasClass('disabled') && self.pagination.currentPage < totalPages) {
+                self.pagination.currentPage++;
+                self.renderTable();
+                
+                // Scroll to top of table
+                $(".table-responsive").get(0)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        });
+        
+        // Page number buttons
+        $("body").off("click", ".page-num-btn").on("click", ".page-num-btn", function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const page = parseInt($(this).data("page"));
+            if (page && page !== self.pagination.currentPage) {
+                self.pagination.currentPage = page;
+                self.renderTable();
+                
+                // Scroll to top of table
+                $(".table-responsive").get(0)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }
         });
         

@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>KYRO AML - Demo Access</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 400px;
+            width: 90%;
+            text-align: center;
+        }
+        h1 {
+            color: #1a1a1a;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+        p {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        .btn {
+            background: #FF8D28;
+            color: white;
+            border: none;
+            padding: 14px 32px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            transition: all 0.3s;
+            box-shadow: 0 4px 14px rgba(255, 141, 40, 0.4);
+        }
+        .btn:hover {
+            background: #ff6f00;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(255, 141, 40, 0.6);
+        }
+        .note {
+            margin-top: 20px;
+            padding: 12px;
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 6px;
+            font-size: 13px;
+            color: #856404;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🛡️ KYRO AML Dashboard</h1>
+        <p>Demo Mode - Quick Access</p>
+        
+        <div style="margin: 20px 0; padding: 15px; background: #e3f2fd; border: 1px solid #2196f3; border-radius: 8px; text-align: left;">
+            <strong style="color: #1976d2;">Demo Credentials:</strong><br>
+            <span style="font-family: monospace; color: #424242;">
+                Username: <strong>analyst</strong><br>
+                Password: <strong>kyro123</strong>
+            </span>
+        </div>
+        
+        <button class="btn" onclick="enterDemo()">Enter Dashboard (Demo Mode)</button>
+        
+        <div class="note">
+            <strong>Note:</strong> Database authentication is bypassed. All features available for testing without backend connection.
+        </div>
+    </div>
+
+    <script>
+        function enterDemo() {
+            // Create mock auth data
+            const mockAuth = {
+                access_token: "demo_token_" + Date.now(),
+                refresh_token: "demo_refresh_" + Date.now(),
+                user: {
+                    id: "demo-user-001",
+                    email: "demo@kyro.com",
+                    full_name: "Demo Analyst",
+                    role: "ANALYST",
+                    is_active: true
+                }
+            };
+            
+            // Store in localStorage
+            localStorage.setItem("access_token", mockAuth.access_token);
+            localStorage.setItem("refresh_token", mockAuth.refresh_token);
+            localStorage.setItem("user_data", JSON.stringify(mockAuth.user));
+            
+            // Redirect to dashboard
+            window.location.href = "index.html";
+        }
+    </script>
+</body>
+</html>
