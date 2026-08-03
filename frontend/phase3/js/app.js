@@ -170,25 +170,11 @@ const App = {
     },
     
     async navigateTo(pageName, params = {}) {
-        if (this.currentPage === pageName) {
-            console.log(`Already on ${pageName}, skipping navigation`);
-            return;
-        }
+        if (this.currentPage === pageName) return;
         
         console.log(`📍 Navigating to: ${pageName}`);
         
         try {
-            // Validate page exists
-            if (!this.pages[pageName]) {
-                console.error(`❌ Invalid page: ${pageName}`);
-                showToast("error", `Page not found: ${pageName}`, "Navigation Error");
-                // Fallback to dashboard
-                if (pageName !== 'dashboard') {
-                    this.navigateTo('dashboard');
-                }
-                return;
-            }
-            
             // Update navigation state
             this.updateNavigation(pageName);
             
@@ -200,20 +186,10 @@ const App = {
             await this.loadPage(pageName, params);
             
             this.currentPage = pageName;
-            console.log(`✅ Navigation complete: ${pageName}`);
             
         } catch (error) {
-            console.error(`❌ Navigation error to ${pageName}:`, error);
-            console.error("Error details:", error.stack);
-            
-            // Show user-friendly error without breaking the app
-            showToast("error", "Navigation failed. Please try again.", "Navigation Error");
-            
-            // If not on dashboard and navigation fails, try to go to dashboard
-            if (pageName !== 'dashboard' && this.currentPage !== 'dashboard') {
-                console.log("⚠️ Falling back to dashboard");
-                setTimeout(() => this.navigateTo('dashboard'), 500);
-            }
+            console.error(`Navigation error to ${pageName}:`, error);
+            showToast("error", "Failed to load page", "Navigation Error");
         }
     },
     
@@ -221,8 +197,6 @@ const App = {
         const pageHandler = this.pages[pageName];
         
         if (!pageHandler) {
-            console.error(`❌ Page handler not found: ${pageName}`);
-            console.error("Available pages:", Object.keys(this.pages));
             throw new Error(`Page handler not found: ${pageName}`);
         }
         
@@ -230,41 +204,26 @@ const App = {
         showLoading("#mainContent", `Loading ${capitalizeFirst(pageName)}...`);
         
         try {
-            console.log(`📄 Loading page: ${pageName}`, pageHandler);
-            
-            // Initialize page with proper method detection
-            if (typeof pageHandler.init === 'function') {
-                console.log(`✅ Calling ${pageName}.init()`);
+            // Initialize page
+            if (pageHandler.init) {
                 await pageHandler.init(params);
-            } else if (typeof pageHandler.loadDashboard === 'function') {
-                console.log(`✅ Calling ${pageName}.loadDashboard()`);
-                await pageHandler.loadDashboard(params);
-            } else if (typeof pageHandler.loadPage === 'function') {
-                console.log(`✅ Calling ${pageName}.loadPage()`);
+            } else if (pageHandler.loadPage) {
                 await pageHandler.loadPage(params);
-            } else if (typeof pageHandler.load === 'function') {
-                console.log(`✅ Calling ${pageName}.load()`);
-                await pageHandler.load(params);
             } else {
-                console.error(`❌ No init method found for ${pageName}`, pageHandler);
-                throw new Error(`Page ${pageName} has no init/load method`);
+                throw new Error(`Page ${pageName} has no init method`);
             }
             
-            console.log(`✅ Page loaded successfully: ${pageName}`);
-            
         } catch (error) {
-            console.error(`❌ Page load error for ${pageName}:`, error);
-            console.error("Error stack:", error.stack);
+            console.error(`Page load error for ${pageName}:`, error);
             
-            // Show error state without throwing
+            // Show error state
             $("#mainContent").html(`
                 <div class="alert alert-danger" role="alert">
                     <h4 class="alert-heading">
                         <i class="fas fa-exclamation-triangle me-2"></i>
-                        Navigation Error
+                        Page Load Error
                     </h4>
                     <p>Failed to load ${capitalizeFirst(pageName)} page.</p>
-                    <p class="small text-muted mb-0">${error.message}</p>
                     <hr>
                     <div class="d-flex gap-2">
                         <button class="btn btn-outline-danger" onclick="App.loadPage('${pageName}')">
@@ -277,8 +236,7 @@ const App = {
                 </div>
             `);
             
-            // Don't throw, just log - this prevents navigation from completely breaking
-            return;
+            throw error;
         }
     },
     

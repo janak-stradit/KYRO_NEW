@@ -257,11 +257,11 @@ const Dashboard = {
                         <p class="figma-text-gray">Quick access to critical review workflows</p>
                     </div>
 
-                    <div class="container-fluid" style="max-width: 1200px; padding: 0 20px;">
-                        <div class="row g-3 mb-5" style="margin: 0 auto; display: flex; flex-wrap: wrap; justify-content: center;">
+                    <div class="container" style="max-width: 1200px; padding: 0 16px;">
+                        <div class="row g-4 mb-5" style="margin: 0; width: 100%; display: flex; justify-content: center; align-items: stretch;">
                             <!-- Review Cases Card -->
-                            <div class="col-12 col-sm-6 col-md-6 col-lg-4 px-2 mb-3 mb-lg-0" style="display: flex; justify-content: center;">
-                                <div class="figma-action-card h-100" onclick="App.navigateTo('cases')" style="width: 100%; max-width: 380px; display: block; visibility: visible !important; opacity: 1 !important;">
+                            <div class="col-12 col-sm-12 col-md-6 col-lg-4" style="padding: 0 12px; display: flex;">
+                                <div class="figma-action-card h-100" onclick="App.navigateTo('cases')" style="width: 100%; flex: 1;">
                                     <h3 class="figma-text-orange font-medium text-lg mb-2">Review Cases</h3>
                                     <p class="figma-text-gray mb-4">Process and resolve all flagged cases</p>
                                     <div class="figma-button d-inline-flex px-4 py-2 mx-auto">
@@ -271,8 +271,8 @@ const Dashboard = {
                             </div>
 
                             <!-- Periodic Reviews Card -->
-                            <div class="col-12 col-sm-6 col-md-6 col-lg-4 px-2 mb-3 mb-lg-0" style="display: flex; justify-content: center;">
-                                <div class="figma-action-card-dark h-100" onclick="App.navigateTo('periodic-reviews')" style="width: 100%; max-width: 380px; display: block; visibility: visible !important; opacity: 1 !important;">
+                            <div class="col-12 col-sm-12 col-md-6 col-lg-4" style="padding: 0 12px; display: flex;">
+                                <div class="figma-action-card-dark h-100" onclick="App.navigateTo('periodic-reviews')" style="width: 100%; flex: 1;">
                                     <h3 class="figma-text-orange font-medium text-lg mb-2">Periodic Reviews</h3>
                                     <p class="figma-text-white mb-4">Schedule and manage time-based customer reviews</p>
                                     <div class="figma-button d-inline-flex px-4 py-2 mx-auto">
@@ -282,8 +282,8 @@ const Dashboard = {
                             </div>
 
                             <!-- Behavioral Patterns Card -->
-                            <div class="col-12 col-sm-6 col-md-6 col-lg-4 px-2 mb-3 mb-lg-0" style="display: flex; justify-content: center;">
-                                <div class="figma-action-card h-100" onclick="App.navigateTo('patterns')" style="width: 100%; max-width: 380px; display: block; visibility: visible !important; opacity: 1 !important;">
+                            <div class="col-12 col-sm-12 col-md-6 col-lg-4" style="padding: 0 12px; display: flex;">
+                                <div class="figma-action-card h-100" onclick="App.navigateTo('patterns')" style="width: 100%; flex: 1;">
                                     <h3 class="figma-text-orange font-medium text-lg mb-2">Behavioral Patterns</h3>
                                     <p class="figma-text-gray mb-4">Analyze and investigate behavioral anomalies</p>
                                     <div class="figma-button d-inline-flex px-4 py-2 mx-auto">
@@ -294,90 +294,85 @@ const Dashboard = {
                         </div>
                     </div>
                 </div>
+
+                <!-- Bottom Left Button: Back to Home -->
+                <div class="position-fixed take-action-back-btn" style="bottom: 20px; left: 20px; z-index: 1000;">
+                    <a href="/" class="btn fw-bold px-4 py-2" style="background-color: #FF8C42; color: #ffffff; border-radius: 6px; box-shadow: 0 4px 12px rgba(255, 140, 66, 0.3); font-family: 'Plus Jakarta Sans', sans-serif; font-size: 14px; text-decoration: none;">
+                        Back to Home
+                    </a>
+                </div>
             </div>
         `;
     },
     
     async loadKPIs() {
+        try {
+            // Show loading state
+            this.showKPILoading();
+            
+            console.log("📊 Fetching KPIs from API...");
+            const data = await API.get(API.endpoints.kpis);
+            console.log("✅ KPI Data received:", data);
+            
+            // Hide loading state
+            this.hideKPILoading();
+            
+            // Keep notification updates intact
+            $("#notificationBadge").text(data.pending_alerts);
+            $("#sidebarAlertCount").text(data.pending_alerts);
+
+            // Update Transaction Overview card values
+            const formattedTotalTx = Number(data.total_transactions || 0).toLocaleString();
+            const formattedTotalVol = '$' + Number(data.total_volume || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            const formattedAvgAmt = '$' + Number(data.avg_amount || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            
+            console.log("💰 Transaction Stats:", { formattedTotalTx, formattedTotalVol, formattedAvgAmt });
+            
+            $("#txOverviewCount").text(formattedTotalTx);
+            $("#txOverviewVolume").text(formattedTotalVol);
+            $("#txOverviewAverage").text(formattedAvgAmt);
+
+            // Update Take Action values
+            $("#takeActionCasesVal").text(`${data.pending_alerts || 0} Active`);
+
+            // Set periodic reviews count based on mockup reviews data if defined, otherwise 288
+            const periodicCount = (window.PeriodicReviews && window.PeriodicReviews.reviewsData && window.PeriodicReviews.reviewsData.length) || 288;
+            $("#takeActionReviewsVal").text(`${periodicCount} Pending`);
+            
+            // Load patterns data
             try {
-                // Show loading state
-                this.showKPILoading();
-
-                console.log("📊 Fetching KPIs and patterns from API in parallel...");
-
-                // Fetch KPIs and patterns in parallel for better performance
-                const [kpisResult, patternsResult] = await Promise.allSettled([
-                    API.get(API.endpoints.kpis),
-                    API.get("/dashboard/patterns")
-                ]);
-
-                // Hide loading state
-                this.hideKPILoading();
-
-                // Process KPIs data
-                if (kpisResult.status === 'fulfilled') {
-                    const data = kpisResult.value;
-                    console.log("✅ KPI Data received:", data);
-
-                    // Keep notification updates intact
-                    $("#notificationBadge").text(data.pending_alerts);
-                    $("#sidebarAlertCount").text(data.pending_alerts);
-
-                    // Update Transaction Overview card values
-                    const formattedTotalTx = Number(data.total_transactions || 0).toLocaleString();
-                    const formattedTotalVol = '$' + Number(data.total_volume || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
-                    const formattedAvgAmt = '₹' + Number(data.avg_amount || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
-
-                    console.log("💰 Transaction Stats:", { formattedTotalTx, formattedTotalVol, formattedAvgAmt });
-
-                    $("#txOverviewCount").text(formattedTotalTx);
-                    $("#txOverviewVolume").text(formattedTotalVol);
-                    $("#txOverviewAverage").text(formattedAvgAmt);
-
-                    // Update Take Action values
-                    $("#takeActionCasesVal").text(`${data.pending_alerts || 0} Active`);
-
-                    // Set periodic reviews count based on mockup reviews data if defined, otherwise 288
-                    const periodicCount = (window.PeriodicReviews && window.PeriodicReviews.reviewsData && window.PeriodicReviews.reviewsData.length) || 288;
-                    $("#takeActionReviewsVal").text(`${periodicCount} Pending`);
-                } else {
-                    console.error("Failed to load KPIs:", kpisResult.reason);
-                }
-
-                // Process patterns data
-                if (patternsResult.status === 'fulfilled') {
-                    const patternData = patternsResult.value;
-                    console.log("✅ Pattern Data received:", patternData);
-
-                    if (patternData) {
-                        // Update Behavioral Patterns Take Action count
-                        $("#takeActionPatternsVal").text(`${patternData.total_pattern_hits || 0} Detected`);
-
-                        // Update Behavioral Flags List
-                        if (patternData.patterns) {
-                            let html = '';
-                            patternData.patterns.forEach((pattern, index) => {
-                                const isLast = index === patternData.patterns.length - 1;
-                                const borderStyle = isLast ? '' : 'style="border-bottom: 1px solid rgba(124, 143, 172, 0.08);"';
-                                html += `
-                                    <div class="d-flex justify-content-between align-items-center py-2" ${borderStyle}>
-                                        <span class="figma-text-gray text-sm">${pattern.label}</span>
-                                        <span class="figma-text-dark font-bold text-sm">${pattern.hit_count}</span>
-                                    </div>
-                                `;
-                            });
-                            $("#behavioralFlagsList").html(html);
-                        }
+                console.log("🔍 Fetching patterns data...");
+                const patternData = await API.get("/dashboard/patterns");
+                console.log("✅ Pattern Data received:", patternData);
+                
+                if (patternData) {
+                    // Update Behavioral Patterns Take Action count
+                    $("#takeActionPatternsVal").text(`${patternData.total_pattern_hits || 0} Detected`);
+                    
+                    // Update Behavioral Flags List
+                    if (patternData.patterns) {
+                        let html = '';
+                        patternData.patterns.forEach((pattern, index) => {
+                            const isLast = index === patternData.patterns.length - 1;
+                            const borderStyle = isLast ? '' : 'style="border-bottom: 1px solid rgba(124, 143, 172, 0.08);"';
+                            html += `
+                                <div class="d-flex justify-content-between align-items-center py-2" ${borderStyle}>
+                                    <span class="figma-text-gray text-sm">${pattern.label}</span>
+                                    <span class="figma-text-dark font-bold text-sm">${pattern.hit_count}</span>
+                                </div>
+                            `;
+                        });
+                        $("#behavioralFlagsList").html(html);
                     }
-                } else {
-                    console.error("Failed to load patterns:", patternsResult.reason);
                 }
-
-            } catch (error) {
-                console.error("KPI load error:", error);
+            } catch (err) {
+                console.error("Failed to load dashboard patterns:", err);
             }
+            
+        } catch (error) {
+            console.error("KPI load error:", error);
         }
-,
+    },
     
     getChartThemeColors() {
         const isDark = document.documentElement.getAttribute("data-theme") === "dark";
@@ -423,14 +418,10 @@ const Dashboard = {
     },
     
     renderCSSBarChart(chartData) {
-        console.log("📊 Rendering Review Case Volume Chart with data:", chartData);
-        
         const alertVolume = chartData.alert_volume || { dates: [], counts: [], flags: [], total_period: 0 };
         const dates = alertVolume.dates || [];
         const openCounts = alertVolume.counts || [];
         const flagCounts = alertVolume.flags || [];
-
-        console.log("📊 Chart values - Dates:", dates.length, "Counts:", openCounts, "Flags:", flagCounts);
 
         const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
         const labels = dates.map(d => {
@@ -439,18 +430,13 @@ const Dashboard = {
         });
 
         const totalLastPeriod = alertVolume.total_period !== undefined ? alertVolume.total_period : openCounts.reduce((a, b) => a + b, 0);
-        console.log("📊 Total Last Period:", totalLastPeriod);
         $("#caseVolumePeriodText").text(`+${totalLastPeriod.toLocaleString()} Last period`);
 
-        // Calculate max value for Y-axis scaling
         const maxVal = Math.max(...openCounts, ...flagCounts, 10);
-        console.log("📊 Max value for scaling:", maxVal);
         
         // Dynamically update Y-axis gridline labels for case volume chart
         const step = Math.ceil(maxVal / 4);
-        const gridlines = $("#volumeBars").closest(".aml-card").find(".aml-gridline span");
-        console.log("📊 Y-axis step:", step, "Gridlines found:", gridlines.length);
-        
+        const gridlines = $(".aml-chart .aml-gridline span");
         if (gridlines.length >= 5) {
             gridlines.eq(0).text(step * 4);
             gridlines.eq(1).text(step * 3);
@@ -459,17 +445,15 @@ const Dashboard = {
             gridlines.eq(4).text(0);
         }
 
-        // Generate bars with proper scaling
         const barsHtml = openCounts.map((openCnt, i) => {
             const darkVal = flagCounts[i] !== undefined ? flagCounts[i] : Math.round(openCnt * 0.7);
             const orangeVal = openCnt;
             
-            // Calculate heights as percentage of max value
             const darkHeight = Math.min(Math.max(Math.round((darkVal / (step * 4)) * 100), 8), 95);
             const orangeHeight = Math.min(Math.max(Math.round((orangeVal / (step * 4)) * 100), 12), 95);
             
             return `
-                <div class="aml-bar-group" title="Date: ${dates[i]} | Reviewed: ${darkVal.toLocaleString()} | Flagged: ${orangeVal.toLocaleString()}">
+                <div class="aml-bar-group" title="Date: ${dates[i]} | Reviewed: ${darkVal} | Flagged: ${orangeVal}">
                     <div class="aml-bar dark" style="height: ${darkHeight}%;"></div>
                     <div class="aml-bar orange" style="height: ${orangeHeight}%;"></div>
                     <span class="aml-x-label">${labels[i]}</span>
@@ -478,28 +462,21 @@ const Dashboard = {
         }).join('');
         
         $("#volumeBars").html(barsHtml);
-        console.log("✅ Review Case Volume Chart rendered successfully");
     },
     
     renderCSSDonutChart(chartData) {
-        console.log("🍩 Rendering Customer Risk Profile Chart with data:", chartData);
-        
         const riskCounts = chartData.risk_counts || { LOW: 0, MEDIUM: 0, HIGH: 0 };
         const lowCount = riskCounts.LOW !== undefined ? riskCounts.LOW : (chartData.risk_distribution ? chartData.risk_distribution[0] : 0);
         const mediumCount = riskCounts.MEDIUM !== undefined ? riskCounts.MEDIUM : (chartData.risk_distribution ? chartData.risk_distribution[1] : 0);
         const highCount = riskCounts.HIGH !== undefined ? riskCounts.HIGH : (chartData.risk_distribution ? chartData.risk_distribution[2] : 0);
         
-        console.log("🍩 Risk counts - Low:", lowCount, "Medium:", mediumCount, "High:", highCount);
-        
         const totalRisk = lowCount + mediumCount + highCount;
         const highRiskPercentage = totalRisk > 0 ? ((highCount / totalRisk) * 100).toFixed(1) : "0.0";
         const lowMidPercentage = (100 - parseFloat(highRiskPercentage)).toFixed(1);
         
-        console.log("🍩 Percentages - High Risk:", highRiskPercentage + "%", "Low/Mid:", lowMidPercentage + "%");
-        
         // Update legend text dynamically with live counts
-        $("#highRiskLegend").text(`High Risk - ${highCount.toLocaleString()} (${highRiskPercentage}%)`);
-        $("#lowMidLegend").text(`Low/Mid - ${(lowCount + mediumCount).toLocaleString()} (${lowMidPercentage}%)`);
+        $("#highRiskLegend").text(`High Risk - ${highCount} (${highRiskPercentage}%)`);
+        $("#lowMidLegend").text(`Low/Mid - ${lowCount + mediumCount} (${lowMidPercentage}%)`);
         
         const lowMidTurn = parseFloat(lowMidPercentage) / 100;
         
@@ -511,7 +488,6 @@ const Dashboard = {
         `;
         
         $("#riskDonut").attr("style", donutStyle);
-        console.log("✅ Customer Risk Profile Chart rendered successfully");
     },
     
     renderFallbackCharts() {
@@ -682,20 +658,14 @@ const Dashboard = {
     },
     
     startRealTimeUpdates() {
-            // Update KPIs and Charts periodically every 30 seconds (reduced frequency)
-            setInterval(async () => {
-                if (this.realTimeUpdates) {
-                    console.log("🔄 Refreshing dashboard data...");
-                    // Only refresh KPIs (which now includes patterns in parallel)
-                    await this.loadKPIs();
-                    // Charts refresh less frequently - every other cycle
-                    if (Math.random() < 0.5) {
-                        await this.initializeCharts();
-                    }
-                }
-            }, 30000);
-        }
-,
+        // Update KPIs and Charts periodically every 10 seconds
+        setInterval(async () => {
+            if (this.realTimeUpdates) {
+                await this.loadKPIs();
+                await this.initializeCharts();
+            }
+        }, 10000);
+    },
     
     async handleNewAlert(alert) {
         // Instantly update KPIs and Charts on new alert events

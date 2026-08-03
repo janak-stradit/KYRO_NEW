@@ -4,86 +4,51 @@
  */
 
 /**
- * Toast notification system - Professional and smooth
+ * Toast notification system
  */
-const ToastManager = {
-    activeToasts: new Set(),
-    maxToasts: 3,
+function showToast(type, message, title = null, duration = 5000) {
+    const colors = {
+        success: "bg-success",
+        error: "bg-danger",
+        warning: "bg-warning",
+        info: "bg-info"
+    };
     
-    show(type, message, title = null, duration = 4000) {
-        // Prevent duplicate messages
-        const toastKey = `${type}-${message}`;
-        if (this.activeToasts.has(toastKey)) {
-            return;
-        }
-        
-        // Limit max toasts
-        const existingToasts = $("#toastContainer .toast");
-        if (existingToasts.length >= this.maxToasts) {
-            existingToasts.first().remove();
-        }
-        
-        const colors = {
-            success: "bg-success",
-            error: "bg-danger",
-            warning: "bg-warning",
-            info: "bg-info"
-        };
-        
-        const icons = {
-            success: "fas fa-check-circle",
-            error: "fas fa-times-circle",
-            warning: "fas fa-exclamation-triangle",
-            info: "fas fa-info-circle"
-        };
-        
-        const toastHtml = `
-            <div class="toast align-items-center ${colors[type]} text-white border-0 shadow-lg" role="alert" aria-live="assertive" aria-atomic="true" style="min-width: 300px;">
-                <div class="d-flex">
-                    <div class="toast-body d-flex align-items-center" style="padding: 12px 16px;">
-                        <i class="${icons[type]} me-3" style="font-size: 20px;"></i>
-                        <div style="flex: 1;">
-                            ${title ? `<div class="fw-bold mb-1" style="font-size: 14px;">${title}</div>` : ''}
-                            <div style="font-size: 13px; line-height: 1.4;">${message}</div>
-                        </div>
+    const icons = {
+        success: "fas fa-check-circle",
+        error: "fas fa-exclamation-triangle",
+        warning: "fas fa-exclamation-circle",
+        info: "fas fa-info-circle"
+    };
+    
+    const toastHtml = `
+        <div class="toast align-items-center ${colors[type]} text-white" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="d-flex">
+                <div class="toast-body d-flex align-items-center">
+                    <i class="${icons[type]} me-2"></i>
+                    <div>
+                        ${title ? `<div class="fw-bold">${title}</div>` : ''}
+                        ${message}
                     </div>
-                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close" style="font-size: 12px;"></button>
                 </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
             </div>
-        `;
-        
-        const toastElement = $(toastHtml);
-        $("#toastContainer").append(toastElement);
-        
-        this.activeToasts.add(toastKey);
-        
-        const toast = new bootstrap.Toast(toastElement[0], {
-            delay: duration,
-            animation: true
-        });
-        
-        toast.show();
-        
-        // Auto-remove after animation
-        const self = this;
-        toastElement.on('hidden.bs.toast', function() {
-            $(this).remove();
-            self.activeToasts.delete(toastKey);
-        });
-        
-        // Force remove after duration + 1 second
-        setTimeout(() => {
-            if (toastElement.length) {
-                toastElement.remove();
-                self.activeToasts.delete(toastKey);
-            }
-        }, duration + 1000);
-    }
-};
-
-// Backward compatibility
-function showToast(type, message, title = null, duration = 4000) {
-    ToastManager.show(type, message, title, duration);
+        </div>
+    `;
+    
+    const toastElement = $(toastHtml);
+    $("#toastContainer").append(toastElement);
+    
+    const toast = new bootstrap.Toast(toastElement[0], {
+        delay: duration
+    });
+    
+    toast.show();
+    
+    // Auto-remove after animation
+    toastElement.on('hidden.bs.toast', function() {
+        $(this).remove();
+    });
 }
 
 /**

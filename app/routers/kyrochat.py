@@ -321,35 +321,35 @@ def get_processing_cases(db: Session = Depends(get_db)) -> list[dict[str, Any]]:
 # ── Real Failed Cases endpoint ────────────────────────────────────────────────
 # Maps alert_type and triggered_rules to a business-readable transaction reason
 _RULE_REASON_MAP = {
-    "R001": "Large transaction - single transaction exceeds $10,000 reporting threshold",
-    "R002": "High transaction frequency - more than 5 transactions in 24 hours",
-    "R003": "Rapid transactions - more than 3 transactions within one hour",
-    "R004": "High-risk country - transaction involves sanctioned or restricted jurisdiction",
-    "R005": "Politically Exposed Person - customer requires enhanced due diligence",
-    "R006": "Sanctions list match - customer matches OFAC or international sanctions screening",
-    "R007": "New recipient account - first time sending funds to this counterparty",
-    "R008": "Off-hours transaction - large transaction made on weekend or holiday",
-    "R009": "Round amount pattern - transaction uses round figures possibly indicating structuring",
-    "R010": "Burst activity - multiple transactions within 60 seconds",
+    "R001": "Threshold breach: Single high-value transaction exceeds $10,000 reporting limit",
+    "R002": "Velocity spike: More than 5 transactions within a 24-hour window",
+    "R003": "Rapid velocity: More than 3 transactions within a single hour",
+    "R004": "Geographic risk: Transaction routed through sanctioned or high-risk jurisdiction",
+    "R005": "PEP exposure: Customer identified as a Politically Exposed Person",
+    "R006": "Sanctions match: Customer matched against active sanctions screening list",
+    "R007": "New counterparty: First-time transfer to previously unseen counterparty",
+    "R008": "Off-hours activity: High-value transaction initiated on weekend",
+    "R009": "Structuring detected: Round-figure transaction amount consistent with layering pattern",
+    "R010": "Rapid succession: Multiple transactions within 60-second window indicating burst activity",
 }
 
 _ALERT_TYPE_REASON_MAP = {
-    "VELOCITY_SPIKE":        "Unusual transaction frequency detected - significantly higher than normal activity pattern",
-    "GEOGRAPHIC_SHIFT":      "New geographic location - customer making transactions from unfamiliar high-risk country",
-    "GEOGRAPHY":             "High-risk country involved - transaction involves sanctioned or restricted jurisdiction",
-    "THRESHOLD_BREACH":      "Large transaction amount - single transaction exceeds $10,000 reporting threshold",
-    "COUNTERPARTY_CHANGES":  "Multiple new recipients - customer sending funds to several new unverified accounts",
-    "COMPLEXITY_SHIFT":      "Complex transaction chain - funds moving through multiple accounts in unusual pattern",
-    "INACTIVE_REACTIVATION": "Dormant account suddenly active - account inactive for months now shows large transactions",
-    "BEHAVIORAL_ANOMALY":    "Unusual activity pattern - transaction behavior differs significantly from customer's normal usage",
-    "HIGH_RISK_CUSTOMER":    "Customer has risk indicators (PEP status, sanctions match, adverse media, or high-risk country)",
-    "PEP":                   "Politically Exposed Person - customer requires enhanced monitoring and due diligence",
-    "SANCTIONS":             "Sanctions screening match - customer or recipient appears on OFAC or international sanctions list",
-    "STRUCTURING":           "Possible structuring activity - multiple transactions just below reporting threshold may indicate avoidance",
+    "VELOCITY_SPIKE":        "Unusual velocity spike — transaction frequency far exceeds customer's 90-day baseline",
+    "GEOGRAPHIC_SHIFT":      "Geographic shift detected — cross-border transfers to previously unseen high-risk regions",
+    "GEOGRAPHY":             "Geographic risk — transaction originates from or routes through a sanctioned jurisdiction",
+    "THRESHOLD_BREACH":      "Threshold breach — single wire transfer exceeds mandatory reporting threshold",
+    "COUNTERPARTY_CHANGES":  "Counterparty anomaly — rapid introduction of multiple new unverified counterparties",
+    "COMPLEXITY_SHIFT":      "Complexity shift — sudden layering pattern with multiple intermediary accounts detected",
+    "INACTIVE_REACTIVATION": "Dormant account reactivation — sudden high-value activity on long-inactive account",
+    "BEHAVIORAL_ANOMALY":    "Behavioral deviation — transaction pattern significantly diverges from established customer baseline",
+    "HIGH_RISK_CUSTOMER":    "High-risk customer flag — customer profile carries PEP, sanctions, or adverse media indicators",
+    "PEP":                   "PEP exposure — customer is a Politically Exposed Person; enhanced due diligence required",
+    "SANCTIONS":             "Sanctions match — customer or counterparty matched on active OFAC/UN sanctions screening list",
+    "STRUCTURING":           "Structuring pattern — multiple near-threshold deposits consistent with deliberate split structuring",
 }
 
 
-def _derive_failure_reason(alert_type: str | None, triggered_rules: dict | None, customer: Customer | None = None) -> str:
+def _derive_failure_reason(alert_type: str | None, triggered_rules: dict | None) -> str:
     """Derive a transaction-centric human-readable failure reason from alert metadata."""
     # First try triggered rules — most specific
     if triggered_rules and isinstance(triggered_rules, dict):
@@ -362,21 +362,6 @@ def _derive_failure_reason(alert_type: str | None, triggered_rules: dict | None,
             # Fallback: first rule in list
             return _RULE_REASON_MAP.get(rules_list[0], "")
 
-    # For HIGH_RISK_CUSTOMER, provide specific reason based on customer flags
-    if alert_type and alert_type.upper().replace(" ", "_") == "HIGH_RISK_CUSTOMER" and customer:
-        risk_reasons = []
-        if customer.pep_flag:
-            risk_reasons.append("Politically Exposed Person (PEP)")
-        if customer.sanctions_flag:
-            risk_reasons.append("sanctions match")
-        if customer.adverse_media_flag:
-            risk_reasons.append("adverse media")
-        if customer.risk_level == "HIGH":
-            risk_reasons.append("high-risk profile")
-        
-        if risk_reasons:
-            return f"Customer flagged for: {', '.join(risk_reasons)} - enhanced due diligence required"
-    
     # Fall back to alert_type mapping
     if alert_type:
         normalized = alert_type.upper().replace(" ", "_")
@@ -396,7 +381,7 @@ def get_real_failed_cases(
     Derives a transaction-based failure reason from alert_type and triggered_rules.
     """
     alerts = (
-        db.query(Alert, Customer.full_name, Customer)
+        db.query(Alert, Customer.full_name)
         .join(Customer, Alert.customer_id == Customer.id)
         .filter(Alert.status.in_(["OPEN", "ESCALATED"]))
         .order_by(Alert.risk_score.desc())
@@ -409,7 +394,7 @@ def get_real_failed_cases(
     seq_counter = 1
 
     results = []
-    for alert, full_name, customer in alerts:
+    for alert, full_name in alerts:
         cust_id_str = str(alert.customer_id)
         if cust_id_str not in cust_seq:
             cust_seq[cust_id_str] = seq_counter
@@ -417,7 +402,7 @@ def get_real_failed_cases(
         cust_label = f"CUST-{cust_seq[cust_id_str]:03d}"
         case_label = f"CASE-{str(alert.id)[:6].upper()}"
 
-        reason = _derive_failure_reason(alert.alert_type, alert.triggered_rules, customer)
+        reason = _derive_failure_reason(alert.alert_type, alert.triggered_rules)
 
         # Also pull SHAP top feature description if available
         ml_expl = alert.ml_explanation

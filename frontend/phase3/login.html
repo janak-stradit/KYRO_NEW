@@ -2,9 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, shrink-to-fit=no">
-    <meta name="HandheldFriendly" content="true">
-    <meta name="MobileOptimized" content="375">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
@@ -23,18 +21,11 @@
     <link rel="stylesheet" href="css/custom.css">
     
     <style>
-        * {
-            -webkit-tap-highlight-color: transparent;
-            touch-action: manipulation;
-        }
-        
         body {
             background: #f8f9fa;
             min-height: 100vh;
             margin: 0;
             padding: 0;
-            -webkit-text-size-adjust: 100%;
-            touch-action: manipulation;
         }
         .login-container {
             min-height: 100vh;
@@ -84,72 +75,21 @@
         .character-image {
             width: 100%;
             max-width: 500px;
-            height: 600px; /* Fixed height to prevent size changes */
-            min-height: 600px;
+            height: auto;
             border-radius: 24px;
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
             position: relative;
             z-index: 2;
-            /* animation: floatCharacter 3s ease-in-out infinite; */ /* REMOVED FLOAT ANIMATION */
-            object-fit: cover; /* Cover to maintain aspect ratio without distortion */
-            pointer-events: none; /* Disable all pointer events */
-            touch-action: none;
-            -webkit-user-select: none;
-            user-select: none;
-            transition: opacity 0.3s ease-in-out; /* Smooth fade only, no scale */
-            transform: scale(1); /* Fixed scale */
-            will-change: opacity; /* GPU acceleration for opacity only */
+            animation: floatCharacter 3s ease-in-out infinite;
+            object-fit: cover;
         }
         #characterVideo {
             max-height: 600px;
-            min-height: 600px;
-            height: 600px; /* Same as image */
-            max-width: 500px;
-            width: 100%;
-            pointer-events: none; /* Completely disable interaction */
-            touch-action: none;
-            cursor: default;
-            transition: opacity 0.3s ease-in-out;
-            transform: scale(1);
-            will-change: opacity;
-            object-fit: cover; /* Same as image */
         }
-        
-        /* Prevent zoom on video and image interaction */
-        video, img {
-            touch-action: none !important;
-            -webkit-user-select: none;
-            user-select: none;
-            pointer-events: none;
-        }
-        
-        /* Float animation - DISABLED
         @keyframes floatCharacter {
             0%, 100% { transform: translateY(0px); }
             50% { transform: translateY(-20px); }
         }
-        */
-        
-        /* Add overlay to prevent video clicks */
-        .login-left {
-            position: relative;
-        }
-        .login-left::after {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            z-index: 3;
-            pointer-events: auto;
-        }
-        /* Float animation - DISABLED
-        @keyframes floatCharacter {
-            0%, 100% { transform: translateY(0px); }
-            50% { transform: translateY(-20px); }
-        }
-        */
         .brand-section {
             text-align: center;
             color: white;
@@ -247,27 +187,11 @@
             border: 2px solid #e9ecef;
             padding: 1rem 0.75rem;
             height: auto;
-            min-height: 58px;
-            font-size: 16px !important; /* Prevent iOS zoom - must be 16px or larger */
-            -webkit-text-size-adjust: 100%;
-            touch-action: manipulation;
-            -webkit-tap-highlight-color: transparent;
+            font-size: 1rem;
         }
         .form-floating .form-control:focus {
             border-color: #FF8C42;
             box-shadow: 0 0 0 0.2rem rgba(255, 140, 66, 0.15);
-            outline: none;
-        }
-        .form-floating label {
-            padding: 1rem 0.75rem;
-            color: #6c757d;
-            font-size: 16px !important; /* Label also 16px to prevent zoom */
-            pointer-events: none;
-        }
-        /* Additional zoom prevention for all inputs */
-        input, select, textarea {
-            font-size: 16px !important;
-            touch-action: manipulation;
         }
         .form-floating label {
             padding: 1rem 0.75rem;
@@ -357,10 +281,12 @@
                     <p class="brand-subtitle-large">AI-Powered Risk Assessment Specialist</p>
                 </div>
                 
-                <!-- Media Container - Just static image -->
-                <div class="media-container" style="position: relative; width: 100%; max-width: 500px; height: 600px; margin: 0 auto;">
-                    <img src="../assets/Character 01.webp" alt="KYRO Character" class="character-image" id="characterImage">
-                </div>
+                <img src="../assets/Character 01.webp" alt="KYRO Character" class="character-image" id="characterImage">
+                
+                <!-- Video Container (hidden initially) -->
+                <video class="character-image" id="characterVideo" style="display: none;" autoplay muted loop playsinline>
+                    <source src="../assets/envato_video_gen_Feb_27_2026_14_39_51.mp4" type="video/mp4">
+                </video>
                 
                 <ul class="features-list">
                     <li>
@@ -475,18 +401,46 @@
                 $(this).closest(".form-floating").removeClass("focused");
             });
             
-            // Prevent desktop zoom with Ctrl+Scroll and trackpad pinch
-            document.addEventListener('wheel', function(e) {
-                if (e.ctrlKey) {
-                    e.preventDefault();
-                }
-            }, { passive: false });
+            // Media rotation: image + 4 videos
+            const mediaItems = [
+                { type: 'image', src: '../assets/Character 01.webp', duration: 5000 },
+                { type: 'video', src: '../assets/envato_video_gen_Feb_27_2026_14_39_51.mp4', duration: 10000 },
+                { type: 'video', src: '../assets/envato_video_gen_Feb_27_2026_15_00_51.mp4', duration: 10000 },
+                { type: 'video', src: '../assets/envato_video_gen_Feb_27_2026_15_03_30.mp4', duration: 10000 },
+                { type: 'video', src: '../assets/envato_video_gen_Feb_27_2026_15_06_12.mp4', duration: 10000 }
+            ];
             
-            document.addEventListener('keydown', function(e) {
-                if ((e.ctrlKey || e.metaKey) && (e.key === '+' || e.key === '-' || e.key === '=')) {
-                    e.preventDefault();
+            let currentIndex = 0;
+            const $image = $('#characterImage');
+            const $video = $('#characterVideo');
+            
+            function showNextMedia() {
+                currentIndex = (currentIndex + 1) % mediaItems.length;
+                const item = mediaItems[currentIndex];
+                
+                if (item.type === 'image') {
+                    // Show image, hide video
+                    $video.fadeOut(500, function() {
+                        $image.attr('src', item.src).fadeIn(500);
+                    });
+                    setTimeout(showNextMedia, item.duration);
+                } else {
+                    // Show video, hide image
+                    $image.fadeOut(500, function() {
+                        $video.find('source').attr('src', item.src);
+                        $video[0].load();
+                        $video[0].play();
+                        $video.fadeIn(500);
+                    });
+                    
+                    // Wait for video to end or use fixed duration
+                    $video[0].onended = showNextMedia;
+                    setTimeout(showNextMedia, item.duration); // Fallback
                 }
-            });
+            }
+            
+            // Start rotation after 5 seconds (after showing initial image)
+            setTimeout(showNextMedia, 5000);
         });
     </script>
 </body>
