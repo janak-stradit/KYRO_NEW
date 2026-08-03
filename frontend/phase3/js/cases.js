@@ -316,7 +316,8 @@ const Cases = {
             // Build customer map to convert UUIDs to clean CUST-XXX IDs
             let customerMap = {};
             try {
-                const custResponse = await API.get("/customers", { page_size: 10000 });
+                // Only fetch 10 customers for faster loading
+                const custResponse = await API.get("/customers", { page_size: 10 });
                 if (custResponse && custResponse.items) {
                     custResponse.items.forEach((c, idx) => {
                         const code = `CUST-${String(idx + 1).padStart(3, '0')}`;
@@ -327,7 +328,8 @@ const Cases = {
                 console.warn("Could not fetch customer lookup map for cases:", err);
             }
 
-            const data = await API.get("/alerts", { page_size: 100 });
+            // Fetch only 25 alerts for faster loading
+            const data = await API.get("/alerts", { page_size: 25 });
             const alerts = data.items || data;
             
             // If no alerts from API, generate mock data for demo

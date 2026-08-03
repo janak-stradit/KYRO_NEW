@@ -54,7 +54,8 @@ const PeriodicReviews = {
             // Load customer lookup map to convert UUIDs to clean CUST-XXX format
             let customerMap = {};
             try {
-                const custResponse = await API.get("/customers", { page_size: 10000 });
+                // Only fetch 10 customers for faster loading
+                const custResponse = await API.get("/customers", { page_size: 10 });
                 if (custResponse && custResponse.items) {
                     custResponse.items.forEach((c, idx) => {
                         const code = `CUST-${String(idx + 1).padStart(3, '0')}`;
@@ -65,8 +66,8 @@ const PeriodicReviews = {
                 console.warn("Could not fetch customer lookup map:", custErr);
             }
 
-            // Fetch KYC reviews from backend
-            const response = await API.get("/kyc-reviews", { page_size: 100 });
+            // Fetch only 30 KYC reviews for faster loading
+            const response = await API.get("/kyc-reviews", { page_size: 30 });
             
             console.log("API response:", response);
             

@@ -33,8 +33,8 @@ const Patterns = {
     
     async fetchRealCustomersAndGeneratePatterns() {
         try {
-            // Fetch real customers from API (max page_size: 10000)
-            const response = await API.get("/customers", { page_size: 10000 });
+            // Only fetch 10 customers for faster loading
+            const response = await API.get("/customers", { page_size: 10 });
             const customers = response.items || [];
             
             console.log(`✅ Fetched ${customers.length} real customers from API`);
