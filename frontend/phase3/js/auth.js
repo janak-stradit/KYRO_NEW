@@ -315,19 +315,14 @@ const LoginForm = {
         // Form submission
         $("#loginForm").on("submit", (e) => {
             e.preventDefault();
+            e.stopPropagation();
             this.handleLogin();
+            return false;
         });
         
         // Password visibility toggle
         $("#togglePassword").on("click", () => {
             this.togglePasswordVisibility();
-        });
-        
-        // Enter key handling
-        $("#username, #password").on("keypress", (e) => {
-            if (e.which === 13) {
-                $("#loginForm").submit();
-            }
         });
         
         // Remember me checkbox
