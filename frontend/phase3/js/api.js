@@ -4,22 +4,10 @@
  */
 
 const API = {
-    baseUrl: (function() {
-        // Check if we're in production (deployed on server with nginx)
-        // Production uses nginx proxy at /api/, local dev uses port 8010
-        const isProduction = window.location.hostname !== 'localhost' && 
-                           window.location.hostname !== '127.0.0.1';
-        
-        if (isProduction) {
-            // Production: nginx proxies /api/ to backend
-            return '/api/v1';
-        } else {
-            // Local dev: direct connection to FastAPI on port 8010
-            const host = window.location.hostname || 'localhost';
-            const proto = window.location.protocol || 'http:';
-            return `${proto}//${host}:8010/api/v1`;
-        }
-    })(),
+    // Relative path — nginx (docker/nginx.frontend.conf) proxies /api/ to the
+    // API container on the same origin/port the page was loaded from, so this
+    // works unchanged for localhost, external IPs, and any domain.
+    baseUrl: "/api/v1",
     timeout: 30000,
     retryAttempts: 3,
     retryDelay: 1000,
