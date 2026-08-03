@@ -17,11 +17,21 @@ const Auth = {
     },
     
     getApiUrl(path) {
-        // Always target the FastAPI backend on port 8010
-        const host = window.location.hostname || 'localhost';
-        const proto = window.location.protocol || 'http:';
-        console.log(`🔧 Building auth URL: ${proto}//${host}:8010${path}`);
-        return `${proto}//${host}:8010${path}`;
+        // Check if we're in production (deployed on server with nginx)
+        const isProduction = window.location.hostname !== 'localhost' && 
+                           window.location.hostname !== '127.0.0.1';
+        
+        if (isProduction) {
+            // Production: nginx proxies /api/ to backend
+            console.log(`🔧 Building auth URL (production): ${path}`);
+            return path;
+        } else {
+            // Local dev: direct connection to FastAPI on port 8010
+            const host = window.location.hostname || 'localhost';
+            const proto = window.location.protocol || 'http:';
+            console.log(`🔧 Building auth URL (local): ${proto}//${host}:8010${path}`);
+            return `${proto}//${host}:8010${path}`;
+        }
     },
     
     /**

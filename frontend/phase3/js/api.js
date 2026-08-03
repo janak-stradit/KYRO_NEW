@@ -5,11 +5,20 @@
 
 const API = {
     baseUrl: (function() {
-        // Always target the FastAPI backend on port 8010 using whatever
-        // hostname the browser resolved — works for localhost AND external IPs.
-        const host = window.location.hostname || 'localhost';
-        const proto = (window.location.protocol || 'http:');
-        return `${proto}//${host}:8010/api/v1`;
+        // Check if we're in production (deployed on server with nginx)
+        // Production uses nginx proxy at /api/, local dev uses port 8010
+        const isProduction = window.location.hostname !== 'localhost' && 
+                           window.location.hostname !== '127.0.0.1';
+        
+        if (isProduction) {
+            // Production: nginx proxies /api/ to backend
+            return '/api/v1';
+        } else {
+            // Local dev: direct connection to FastAPI on port 8010
+            const host = window.location.hostname || 'localhost';
+            const proto = window.location.protocol || 'http:';
+            return `${proto}//${host}:8010/api/v1`;
+        }
     })(),
     timeout: 30000,
     retryAttempts: 3,
