@@ -801,17 +801,17 @@ const Cases = {
     },
     
     generateMockCases() {
-        // Generate mock cases with LIMITED customers (only 5 unique customers)
+        // Generate mock cases with 10 unique customers for faster loading
         const triggerTypes = ['BEHAVIOR BASED', 'TIME BASED', 'RULE BASED', 'MANUAL'];
         const statuses = ['OPEN', 'ASSIGNED', 'IN_REVIEW', 'ESCALATED'];
         const priorities = ['URGENT', 'HIGH', 'MEDIUM', 'LOW'];
         const riskLevels = ['HIGH', 'MEDIUM', 'LOW'];
         
-        // Only 5 customers like patterns page
-        const customers = ['CUST-001', 'CUST-002', 'CUST-003', 'CUST-004', 'CUST-005'];
+        // 10 customers for demo
+        const customers = ['CUST-001', 'CUST-002', 'CUST-003', 'CUST-004', 'CUST-005', 'CUST-006', 'CUST-007', 'CUST-008', 'CUST-009', 'CUST-010'];
         
         this.casesData = [];
-        for (let i = 1; i <= 125; i++) {
+        for (let i = 1; i <= 50; i++) {
             const riskLevel = riskLevels[Math.floor(Math.random() * riskLevels.length)];
             const priority = riskLevel === 'HIGH' ? 'URGENT' : riskLevel === 'MEDIUM' ? 'HIGH' : 'MEDIUM';
             
