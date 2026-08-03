@@ -54,8 +54,8 @@ const PeriodicReviews = {
             // Skip customer lookup - use CUST-XXX IDs directly from API
             const customerMap = {};
 
-            // Fetch only 30 KYC reviews for faster loading
-            const response = await API.get("/kyc-reviews", { page_size: 30 });
+            // Fetch KYC reviews from backend
+            const response = await API.get("/kyc-reviews", { page_size: 100 });
             
             console.log("API response:", response);
             
@@ -115,8 +115,8 @@ const PeriodicReviews = {
     },
     
     generateFallbackData() {
-        // 10 customers for faster demo loading
-        const customers = ['CUST-001', 'CUST-002', 'CUST-003', 'CUST-004', 'CUST-005', 'CUST-006', 'CUST-007', 'CUST-008', 'CUST-009', 'CUST-010'];
+        // Only 5 customers like patterns page
+        const customers = ['CUST-001', 'CUST-002', 'CUST-003', 'CUST-004', 'CUST-005'];
         const frequencies = ['12 months', '6 months', '3 months'];
         const statuses = ['Active', 'Active', 'Active', 'Active', 'Inactive'];
         
