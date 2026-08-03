@@ -2912,6 +2912,12 @@ header.kyro-navbar {
     border-left: 1px solid var(--aml-grid);
     border-bottom: 1px solid var(--aml-grid);
     flex: 1;
+    overflow: hidden; /* Prevent bars from overflowing */
+}
+
+/* Frequency bar container to clip overflow */
+.freq-bar-animated {
+    max-height: 100% !important; /* Never exceed container height */
 }
 
 .aml-freq-y {
