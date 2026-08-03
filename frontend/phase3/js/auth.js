@@ -17,9 +17,11 @@ const Auth = {
     },
     
     getApiUrl(path) {
-        // Relative path — nginx (docker/nginx.frontend.conf) proxies /api/ to
-        // the API container on the same origin the page was loaded from.
-        return path;
+        // Always target the FastAPI backend on port 8010
+        const host = window.location.hostname || 'localhost';
+        const proto = window.location.protocol || 'http:';
+        console.log(`🔧 Building auth URL: ${proto}//${host}:8010${path}`);
+        return `${proto}//${host}:8010${path}`;
     },
     
     /**

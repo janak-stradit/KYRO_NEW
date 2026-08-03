@@ -21,6 +21,11 @@ kyro_aml.db
 # ── Logs (runtime generated) ────────────────────────────────────
 logs/
 *.log
+nohup.out
+pipeline.log
+pipeline_logs.txt
+latest_output.txt
+*.out
 
 # ── App output / secrets ────────────────────────────────────────
 output/
@@ -34,7 +39,7 @@ pyrightconfig.json
 # ── Let's Encrypt certs (host-only, never committed) ────────────
 certbot/
 
-# ── Test files ─────────────────────────────────────────────────
+# ── Test and utility files (not needed on server) ─────────────
 tests/
 **/tests/
 test_*.py
@@ -42,59 +47,34 @@ test_*.py
 check_*.py
 audit_*.py
 fix_*.py
+populate_*.py
+train_*.py
 test_*.sh
+start_*.sh
 *.test.js
 *.spec.js
 *.test.ts
 *.spec.ts
 
-# ── Test files ─────────────────────────────────────────────────
-tests/
-**/tests/
-test_*.py
-*_test.py
-check_*.py
-audit_*.py
-fix_*.py
-test_*.sh
-*.test.js
-*.spec.js
-*.test.ts
-*.spec.ts
-
-# ── Test files ─────────────────────────────────────────────────
-tests/
-**/tests/
-test_*.py
-*_test.py
-check_*.py
-audit_*.py
-fix_*.py
-test_*.sh
-*.test.js
-*.spec.js
-*.test.ts
-*.spec.ts
-
-# ── Test files ─────────────────────────────────────────────────
-tests/
-**/tests/
-test_*.py
-*_test.py
-check_*.py
-audit_*.py
-fix_*.py
-test_*.sh
-*.test.js
-*.spec.js
-*.test.ts
-*.spec.ts
-
-# Specific untracked files to ignore
-populate_kyc_reviews.py
-train_models.py
-start_backend.sh
-start_server.sh
+# ── Documentation (not needed on server) ───────────────────────
 CHANGES_SUMMARY.md
 E2E_TEST_REPORT.md
 GITHUB_STATUS.md
+*_REPORT.md
+*_SUMMARY.mdoard.py
+
+# ── Old/Obsolete Frontend Files ───────────────────────────────
+frontend/index.html
+frontend/aml-*.html
+frontend/js/
+frontend/styles/
+frontend/assets/
+
+# ── Backend files (only track frontend UI) ────────────────────
+app/
+docker/
+docker-compose.yml
+alembic.ini
+artifacts/
+*.py
+!frontend/**/*.py

@@ -33,8 +33,8 @@ const Patterns = {
     
     async fetchRealCustomersAndGeneratePatterns() {
         try {
-            // Fetch real customers from API (max page_size: 10000)
-            const response = await API.get("/customers", { page_size: 10000 });
+            // Only fetch 10 customers for faster loading
+            const response = await API.get("/customers", { page_size: 10 });
             const customers = response.items || [];
             
             console.log(`✅ Fetched ${customers.length} real customers from API`);
@@ -66,19 +66,18 @@ const Patterns = {
     generateFallbackCustomers() {
         const names = [
             'Sarah Chen', 'Mike Rodriguez', 'Priya Patel', 'James Wilson', 'Alex Morgan',
-            'David Kim', 'Emma Watson', 'Robert Taylor', 'Linda Garcia', 'Michael Brown',
-            'Jennifer Martinez', 'William Davis', 'Elizabeth Miller', 'Christopher Wilson',
-            'Jessica Anderson', 'Thomas Thomas', 'Karen Jackson', 'Daniel White', 'Nancy Harris'
+            'David Kim', 'Emma Watson', 'Robert Taylor', 'Linda Garcia', 'Michael Brown'
         ];
         this.allCustomersList = [];
-        for (let i = 1; i <= 100; i++) {
+        // Only 10 customers for faster loading
+        for (let i = 1; i <= 10; i++) {
             const code = `CUST-${String(i).padStart(3, '0')}`;
-            const name = `${names[i % names.length]} ${Math.floor(i / names.length) + 1}`;
+            const name = names[i - 1];
             this.allCustomersList.push({
                 id: code,
                 name: name,
                 displayName: `${name} (${code})`,
-                kycStatus: i % 5 === 0 ? 'UNDER_REVIEW' : 'VERIFIED'
+                kycStatus: i % 3 === 0 ? 'UNDER_REVIEW' : 'VERIFIED'
             });
         }
         console.log(`⚠️ Using fallback: ${this.allCustomersList.length} customers`);

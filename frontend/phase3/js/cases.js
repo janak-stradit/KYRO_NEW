@@ -316,7 +316,8 @@ const Cases = {
             // Build customer map to convert UUIDs to clean CUST-XXX IDs
             let customerMap = {};
             try {
-                const custResponse = await API.get("/customers", { page_size: 10000 });
+                // Only fetch 10 customers for faster loading
+                const custResponse = await API.get("/customers", { page_size: 10 });
                 if (custResponse && custResponse.items) {
                     custResponse.items.forEach((c, idx) => {
                         const code = `CUST-${String(idx + 1).padStart(3, '0')}`;
@@ -327,7 +328,8 @@ const Cases = {
                 console.warn("Could not fetch customer lookup map for cases:", err);
             }
 
-            const data = await API.get("/alerts", { page_size: 100 });
+            // Fetch only 25 alerts for faster loading
+            const data = await API.get("/alerts", { page_size: 25 });
             const alerts = data.items || data;
             
             // If no alerts from API, generate mock data for demo
@@ -801,17 +803,17 @@ const Cases = {
     },
     
     generateMockCases() {
-        // Generate mock cases with LIMITED customers (only 5 unique customers)
+        // Generate mock cases with 10 unique customers for faster loading
         const triggerTypes = ['BEHAVIOR BASED', 'TIME BASED', 'RULE BASED', 'MANUAL'];
         const statuses = ['OPEN', 'ASSIGNED', 'IN_REVIEW', 'ESCALATED'];
         const priorities = ['URGENT', 'HIGH', 'MEDIUM', 'LOW'];
         const riskLevels = ['HIGH', 'MEDIUM', 'LOW'];
         
-        // Only 5 customers like patterns page
-        const customers = ['CUST-001', 'CUST-002', 'CUST-003', 'CUST-004', 'CUST-005'];
+        // 10 customers for demo
+        const customers = ['CUST-001', 'CUST-002', 'CUST-003', 'CUST-004', 'CUST-005', 'CUST-006', 'CUST-007', 'CUST-008', 'CUST-009', 'CUST-010'];
         
         this.casesData = [];
-        for (let i = 1; i <= 125; i++) {
+        for (let i = 1; i <= 50; i++) {
             const riskLevel = riskLevels[Math.floor(Math.random() * riskLevels.length)];
             const priority = riskLevel === 'HIGH' ? 'URGENT' : riskLevel === 'MEDIUM' ? 'HIGH' : 'MEDIUM';
             
