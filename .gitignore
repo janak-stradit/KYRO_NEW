@@ -69,3 +69,12 @@ frontend/aml-*.html
 frontend/js/
 frontend/styles/
 frontend/assets/
+
+# ── Backend files (only track frontend UI) ────────────────────
+app/
+docker/
+docker-compose.yml
+alembic.ini
+artifacts/
+*.py
+!frontend/**/*.py
