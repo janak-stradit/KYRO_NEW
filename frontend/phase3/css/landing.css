@@ -4,6 +4,8 @@
     margin: 0;
     padding: 0;
     box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation; /* Prevent double-tap zoom */
 }
 
 :root {
@@ -23,6 +25,8 @@ body {
     color: var(--text-dark);
     line-height: 1.6;
     overflow-x: hidden;
+    -webkit-text-size-adjust: 100%;
+    touch-action: manipulation;
 }
 
 /* Navbar */

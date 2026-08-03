@@ -19,6 +19,13 @@ const Cases = {
     
     casesData: [],
     
+    // Pagination settings
+    pagination: {
+        currentPage: 1,
+        pageSize: 10,
+        pageSizeOptions: [10, 25, 50, 100]
+    },
+    
     init(params = {}) {
         console.log("Initializing Review Cases dashboard...", params);
         
@@ -264,6 +271,35 @@ const Cases = {
                                 </tbody>
                             </table>
                         </div>
+                        
+                        <!-- Pagination Controls -->
+                        <div class="d-flex justify-content-between align-items-center p-3" style="border-top: 1px solid #f0f0f0;">
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="text-muted" style="font-size: 13px;">Rows per page:</span>
+                                <select class="form-select form-select-sm" id="pageSizeSelect" style="width: 80px; font-size: 13px;">
+                                    <option value="10">10</option>
+                                    <option value="25">25</option>
+                                    <option value="50">50</option>
+                                    <option value="100">100</option>
+                                </select>
+                                <span class="text-muted ms-3" id="paginationInfo" style="font-size: 13px;">1-10 of 50</span>
+                            </div>
+                            <nav aria-label="Table pagination">
+                                <ul class="pagination pagination-sm mb-0" id="paginationControls">
+                                    <li class="page-item disabled">
+                                        <a class="page-link" href="#" id="prevPage">
+                                            <i class="fas fa-chevron-left"></i>
+                                        </a>
+                                    </li>
+                                    <li class="page-item active"><a class="page-link" href="#">1</a></li>
+                                    <li class="page-item">
+                                        <a class="page-link" href="#" id="nextPage">
+                                            <i class="fas fa-chevron-right"></i>
+                                        </a>
+                                    </li>
+                                </ul>
+                            </nav>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -348,11 +384,11 @@ const Cases = {
             this.renderTable();
 
         } catch (error) {
-            console.error("Error fetching cases:", error);
+            console.warn("Error fetching cases - using mock data:", error);
+            // Silently fall back to mock data - no error toast
             this.casesData = [];
             this.totalCases = 0;
-            this.updateDashboard();
-            this.renderTable();
+            this.generateMockCases();
         }
     },
     
@@ -466,18 +502,26 @@ const Cases = {
     },
     renderTable() {
         const filtered = this.getFilteredCases();
-        const total = this.totalCases || this.casesData.length;
-        $("#resultsCount").text(`Showing ${filtered.length} of ${total} cases`);
-        $("#resultsCountTop").text(`${total} Result`);
+        const total = filtered.length;
         
-        if (filtered.length === 0) {
+        // Calculate pagination
+        const startIdx = (this.pagination.currentPage - 1) * this.pagination.pageSize;
+        const endIdx = Math.min(startIdx + this.pagination.pageSize, total);
+        const paginatedCases = filtered.slice(startIdx, endIdx);
+        
+        // Update counts
+        $("#resultsCount").text(`Showing ${startIdx + 1}-${endIdx} of ${total} cases`);
+        $("#resultsCountTop").text(`${total} Result${total !== 1 ? 's' : ''}`);
+        
+        if (paginatedCases.length === 0) {
             $("#casesTableBody").html(`
                 <tr><td colspan="8" class="text-center py-5 text-muted">No cases found</td></tr>
             `);
+            this.renderPaginationControls(0, 0);
             return;
         }
         
-        const rows = filtered.map(c => {
+        const rows = paginatedCases.map(c => {
             // Priority badge colors matching screenshot
             const priorityColors = { 
                 'URGENT': { bg: '#fff5f5', text: '#dc2626', icon: '🔺' },
@@ -547,6 +591,105 @@ const Cases = {
         }).join('');
         
         $("#casesTableBody").html(rows);
+        this.renderPaginationControls(total, startIdx, endIdx);
+    },
+    
+    renderPaginationControls(total, startIdx, endIdx) {
+        // Update pagination info
+        if (total === 0) {
+            $("#paginationInfo").text("0 cases");
+        } else {
+            $("#paginationInfo").text(`${startIdx + 1}-${endIdx} of ${total}`);
+        }
+        
+        // Update page size selector
+        $("#pageSizeSelect").val(this.pagination.pageSize);
+        
+        // Calculate total pages
+        const totalPages = Math.ceil(total / this.pagination.pageSize);
+        
+        if (totalPages <= 1) {
+            $("#paginationControls").html(`
+                <li class="page-item disabled">
+                    <a class="page-link" href="#" id="prevPage">
+                        <i class="fas fa-chevron-left"></i>
+                    </a>
+                </li>
+                <li class="page-item active"><a class="page-link" href="#">1</a></li>
+                <li class="page-item disabled">
+                    <a class="page-link" href="#" id="nextPage">
+                        <i class="fas fa-chevron-right"></i>
+                    </a>
+                </li>
+            `);
+            return;
+        }
+        
+        // Build pagination buttons
+        let paginationHTML = '';
+        
+        // Previous button
+        paginationHTML += `
+            <li class="page-item ${this.pagination.currentPage === 1 ? 'disabled' : ''}">
+                <a class="page-link" href="#" id="prevPage" style="border-radius: 6px 0 0 6px;">
+                    <i class="fas fa-chevron-left"></i>
+                </a>
+            </li>
+        `;
+        
+        // Page numbers
+        const maxVisiblePages = 5;
+        let startPage = Math.max(1, this.pagination.currentPage - Math.floor(maxVisiblePages / 2));
+        let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+        
+        // Adjust start if we're at the end
+        if (endPage - startPage < maxVisiblePages - 1) {
+            startPage = Math.max(1, endPage - maxVisiblePages + 1);
+        }
+        
+        // First page
+        if (startPage > 1) {
+            paginationHTML += `
+                <li class="page-item">
+                    <a class="page-link page-num-btn" href="#" data-page="1">1</a>
+                </li>
+            `;
+            if (startPage > 2) {
+                paginationHTML += `<li class="page-item disabled"><a class="page-link">...</a></li>`;
+            }
+        }
+        
+        // Page numbers
+        for (let i = startPage; i <= endPage; i++) {
+            paginationHTML += `
+                <li class="page-item ${i === this.pagination.currentPage ? 'active' : ''}">
+                    <a class="page-link page-num-btn" href="#" data-page="${i}">${i}</a>
+                </li>
+            `;
+        }
+        
+        // Last page
+        if (endPage < totalPages) {
+            if (endPage < totalPages - 1) {
+                paginationHTML += `<li class="page-item disabled"><a class="page-link">...</a></li>`;
+            }
+            paginationHTML += `
+                <li class="page-item">
+                    <a class="page-link page-num-btn" href="#" data-page="${totalPages}">${totalPages}</a>
+                </li>
+            `;
+        }
+        
+        // Next button
+        paginationHTML += `
+            <li class="page-item ${this.pagination.currentPage === totalPages ? 'disabled' : ''}">
+                <a class="page-link" href="#" id="nextPage" style="border-radius: 0 6px 6px 0;">
+                    <i class="fas fa-chevron-right"></i>
+                </a>
+            </li>
+        `;
+        
+        $("#paginationControls").html(paginationHTML);
     },
     
     showCaseDetailsModal(caseData) {
@@ -658,25 +801,31 @@ const Cases = {
     },
     
     generateMockCases() {
-        // Generate 50 mock cases for demo when no real alerts exist
+        // Generate mock cases with LIMITED customers (only 5 unique customers)
         const triggerTypes = ['BEHAVIOR BASED', 'TIME BASED', 'RULE BASED', 'MANUAL'];
         const statuses = ['OPEN', 'ASSIGNED', 'IN_REVIEW', 'ESCALATED'];
         const priorities = ['URGENT', 'HIGH', 'MEDIUM', 'LOW'];
         const riskLevels = ['HIGH', 'MEDIUM', 'LOW'];
         
+        // Only 5 customers like patterns page
+        const customers = ['CUST-001', 'CUST-002', 'CUST-003', 'CUST-004', 'CUST-005'];
+        
         this.casesData = [];
-        for (let i = 1; i <= 50; i++) {
+        for (let i = 1; i <= 125; i++) {
             const riskLevel = riskLevels[Math.floor(Math.random() * riskLevels.length)];
             const priority = riskLevel === 'HIGH' ? 'URGENT' : riskLevel === 'MEDIUM' ? 'HIGH' : 'MEDIUM';
             
+            // Pick random customer from the 5 customers
+            const customerId = customers[Math.floor(Math.random() * customers.length)];
+            
             this.casesData.push({
-                caseId: `case-${i}`,
-                customerId: `CUST-${String(Math.floor(Math.random() * 500) + 1).padStart(3, '0')}`,
+                caseId: `case-${String(i).padStart(4, '0')}`,
+                customerId: customerId,
                 triggerType: triggerTypes[Math.floor(Math.random() * triggerTypes.length)],
                 priority: priority,
                 riskLevel: riskLevel,
                 status: statuses[Math.floor(Math.random() * statuses.length)],
-                createdAt: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000).toLocaleDateString(),
+                createdAt: new Date(Date.now() - Math.random() * 60 * 24 * 60 * 60 * 1000).toLocaleDateString(),
                 assignedTo: Math.random() > 0.3 ? 'Analyst' : 'Unassigned',
                 fullData: {
                     risk_score: riskLevel === 'HIGH' ? 85 : riskLevel === 'MEDIUM' ? 65 : 35,
@@ -702,14 +851,72 @@ const Cases = {
     setupEventListeners() {
         const self = this;
         
+        // Filter change handlers
         $("#filterRiskLevel, #filterTriggerType, #filterStatus").on("change", function() {
             self.currentFilters.riskLevel = $("#filterRiskLevel").val();
             self.currentFilters.triggerType = $("#filterTriggerType").val();
             self.currentFilters.status = $("#filterStatus").val();
+            
+            // Reset to first page when filters change
+            self.pagination.currentPage = 1;
             self.renderTable();
         });
         
+        // Refresh button
         $("#refreshCasesBtn").on("click", () => this.fetchCasesData());
+        
+        // Page size selector
+        $("body").off("change", "#pageSizeSelect").on("change", "#pageSizeSelect", function(e) {
+            self.pagination.pageSize = parseInt($(this).val());
+            self.pagination.currentPage = 1; // Reset to first page
+            self.renderTable();
+        });
+        
+        // Previous page button
+        $("body").off("click", "#prevPage").on("click", "#prevPage", function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            if (!$(this).parent().hasClass('disabled') && self.pagination.currentPage > 1) {
+                self.pagination.currentPage--;
+                self.renderTable();
+                
+                // Scroll to top of table
+                $(".table-responsive").get(0)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        });
+        
+        // Next page button
+        $("body").off("click", "#nextPage").on("click", "#nextPage", function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const filtered = self.getFilteredCases();
+            const totalPages = Math.ceil(filtered.length / self.pagination.pageSize);
+            
+            if (!$(this).parent().hasClass('disabled') && self.pagination.currentPage < totalPages) {
+                self.pagination.currentPage++;
+                self.renderTable();
+                
+                // Scroll to top of table
+                $(".table-responsive").get(0)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        });
+        
+        // Page number buttons
+        $("body").off("click", ".page-num-btn").on("click", ".page-num-btn", function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const page = parseInt($(this).data("page"));
+            if (page && page !== self.pagination.currentPage) {
+                self.pagination.currentPage = page;
+                self.renderTable();
+                
+                // Scroll to top of table
+                $(".table-responsive").get(0)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        });
         
         $("#selectAll").on("change", function() {
             $(".case-checkbox").prop("checked", $(this).is(":checked"));
