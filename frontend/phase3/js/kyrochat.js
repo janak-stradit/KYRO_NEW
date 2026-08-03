@@ -1130,40 +1130,40 @@ const KyroChat = {
         // Map failure reasons to trigger types and behavioral patterns
         const failureReasonsByTriggerType = {
             'VELOCITY_SPIKE': [
-                'Rapid transaction velocity requires manual fraud review',
-                'Velocity pattern exceeds automated threshold - human verification needed'
+                'Many transactions in short time - fraud review needed',
+                'High transaction frequency detected - manual verification required'
             ],
             'THRESHOLD_BREACH': [
-                'Large transaction amount pending compliance officer approval',
-                'Amount structuring pattern detected - additional documentation required'
+                'Large transaction amount - compliance approval needed',
+                'Transaction exceeds threshold - additional documentation required'
             ],
             'GEOGRAPHIC_SHIFT': [
-                'External sanctions screening service timeout for high-risk jurisdiction',
-                'Geographic risk assessment pending manual review'
+                'Transaction from new high-risk country - customer verification needed',
+                'Geographic location change requires additional review'
             ],
             'COUNTERPARTY_CHANGES': [
-                'New counterparty relationships require enhanced due diligence',
-                'Beneficial ownership verification pending from customer'
+                'New recipients added - identity verification required',
+                'Multiple new counterparties need compliance approval'
             ],
             'COMPLEXITY_SHIFT': [
-                'Complex transaction pattern flagged for senior analyst review',
-                'Unusual transaction metadata requires manual investigation'
+                'Complex transaction chain detected - senior analyst review needed',
+                'Unusual transaction structure requires investigation'
             ],
             'INACTIVE_REACTIVATION': [
-                'Account reactivation after dormancy - customer interview required',
-                'Source of funds verification pending for reactivated account'
+                'Dormant account now active - customer interview required',
+                'Reactivated account needs source of funds verification'
             ],
             'BEHAVIORAL_ANOMALY': [
-                'Customer risk assessment pending manual review',
-                'Behavioral pattern deviation requires analyst confirmation'
+                'Activity pattern changed - manual review needed',
+                'Transaction behavior differs from normal - analyst confirmation required'
             ],
             'HIGH_RISK_CUSTOMER': [
-                'PEP screening results require compliance officer review',
-                'Customer risk assessment pending manual review'
+                'Customer risk factors identified - compliance review required',
+                'Enhanced due diligence needed for customer profile'
             ],
             'DUPLICATE': [
-                'Duplicate transaction alert - case merged with existing investigation',
-                'Similar alert already under review - case consolidation required'
+                'Similar case already under investigation - consolidation needed',
+                'Duplicate alert detected - merged with existing case'
             ]
         };
         

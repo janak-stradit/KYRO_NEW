@@ -8,9 +8,29 @@ document.addEventListener('DOMContentLoaded', function() {
     initVolumeControl();
     initScrollAnimations();
     initCardInteractions();
+    preventDesktopZoom();
     
     console.log('✨ KYRO Landing Page initialized');
 });
+
+/**
+ * Prevent Desktop Zoom (Ctrl+Scroll, Ctrl+Plus/Minus)
+ */
+function preventDesktopZoom() {
+    // Prevent Ctrl+Scroll zoom
+    document.addEventListener('wheel', function(e) {
+        if (e.ctrlKey) {
+            e.preventDefault();
+        }
+    }, { passive: false });
+    
+    // Prevent Ctrl+Plus/Minus zoom
+    document.addEventListener('keydown', function(e) {
+        if ((e.ctrlKey || e.metaKey) && (e.key === '+' || e.key === '-' || e.key === '=' || e.key === '0')) {
+            e.preventDefault();
+        }
+    });
+}
 
 /**
  * Volume Control for Hero Video
