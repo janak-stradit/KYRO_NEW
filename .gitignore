@@ -89,12 +89,3 @@ test_*.sh
 *.spec.js
 *.test.ts
 *.spec.ts
-
-# Specific untracked files to ignore
-populate_kyc_reviews.py
-train_models.py
-start_backend.sh
-start_server.sh
-CHANGES_SUMMARY.md
-E2E_TEST_REPORT.md
-GITHUB_STATUS.md

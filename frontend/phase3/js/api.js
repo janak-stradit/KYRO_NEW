@@ -30,29 +30,11 @@ const API = {
     handleError(xhr, endpoint) {
         console.error(`API Error [${endpoint}]:`, xhr);
         
-        // Handle network/connection errors (status 0)
-        if (xhr.status === 0) {
-            // Don't show error if request was aborted
-            if (xhr.statusText === 'abort') {
-                return;
-            }
-            
-            console.warn("Connection failed - backend may be unavailable");
-            // Silently fail for non-critical endpoints
-            const criticalEndpoints = ['/auth/login', '/auth/refresh'];
-            if (!criticalEndpoints.some(ep => endpoint.includes(ep))) {
-                return; // Don't show toast for non-critical failures
-            }
-            
-            showToast("warning", "Unable to connect to server. Using cached data.");
-            return;
-        }
-        
         if (xhr.status === 401) {
             // Token expired or invalid
             Auth.logout();
             showToast("error", "Session expired. Please login again.");
-            window.location.href = "login.html";
+            window.location.href = "/login";
             return;
         }
         
@@ -66,18 +48,11 @@ const API = {
             return;
         }
         
-        if (xhr.status >= 500) {
-            showToast("error", "Server error. Please try again later.");
-            return;
-        }
+        const errorMessage = xhr.responseJSON?.detail || 
+                           xhr.responseJSON?.message || 
+                           `API Error: ${xhr.status} ${xhr.statusText}`;
         
-        // Only show error for client errors (4xx)
-        if (xhr.status >= 400 && xhr.status < 500) {
-            const errorMessage = xhr.responseJSON?.detail || 
-                               xhr.responseJSON?.message || 
-                               "Request failed. Please check your input.";
-            showToast("error", errorMessage);
-        }
+        showToast("error", errorMessage);
     },
 
     /**

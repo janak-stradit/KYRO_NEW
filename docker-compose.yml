@@ -17,7 +17,7 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD:-kyro_pass}
       PGDATA: /var/lib/postgresql/data/pgdata
     ports:
-      - "5435:5432"
+      - "5434:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       # Run DDL scripts on first start

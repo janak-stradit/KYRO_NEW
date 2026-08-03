@@ -6,45 +6,10 @@
 const PeriodicReviews = {
     reviewsData: [],
     
-    // Pagination settings
-    pagination: {
-        currentPage: 1,
-        pageSize: 10,
-        pageSizeOptions: [10, 25, 50, 100]
-    },
-    
     async init(params = {}) {
-        try {
-            console.log("=== Periodic Reviews Init ===");
-            console.log("Params:", params);
-            await this.loadDashboard();
-        } catch (error) {
-            console.error("Periodic Reviews init error:", error);
-            $("#mainContent").html(`
-                <div class="alert alert-danger m-4" role="alert">
-                    <h4 class="alert-heading">
-                        <i class="fas fa-exclamation-triangle me-2"></i>
-                        Failed to Load Periodic Reviews
-                    </h4>
-                    <p>Error: ${error.message || 'Unknown error'}</p>
-                    <hr>
-                    <div class="d-flex gap-2">
-                        <button class="btn btn-outline-danger" onclick="PeriodicReviews.init()">
-                            <i class="fas fa-redo me-2"></i>Retry
-                        </button>
-                        <button class="btn btn-outline-secondary" onclick="App.navigateTo('dashboard')">
-                            <i class="fas fa-home me-2"></i>Go to Dashboard
-                        </button>
-                    </div>
-                </div>
-            `);
-            throw error;
-        }
-    },
-    
-    // Alias for compatibility
-    async loadPage(params = {}) {
-        return await this.init(params);
+        console.log("=== Periodic Reviews Init ===");
+        console.log("Params:", params);
+        await this.loadDashboard();
     },
     
     async fetchReviewsData() {
@@ -89,88 +54,79 @@ const PeriodicReviews = {
                         }
                     }
 
-                    // Determine frequency based on review type and customer risk
-                    let frequency = 'Ad-hoc';
-                    if (review.review_type === 'PERIODIC') {
-                        const riskLevel = review.risk_level_after || 'MEDIUM';
-                        if (riskLevel === 'HIGH') {
-                            frequency = Math.random() > 0.5 ? '3 months' : '6 months';
-                        } else if (riskLevel === 'MEDIUM') {
-                            frequency = Math.random() > 0.5 ? '6 months' : '12 months';
-                        } else {
-                            frequency = '12 months';
-                        }
-                    }
-
                     return {
                         id: review.id,
+                        rawCustomerId: review.customer_id,
                         customerId: displayCode,
-                        customerName: displayName,
-                        riskLevel: review.risk_level_after || 'MEDIUM',
-                        lastReview: review.review_date ? new Date(review.review_date).toLocaleDateString() : 'Never',
-                        nextReview: nextReviewDate.toLocaleDateString(),
+                        customerName: displayName || displayCode,
+                        riskLevel: review.risk_level || 'LOW',
+                        lastReview: review.last_review_date ? new Date(review.last_review_date).toLocaleDateString() : 'Never',
+                        nextReview: nextReviewDate.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' }),
                         dueIn: Math.abs(dueInDays),
                         overdue: dueInDays < 0,
-                        frequency: frequency,
-                        status: review.review_status === 'COMPLETED' ? 'Active' : 'Inactive'
+                        frequency: review.review_type === 'PERIODIC' ? '12 months' : 'Ad-hoc',
+                        status: review.review_status === 'SCHEDULED' ? 'Active' : 'Inactive'
                     };
                 });
             } else {
-                console.log("No reviews found in API, generating fallback data");
+                console.log("No reviews from API, using fallback data");
+                // Fallback to sample data if no reviews exist
                 this.generateFallbackData();
             }
         } catch (error) {
-            console.warn("Error fetching reviews - using fallback data:", error);
+            console.error("Error fetching reviews:", error);
+            // Use fallback data on error
+            console.log("Using fallback data due to error");
             this.generateFallbackData();
         }
     },
     
     generateFallbackData() {
-        // Only 5 customers like patterns page
-        const customers = ['CUST-001', 'CUST-002', 'CUST-003', 'CUST-004', 'CUST-005'];
+        const customers = ['CUST-180', 'CUST-102', 'CUST-066', 'CUST-116', 'CUST-088', 'CUST-004', 'CUST-064', 'CUST-097', 'CUST-099'];
         const frequencies = ['12 months', '6 months', '3 months'];
         const statuses = ['Active', 'Active', 'Active', 'Active', 'Inactive'];
         
-        // Generate multiple reviews for each customer (to get ~125 total reviews)
-        this.reviewsData = [];
-        
-        for (let i = 0; i < 125; i++) {
-            // Pick random customer from the 5 customers
-            const cust = customers[i % customers.length];
-            
+        this.reviewsData = customers.map((cust, idx) => {
             // Create dates relative to today
             const today = new Date();
             const nextReviewDate = new Date(today);
             
             // Mix of overdue, due soon, and future reviews
-            const randomDays = Math.floor(Math.random() * 100) - 30; // -30 to +70 days
-            nextReviewDate.setDate(today.getDate() + randomDays);
+            if (idx < 5) {
+                // Overdue: -30 to -5 days
+                nextReviewDate.setDate(today.getDate() - (30 - idx * 5));
+            } else if (idx < 7) {
+                // Due soon: +1 to +5 days
+                nextReviewDate.setDate(today.getDate() + (idx - 4));
+            } else {
+                // Future: +10 to +30 days
+                nextReviewDate.setDate(today.getDate() + (10 + (idx - 6) * 10));
+            }
             
             const dueInDays = Math.floor((nextReviewDate - today) / (1000 * 60 * 60 * 24));
             
-            this.reviewsData.push({
+            return {
                 customerId: cust,
-                riskLevel: i % 3 === 0 ? 'HIGH' : i % 3 === 1 ? 'MEDIUM' : 'LOW',
+                riskLevel: idx < 3 ? 'HIGH' : idx < 6 ? 'MEDIUM' : 'LOW',
                 lastReview: 'Never',
                 nextReview: nextReviewDate.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' }),
                 dueIn: Math.abs(dueInDays),
                 overdue: dueInDays < 0,
-                frequency: frequencies[i % frequencies.length],
-                status: statuses[i % statuses.length]
-            });
-        }
+                frequency: frequencies[idx % frequencies.length],
+                status: statuses[idx % statuses.length]
+            };
+        });
         
-        console.log('Generated fallback data:', this.reviewsData.length, 'reviews');
+        console.log('Generated fallback data:', this.reviewsData);
     },
     
     async loadDashboard() {
-        try {
-            console.log("=== Loading Dashboard ===");
-            
-            // Fetch real data first
-            await this.fetchReviewsData();
-            
-            console.log("Reviews data loaded:", this.reviewsData.length, "items");
+        console.log("=== Loading Dashboard ===");
+        
+        // Fetch real data first
+        await this.fetchReviewsData();
+        
+        console.log("Reviews data loaded:", this.reviewsData.length, "items");
         
         const html = `
             <div style="padding: 36px 40px; max-width: 1400px; margin: 0 auto;">
@@ -367,35 +323,6 @@ const PeriodicReviews = {
                         </thead>
                         <tbody></tbody>
                     </table>
-                    
-                    <!-- Pagination Controls -->
-                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px 28px; border-top: 1px solid var(--aml-border);">
-                        <div style="display: flex; align-items: center; gap: 12px;">
-                            <span style="font-size: 13px; color: var(--aml-muted);">Rows per page:</span>
-                            <select class="form-select form-select-sm" id="pageSizeSelect" style="width: 80px; font-size: 13px; border: 1px solid var(--aml-border); border-radius: 6px;">
-                                <option value="10">10</option>
-                                <option value="25">25</option>
-                                <option value="50">50</option>
-                                <option value="100">100</option>
-                            </select>
-                            <span style="font-size: 13px; color: var(--aml-text); margin-left: 12px;" id="paginationInfo">1-10 of 50</span>
-                        </div>
-                        <nav aria-label="Table pagination">
-                            <ul class="pagination pagination-sm mb-0" id="paginationControls" style="gap: 4px;">
-                                <li class="page-item disabled">
-                                    <a class="page-link" href="#" id="prevPage" style="border-radius: 6px;">
-                                        <i class="fas fa-chevron-left"></i>
-                                    </a>
-                                </li>
-                                <li class="page-item active"><a class="page-link" href="#" style="border-radius: 6px;">1</a></li>
-                                <li class="page-item">
-                                    <a class="page-link" href="#" id="nextPage" style="border-radius: 6px;">
-                                        <i class="fas fa-chevron-right"></i>
-                                    </a>
-                                </li>
-                            </ul>
-                        </nav>
-                    </div>
                 </div>
             </div>
         `;
@@ -406,10 +333,6 @@ const PeriodicReviews = {
         console.log("Updating stats...");
         // Update stats with actual data
         this.updateStats();
-        
-        console.log("Rendering reviews table...");
-        // Render table rows
-        this.initializeTable();
         
         console.log("Rendering donut chart...");
         // Render donut chart with CSS
@@ -424,10 +347,6 @@ const PeriodicReviews = {
         this.setupEventListeners();
         
         console.log("=== Dashboard loaded successfully ===");
-        } catch (error) {
-            console.error("Load Dashboard Error:", error);
-            throw error;
-        }
     },
     
     updateStats() {
@@ -546,14 +465,7 @@ const PeriodicReviews = {
     },
     
     initializeTable() {
-        const total = this.reviewsData.length;
-        
-        // Calculate pagination
-        const startIdx = (this.pagination.currentPage - 1) * this.pagination.pageSize;
-        const endIdx = Math.min(startIdx + this.pagination.pageSize, total);
-        const paginatedReviews = this.reviewsData.slice(startIdx, endIdx);
-        
-        const tableBody = paginatedReviews.map(review => {
+        const tableBody = this.reviewsData.map(review => {
             // Determine status badge color based on overdue/due soon
             let dueStatus = '';
             let dueColor = '';
@@ -645,111 +557,7 @@ const PeriodicReviews = {
         
         $("#reviewsTable tbody").html(tableBody);
         
-        // Update pagination info
-        $(".aml-subtitle").text(`Showing ${startIdx + 1}-${endIdx} of ${total} reviews`);
-        
-        // Render pagination controls
-        this.renderPaginationControls(total, startIdx, endIdx);
-        
-        console.log(`Table rendered with ${paginatedReviews.length} of ${total} rows (page ${this.pagination.currentPage})`);
-    },
-    
-    renderPaginationControls(total, startIdx, endIdx) {
-        // Update pagination info
-        if (total === 0) {
-            $("#paginationInfo").text("0 reviews");
-        } else {
-            $("#paginationInfo").text(`${startIdx + 1}-${endIdx} of ${total}`);
-        }
-        
-        // Update page size selector
-        $("#pageSizeSelect").val(this.pagination.pageSize);
-        
-        // Calculate total pages
-        const totalPages = Math.ceil(total / this.pagination.pageSize);
-        
-        if (totalPages <= 1) {
-            $("#paginationControls").html(`
-                <li class="page-item disabled">
-                    <a class="page-link" href="#" id="prevPage" style="border-radius: 6px;">
-                        <i class="fas fa-chevron-left"></i>
-                    </a>
-                </li>
-                <li class="page-item active"><a class="page-link" href="#" style="border-radius: 6px;">1</a></li>
-                <li class="page-item disabled">
-                    <a class="page-link" href="#" id="nextPage" style="border-radius: 6px;">
-                        <i class="fas fa-chevron-right"></i>
-                    </a>
-                </li>
-            `);
-            return;
-        }
-        
-        // Build pagination buttons
-        let paginationHTML = '';
-        
-        // Previous button
-        paginationHTML += `
-            <li class="page-item ${this.pagination.currentPage === 1 ? 'disabled' : ''}">
-                <a class="page-link" href="#" id="prevPage" style="border-radius: 6px;">
-                    <i class="fas fa-chevron-left"></i>
-                </a>
-            </li>
-        `;
-        
-        // Page numbers
-        const maxVisiblePages = 5;
-        let startPage = Math.max(1, this.pagination.currentPage - Math.floor(maxVisiblePages / 2));
-        let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
-        
-        // Adjust start if we're at the end
-        if (endPage - startPage < maxVisiblePages - 1) {
-            startPage = Math.max(1, endPage - maxVisiblePages + 1);
-        }
-        
-        // First page
-        if (startPage > 1) {
-            paginationHTML += `
-                <li class="page-item">
-                    <a class="page-link page-num-btn" href="#" data-page="1" style="border-radius: 6px;">1</a>
-                </li>
-            `;
-            if (startPage > 2) {
-                paginationHTML += `<li class="page-item disabled"><a class="page-link" style="border-radius: 6px;">...</a></li>`;
-            }
-        }
-        
-        // Page numbers
-        for (let i = startPage; i <= endPage; i++) {
-            paginationHTML += `
-                <li class="page-item ${i === this.pagination.currentPage ? 'active' : ''}">
-                    <a class="page-link page-num-btn" href="#" data-page="${i}" style="border-radius: 6px;">${i}</a>
-                </li>
-            `;
-        }
-        
-        // Last page
-        if (endPage < totalPages) {
-            if (endPage < totalPages - 1) {
-                paginationHTML += `<li class="page-item disabled"><a class="page-link" style="border-radius: 6px;">...</a></li>`;
-            }
-            paginationHTML += `
-                <li class="page-item">
-                    <a class="page-link page-num-btn" href="#" data-page="${totalPages}" style="border-radius: 6px;">${totalPages}</a>
-                </li>
-            `;
-        }
-        
-        // Next button
-        paginationHTML += `
-            <li class="page-item ${this.pagination.currentPage === totalPages ? 'disabled' : ''}">
-                <a class="page-link" href="#" id="nextPage" style="border-radius: 6px;">
-                    <i class="fas fa-chevron-right"></i>
-                </a>
-            </li>
-        `;
-        
-        $("#paginationControls").html(paginationHTML);
+        console.log(`Table rendered with ${this.reviewsData.length} rows`);
     },
     
     async showScheduleReviewModal() {
@@ -901,8 +709,6 @@ const PeriodicReviews = {
     },
     
     setupEventListeners() {
-        const self = this;
-        
         // Refresh button
         $("#refreshReviewsBtn").on("click", () => {
             this.loadDashboard();
@@ -917,58 +723,6 @@ const PeriodicReviews = {
         // Show More button
         $("#showMoreBtn").on("click", () => {
             showToast("info", "Show More feature coming soon");
-        });
-        
-        // Page size selector
-        $("body").off("change", "#pageSizeSelect").on("change", "#pageSizeSelect", function(e) {
-            self.pagination.pageSize = parseInt($(this).val());
-            self.pagination.currentPage = 1; // Reset to first page
-            self.initializeTable();
-        });
-        
-        // Previous page button
-        $("body").off("click", "#prevPage").on("click", "#prevPage", function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            
-            if (!$(this).parent().hasClass('disabled') && self.pagination.currentPage > 1) {
-                self.pagination.currentPage--;
-                self.initializeTable();
-                
-                // Scroll to top of table
-                $("#reviewsTable").get(0)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
-        });
-        
-        // Next page button
-        $("body").off("click", "#nextPage").on("click", "#nextPage", function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            
-            const totalPages = Math.ceil(self.reviewsData.length / self.pagination.pageSize);
-            
-            if (!$(this).parent().hasClass('disabled') && self.pagination.currentPage < totalPages) {
-                self.pagination.currentPage++;
-                self.initializeTable();
-                
-                // Scroll to top of table
-                $("#reviewsTable").get(0)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
-        });
-        
-        // Page number buttons
-        $("body").off("click", ".page-num-btn").on("click", ".page-num-btn", function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            
-            const page = parseInt($(this).data("page"));
-            if (page && page !== self.pagination.currentPage) {
-                self.pagination.currentPage = page;
-                self.initializeTable();
-                
-                // Scroll to top of table
-                $("#reviewsTable").get(0)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
         });
         
         // Trigger review button
