@@ -54,8 +54,7 @@ const PeriodicReviews = {
             // Load customer lookup map to convert UUIDs to clean CUST-XXX format
             let customerMap = {};
             try {
-                // Only fetch 10 customers for faster loading
-                const custResponse = await API.get("/customers", { page_size: 10 });
+                const custResponse = await API.get("/customers", { page_size: 10000 });
                 if (custResponse && custResponse.items) {
                     custResponse.items.forEach((c, idx) => {
                         const code = `CUST-${String(idx + 1).padStart(3, '0')}`;
@@ -66,8 +65,8 @@ const PeriodicReviews = {
                 console.warn("Could not fetch customer lookup map:", custErr);
             }
 
-            // Fetch only 30 KYC reviews for faster loading
-            const response = await API.get("/kyc-reviews", { page_size: 30 });
+            // Fetch KYC reviews from backend
+            const response = await API.get("/kyc-reviews", { page_size: 100 });
             
             console.log("API response:", response);
             
@@ -127,8 +126,8 @@ const PeriodicReviews = {
     },
     
     generateFallbackData() {
-        // 10 customers for faster demo loading
-        const customers = ['CUST-001', 'CUST-002', 'CUST-003', 'CUST-004', 'CUST-005', 'CUST-006', 'CUST-007', 'CUST-008', 'CUST-009', 'CUST-010'];
+        // Only 5 customers like patterns page
+        const customers = ['CUST-001', 'CUST-002', 'CUST-003', 'CUST-004', 'CUST-005'];
         const frequencies = ['12 months', '6 months', '3 months'];
         const statuses = ['Active', 'Active', 'Active', 'Active', 'Inactive'];
         
