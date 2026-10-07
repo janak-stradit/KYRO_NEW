@@ -39,7 +39,10 @@ class UserOut(BaseModel):
 
     id: uuid.UUID
     username: str
-    email: EmailStr
+    # Plain str on output: stored addresses were validated on input, and
+    # re-validating them here turns e.g. the seeded "admin@kyro.local"
+    # (a reserved TLD) into a 500 on /auth/me.
+    email: str
     full_name: str | None = None
     role: Role
     is_active: bool

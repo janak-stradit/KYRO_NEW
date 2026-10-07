@@ -7,6 +7,8 @@ const PeriodicReviews = {
     reviewsData: [],
     
     // Pagination settings
+    filters: { search: '', risk: 'all', urgency: 'all', status: 'all' },
+    loadError: false,
     pagination: {
         currentPage: 1,
         pageSize: 10,
@@ -51,11 +53,23 @@ const PeriodicReviews = {
         try {
             console.log("Fetching reviews from API...");
             
-            // Skip customer lookup - use CUST-XXX IDs directly from API
+            // Customer codes/names, numbered the same way as Review Cases and Patterns
             const customerMap = {};
+            try {
+                const custResponse = await API.get("/customers", { page_size: 10000 });
+                (custResponse?.items || []).forEach((c, idx) => {
+                    customerMap[c.id] = {
+                        code: `CUST-${String(idx + 1).padStart(3, '0')}`,
+                        name: c.full_name || '',
+                        lastReview: c.kyc_last_review || null
+                    };
+                });
+            } catch (err) {
+                console.warn("Could not load customer names for reviews:", err);
+            }
 
             // Fetch KYC reviews from backend
-            const response = await API.get("/kyc-reviews", { page_size: 100 });
+            const response = await API.get("/kyc-reviews", { page_size: 5000 });
             
             console.log("API response:", response);
             
@@ -78,82 +92,44 @@ const PeriodicReviews = {
                         }
                     }
 
-                    // Determine frequency based on review type and customer risk
-                    let frequency = 'Ad-hoc';
-                    if (review.review_type === 'PERIODIC') {
-                        const riskLevel = review.risk_level_after || 'MEDIUM';
-                        if (riskLevel === 'HIGH') {
-                            frequency = Math.random() > 0.5 ? '3 months' : '6 months';
-                        } else if (riskLevel === 'MEDIUM') {
-                            frequency = Math.random() > 0.5 ? '6 months' : '12 months';
-                        } else {
-                            frequency = '12 months';
-                        }
-                    }
+                    // Review cycle follows the customer's risk rating
+                    const riskForCycle = review.risk_level_after || 'MEDIUM';
+                    const frequency = review.review_type === 'PERIODIC'
+                        ? ({ HIGH: '3 months', MEDIUM: '6 months', LOW: '12 months' }[riskForCycle] || '12 months')
+                        : 'Ad-hoc';
 
                     return {
                         id: review.id,
                         customerId: displayCode,
                         customerName: displayName,
                         riskLevel: review.risk_level_after || 'MEDIUM',
-                        lastReview: review.review_date ? new Date(review.review_date).toLocaleDateString() : 'Never',
+                        lastReview: (review.completed_date || lookup?.lastReview)
+                            ? new Date(review.completed_date || lookup.lastReview).toLocaleDateString()
+                            : 'Never',
                         nextReview: nextReviewDate.toLocaleDateString(),
                         dueIn: Math.abs(dueInDays),
                         overdue: dueInDays < 0,
                         frequency: frequency,
-                        status: review.review_status === 'COMPLETED' ? 'Active' : 'Inactive'
+                        // A schedule is active until its review is completed
+                        status: review.review_status === 'COMPLETED' ? 'Inactive' : 'Active'
                     };
                 });
             } else {
-                console.log("No reviews found in API, generating fallback data");
-                this.generateFallbackData();
+                // Nothing scheduled yet: show the empty state, never invented data
+                this.reviewsData = [];
             }
+            this.loadError = false;
         } catch (error) {
-            console.warn("Error fetching reviews - using fallback data:", error);
-            this.generateFallbackData();
+            console.error("Error fetching reviews:", error);
+            this.reviewsData = [];
+            this.loadError = true;
         }
     },
-    
-    generateFallbackData() {
-        // Only 5 customers like patterns page
-        const customers = ['CUST-001', 'CUST-002', 'CUST-003', 'CUST-004', 'CUST-005'];
-        const frequencies = ['12 months', '6 months', '3 months'];
-        const statuses = ['Active', 'Active', 'Active', 'Active', 'Inactive'];
-        
-        // Generate multiple reviews for each customer (to get ~125 total reviews)
-        this.reviewsData = [];
-        
-        for (let i = 0; i < 125; i++) {
-            // Pick random customer from the 5 customers
-            const cust = customers[i % customers.length];
-            
-            // Create dates relative to today
-            const today = new Date();
-            const nextReviewDate = new Date(today);
-            
-            // Mix of overdue, due soon, and future reviews
-            const randomDays = Math.floor(Math.random() * 100) - 30; // -30 to +70 days
-            nextReviewDate.setDate(today.getDate() + randomDays);
-            
-            const dueInDays = Math.floor((nextReviewDate - today) / (1000 * 60 * 60 * 24));
-            
-            this.reviewsData.push({
-                customerId: cust,
-                riskLevel: i % 3 === 0 ? 'HIGH' : i % 3 === 1 ? 'MEDIUM' : 'LOW',
-                lastReview: 'Never',
-                nextReview: nextReviewDate.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' }),
-                dueIn: Math.abs(dueInDays),
-                overdue: dueInDays < 0,
-                frequency: frequencies[i % frequencies.length],
-                status: statuses[i % statuses.length]
-            });
-        }
-        
-        console.log('Generated fallback data:', this.reviewsData.length, 'reviews');
-    },
-    
+
     async loadDashboard() {
         try {
+            this.filters = { search: '', risk: 'all', urgency: 'all', status: 'all' };
+            this.pagination.currentPage = 1;
             console.log("=== Loading Dashboard ===");
             
             // Fetch real data first
@@ -162,13 +138,16 @@ const PeriodicReviews = {
             console.log("Reviews data loaded:", this.reviewsData.length, "items");
         
         const html = `
-            <div style="padding: 36px 40px; max-width: 1400px; margin: 0 auto;">
+            <div class="kyro-page">
                 <!-- Page Header -->
-                <div style="margin-bottom: 32px;">
-                    <h1 style="font-size: 32px; font-weight: 700; color: #1c2430; margin: 0 0 8px 0; letter-spacing: -0.5px;">Periodic Reviews</h1>
-                    <p style="font-size: 15px; color: #6b7280; margin: 0 0 20px 0;">Manage automatic periodic AML review schedules with intelligent monitoring</p>
+                <div class="kyro-page-head">
+                    <div>
+                        <span class="kyro-kicker">Ongoing Due Diligence</span>
+                        <h1 class="kyro-page-title">Periodic Reviews</h1>
+                        <p class="kyro-page-sub">Manage automatic periodic AML review schedules with intelligent monitoring.</p>
+                    </div>
                     
-                    <div style="display: flex; gap: 12px;">
+                    <div class="kyro-page-actions">
                         <button class="aml-btn aml-btn-secondary" id="refreshReviewsBtn">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/>
@@ -284,27 +263,40 @@ const PeriodicReviews = {
                 </div>
                 
                 <!-- Scheduled Reviews Table -->
-                <div style="margin-top: 32px; background: var(--aml-card); border: 1px solid var(--aml-border); border-radius: 14px; overflow: hidden; box-shadow: 0 1px 2px rgba(20, 28, 40, 0.04);">
-                    <!-- Table Header -->
-                    <div style="padding: 20px 28px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--aml-border);">
-                        <div style="display: flex; align-items: center; gap: 10px;">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f26a22" stroke-width="2" stroke-linecap="round">
-                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-                                <line x1="16" y1="2" x2="16" y2="6"></line>
-                                <line x1="8" y1="2" x2="8" y2="6"></line>
-                                <line x1="3" y1="10" x2="21" y2="10"></line>
-                            </svg>
-                            <h2 style="margin: 0; font-size: 19px; font-weight: 700; color: var(--aml-text);">Scheduled Reviews</h2>
+                <div class="card rc-table-card" style="margin-top: 28px;">
+                    <div class="rc-toolbar">
+                        <div class="rc-toolbar__title">
+                            <h2>Scheduled Reviews</h2>
+                            <small class="text-muted" id="reviewsCount">Loading schedules...</small>
                         </div>
-                        <button class="aml-btn aml-btn-primary" id="showMoreBtn" style="font-size: 13px; padding: 8px 18px;">
-                            Show More
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="margin-left: 4px;">
-                                <polyline points="6 9 12 15 18 9"></polyline>
-                            </svg>
-                        </button>
+                        <div class="rc-toolbar__controls">
+                            <div class="rc-search">
+                                <i class="fas fa-magnifying-glass" aria-hidden="true"></i>
+                                <input type="search" class="form-control" id="reviewSearch" placeholder="Search customer" aria-label="Search reviews" autocomplete="off">
+                            </div>
+                            <select class="form-select" id="filterReviewUrgency" aria-label="Filter by urgency">
+                                <option value="all">Any due date</option>
+                                <option value="overdue">Overdue</option>
+                                <option value="soon">Due in 7 days</option>
+                                <option value="future">Later</option>
+                            </select>
+                            <select class="form-select" id="filterReviewRisk" aria-label="Filter by risk level">
+                                <option value="all">All risk levels</option>
+                                <option value="HIGH">High</option>
+                                <option value="MEDIUM">Medium</option>
+                                <option value="LOW">Low</option>
+                            </select>
+                            <select class="form-select" id="filterReviewStatus" aria-label="Filter by schedule status">
+                                <option value="all">All schedules</option>
+                                <option value="Active">Active</option>
+                                <option value="Inactive">Completed</option>
+                            </select>
+                            <button type="button" class="btn rc-clear d-none" id="clearReviewFiltersBtn">
+                                <i class="fas fa-xmark me-1"></i>Clear
+                            </button>
+                        </div>
                     </div>
-                    <p class="aml-subtitle" style="padding: 0 28px; margin: 12px 0 16px;">Showing schedules...</p>
-                    
+
                     <!-- Table -->
                     <table class="table table-hover mb-0" id="reviewsTable" style="margin: 0;">
                         <thead style="background: transparent; border-bottom: 1px solid var(--aml-border);">
@@ -433,14 +425,13 @@ const PeriodicReviews = {
         const inactive = this.reviewsData.filter(r => r.status === 'Inactive').length;
         const total = this.reviewsData.length;
         
-        const activePercent = total > 0 ? ((active / total) * 100).toFixed(0) : 100;
+        const activePercent = total > 0 ? ((active / total) * 100).toFixed(0) : 0;
         const inactivePercent = total > 0 ? ((inactive / total) * 100).toFixed(0) : 0;
         
         $("#activePercent").text(`${active} (${activePercent}%)`);
         $("#inactivePercent").text(`${inactive} (${inactivePercent}%)`);
         
         // Update subtitle to reflect real accurate count
-        $(".aml-subtitle").text(`Showing ${total} of ${total} schedules`);
         
         // Update bar chart based on frequency data
         this.updateFrequencyChart();
@@ -507,7 +498,9 @@ const PeriodicReviews = {
         
         // Green (#1fb877) for Active, Grey (#9ca3af) for Inactive
         let donutStyle = '';
-        if (inactive === 0) {
+        if (active === 0 && inactive === 0) {
+            donutStyle = 'background: #e5e7eb;'; // no schedules yet
+        } else if (inactive === 0) {
             donutStyle = 'background: #1fb877;';
         } else if (active === 0) {
             donutStyle = 'background: #9ca3af;';
@@ -534,13 +527,38 @@ const PeriodicReviews = {
         }, 200);
     },
     
+    getFilteredReviews() {
+        const f = this.filters;
+        const q = (f.search || '').trim().toLowerCase();
+        return this.reviewsData.filter(r => {
+            if (q && !`${r.customerName || ''} ${r.customerId}`.toLowerCase().includes(q)) return false;
+            if (f.risk !== 'all' && r.riskLevel !== f.risk) return false;
+            if (f.status !== 'all' && r.status !== f.status) return false;
+            if (f.urgency === 'overdue' && !r.overdue) return false;
+            if (f.urgency === 'soon' && (r.overdue || r.dueIn > 7)) return false;
+            if (f.urgency === 'future' && (r.overdue || r.dueIn <= 7)) return false;
+            return true;
+        });
+    },
+
+    emptyRow() {
+        if (this.loadError) {
+            return `<tr><td colspan="8" class="rc-empty"><i class="fas fa-triangle-exclamation"></i><strong>Couldn't load review schedules</strong><span>Check the connection and use Refresh to try again.</span></td></tr>`;
+        }
+        if (!this.reviewsData.length) {
+            return `<tr><td colspan="8" class="rc-empty"><i class="fas fa-calendar-plus"></i><strong>No periodic reviews scheduled yet</strong><span>Use <em>Schedule Review</em> to set up a customer's first review cycle.</span></td></tr>`;
+        }
+        return `<tr><td colspan="8" class="rc-empty"><i class="fas fa-filter"></i><strong>No reviews match these filters</strong><span>Try clearing the search or filters.</span></td></tr>`;
+    },
+
     initializeTable() {
-        const total = this.reviewsData.length;
+        const filtered = this.getFilteredReviews();
+        const total = filtered.length;
         
         // Calculate pagination
         const startIdx = (this.pagination.currentPage - 1) * this.pagination.pageSize;
         const endIdx = Math.min(startIdx + this.pagination.pageSize, total);
-        const paginatedReviews = this.reviewsData.slice(startIdx, endIdx);
+        const paginatedReviews = filtered.slice(startIdx, endIdx);
         
         const tableBody = paginatedReviews.map(review => {
             // Determine status badge color based on overdue/due soon
@@ -570,26 +588,19 @@ const PeriodicReviews = {
                 'Inactive': 'background: #f3f4f6; color: #4b5563; border: 1px solid #e5e7eb;'
             };
             
-            // Format Customer ID (e.g. CUST-180) and prevent displaying raw UUIDs
-            let displayCode = review.customerId || 'CUST-000';
-            if (typeof displayCode === 'string' && displayCode.length > 20 && displayCode.includes('-')) {
-                const num = Math.abs(displayCode.split('-').reduce((acc, part) => acc + (parseInt(part, 16) || 0), 0)) % 1000 + 1;
-                displayCode = `CUST-${String(num).padStart(3, '0')}`;
-            }
-            const custNumber = displayCode.startsWith('CUST-') ? (displayCode.split('-')[1] || '000') : '000';
-            const displayName = review.customerName && review.customerName !== displayCode ? review.customerName : '';
-            
+            const displayCode = review.customerId || '';
+            const displayName = review.customerName || displayCode;
+            const initials = displayName.split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
+
             return `
-            <tr style="border-bottom: 1px solid var(--aml-border);">
-                <td style="padding: 14px 28px;">
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <span style="background: #FF8D28; color: white; font-size: 13px; font-weight: 700; padding: 6px 10px; border-radius: 6px; min-width: 42px; text-align: center;">
-                            ${custNumber}
+            <tr>
+                <td class="px-3 py-3">
+                    <div class="rc-customer">
+                        <span class="rc-customer__avatar" aria-hidden="true">${escapeHtml(initials)}</span>
+                        <span class="rc-customer__text">
+                            <strong>${escapeHtml(displayName)}</strong>
+                            <small>${escapeHtml(displayCode)}</small>
                         </span>
-                        <div>
-                            <div style="font-size: 14px; color: var(--aml-text); font-weight: 600;">${displayCode}</div>
-                            ${displayName ? `<div style="font-size: 11px; color: var(--aml-muted); margin-top: 1px;">${displayName}</div>` : ''}
-                        </div>
                     </div>
                 </td>
                 <td style="padding: 14px 20px;">
@@ -614,28 +625,28 @@ const PeriodicReviews = {
                 </td>
                 <td style="padding: 14px 20px;">
                     <span style="font-size: 13px; padding: 5px 11px; border-radius: 8px; font-weight: 600; display: inline-block; ${statusColors[review.status]}">
-                        ★ ${review.status}
+                        ${review.status === 'Inactive' ? 'Completed' : 'Active'}
                     </span>
                 </td>
-                <td style="padding: 14px 28px; text-align: center;">
-                    <div style="display: flex; gap: 8px; justify-content: center;">
-                        <button class="trigger-review-btn" data-customer="${review.customerId}" style="background: transparent; border: none; color: #3b82f6; cursor: pointer; font-size: 13px; padding: 4px 8px; display: flex; align-items: center; gap: 4px; font-weight: 500;">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="10 8 16 12 10 16"></polyline></svg>
-                            Trigger
+                <td class="px-3 py-3">
+                    <div class="rc-actions">
+                        <button type="button" class="btn btn-sm rc-actions__view trigger-review-btn" data-customer="${review.customerId}">
+                            <i class="fas fa-play me-1"></i>Trigger
                         </button>
-                        <button class="edit-schedule-btn" data-customer="${review.customerId}" style="background: transparent; border: none; color: #22c55e; cursor: pointer; font-size: 13px; padding: 4px 8px; display: flex; align-items: center; gap: 4px; font-weight: 500;">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
-                            Edit
+                        <button type="button" class="btn btn-sm rc-actions__icon edit-schedule-btn" data-customer="${review.customerId}" title="Edit schedule" aria-label="Edit review schedule for ${escapeHtml(displayName)}">
+                            <i class="fas fa-pen"></i>
                         </button>
                     </div>
                 </td>
             </tr>
         `}).join('');
         
-        $("#reviewsTable tbody").html(tableBody);
-        
-        // Update pagination info
-        $(".aml-subtitle").text(`Showing ${startIdx + 1}-${endIdx} of ${total} reviews`);
+        $("#reviewsTable tbody").html(tableBody || this.emptyRow());
+
+        // Update counts
+        $("#reviewsCount").text(total
+            ? `Showing ${startIdx + 1}-${endIdx} of ${total} review${total !== 1 ? 's' : ''}`
+            : (this.reviewsData.length ? 'No matching reviews' : 'No reviews scheduled'));
         
         // Render pagination controls
         this.renderPaginationControls(total, startIdx, endIdx);
@@ -903,11 +914,26 @@ const PeriodicReviews = {
             this.showScheduleReviewModal();
         });
         
-        // Show More button
-        $("#showMoreBtn").on("click", () => {
-            showToast("info", "Show More feature coming soon");
+        // Search + filters
+        const applyFilters = () => {
+            self.filters.search = $("#reviewSearch").val() || '';
+            self.filters.risk = $("#filterReviewRisk").val();
+            self.filters.urgency = $("#filterReviewUrgency").val();
+            self.filters.status = $("#filterReviewStatus").val();
+            const active = self.filters.search.trim() !== '' ||
+                ['risk', 'urgency', 'status'].some(k => self.filters[k] !== 'all');
+            $("#clearReviewFiltersBtn").toggleClass("d-none", !active);
+            self.pagination.currentPage = 1;
+            self.initializeTable();
+        };
+        $("#filterReviewRisk, #filterReviewUrgency, #filterReviewStatus").on("change", applyFilters);
+        $("#reviewSearch").on("input", debounce(applyFilters, 200));
+        $("#clearReviewFiltersBtn").on("click", () => {
+            $("#reviewSearch").val('');
+            $("#filterReviewRisk, #filterReviewUrgency, #filterReviewStatus").val('all');
+            applyFilters();
         });
-        
+
         // Page size selector
         $("body").off("change", "#pageSizeSelect").on("change", "#pageSizeSelect", function(e) {
             self.pagination.pageSize = parseInt($(this).val());
@@ -934,7 +960,7 @@ const PeriodicReviews = {
             e.preventDefault();
             e.stopPropagation();
             
-            const totalPages = Math.ceil(self.reviewsData.length / self.pagination.pageSize);
+            const totalPages = Math.ceil(self.getFilteredReviews().length / self.pagination.pageSize);
             
             if (!$(this).parent().hasClass('disabled') && self.pagination.currentPage < totalPages) {
                 self.pagination.currentPage++;

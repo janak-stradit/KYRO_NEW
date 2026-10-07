@@ -4,10 +4,15 @@ Run with: uvicorn app.main:app --reload
 """
 from __future__ import annotations
 
+import importlib
+import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
@@ -23,7 +28,6 @@ from app.routers import (
     dashboard,
     kyc,
     kyrochat,
-    ml,
     rule_configs,
     transactions,
     tts,
@@ -31,6 +35,7 @@ from app.routers import (
 )
 
 settings = get_settings()
+logger = logging.getLogger("kyro.main")
 
 
 def _seed_default_users() -> None:
@@ -72,8 +77,7 @@ def _seed_default_users() -> None:
         db.commit()
     except Exception as exc:
         db.rollback()
-        import logging
-        logging.getLogger("kyro.main").warning("User seed failed: %s", exc)
+        logger.warning("User seed failed: %s", exc)
     finally:
         db.close()
 
@@ -108,7 +112,15 @@ app.include_router(alerts.router)
 app.include_router(kyc.router)
 app.include_router(watchlists.router)
 app.include_router(rule_configs.router)
-app.include_router(ml.router)
+try:
+    app.include_router(importlib.import_module("app.routers.ml").router)
+except ImportError as exc:
+    # Lets the API run on machines where the ML stack can't load (e.g. Windows
+    # Smart App Control blocking scikit-learn/pandas DLLs). Off by default so a
+    # broken ML install fails loudly in production.
+    if not settings.ml_optional:
+        raise
+    logger.error("ML endpoints disabled — ML dependencies failed to import: %s", exc)
 app.include_router(kyrochat.router)
 app.include_router(tts.router)
 
@@ -117,3 +129,37 @@ app.include_router(tts.router)
 @limiter.exempt
 def health() -> dict[str, str]:
     return {"status": "ok", "service": settings.app_name}
+
+
+# Local (non-Docker) runs: serve the static frontend from the API so the
+# frontend's relative /api/v1 calls stay same-origin, as nginx does in Docker.
+# Mounted last so every API route above takes precedence.
+class _FrontendStaticFiles(StaticFiles):
+    """Static files with nginx's `try_files $uri $uri.html $uri/ /index.html`
+    behaviour, so clean URLs like /dashboard resolve as they do in Docker."""
+
+    async def get_response(self, path: str, scope):
+        response = await self._resolve(path, scope)
+        # Revalidate on every load (cheap 304s via ETag) so frontend edits
+        # show up without a hard refresh.
+        response.headers["Cache-Control"] = "no-cache"
+        return response
+
+    async def _resolve(self, path: str, scope):
+        for candidate in (path, f"{path}.html"):
+            try:
+                return await super().get_response(candidate, scope)
+            except StarletteHTTPException as exc:
+                if exc.status_code != 404:
+                    raise
+        if path.replace("\\", "/").startswith("api/"):
+            raise StarletteHTTPException(status_code=404)
+        return await super().get_response("index.html", scope)
+
+
+if settings.serve_frontend_dir:
+    _frontend_dir = Path(settings.serve_frontend_dir)
+    if _frontend_dir.is_dir():
+        app.mount("/", _FrontendStaticFiles(directory=_frontend_dir, html=True), name="frontend")
+    else:
+        logger.warning("SERVE_FRONTEND_DIR %s does not exist; frontend not served", _frontend_dir)

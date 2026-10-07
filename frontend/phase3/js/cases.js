@@ -5,6 +5,7 @@
 
 const Cases = {
     currentFilters: {
+        search: '',
         status: 'all',
         riskLevel: 'all',
         triggerType: 'all',
@@ -29,6 +30,11 @@ const Cases = {
     init(params = {}) {
         console.log("Initializing Review Cases dashboard...", params);
         
+        // Each visit starts unfiltered (the page re-renders its controls as
+        // "All"); only a customer passed from the Patterns page carries over.
+        Object.assign(this.currentFilters, { search: '', status: 'all', riskLevel: 'all', triggerType: 'all', customer: null, pattern: null });
+        this.pagination.currentPage = 1;
+
         // Apply filters from params if provided
         if (params.customer) {
             this.currentFilters.customer = params.customer;
@@ -41,37 +47,37 @@ const Cases = {
     },
     
     async loadDashboard() {
-        // Build filter info message
+        // Chip shown when arriving from the Patterns page with a customer filter
         let filterInfo = '';
-        if (this.currentFilters.customer || this.currentFilters.pattern) {
-            const parts = [];
-            if (this.currentFilters.customer) {
-                parts.push(`Customer: <strong>${this.currentFilters.customer}</strong>`);
-            }
-            if (this.currentFilters.pattern) {
-                const patternName = this.currentFilters.pattern.replace(/_/g, ' ');
-                parts.push(`Pattern: <strong>${patternName}</strong>`);
-            }
+        if (this.currentFilters.customer) {
+            const pattern = this.currentFilters.pattern
+                ? ` &middot; from pattern <strong>${escapeHtml(this.currentFilters.pattern.replace(/_/g, ' '))}</strong>`
+                : '';
             filterInfo = `
-                <div class="alert alert-info d-flex justify-content-between align-items-center mb-3" role="alert">
-                    <div>
-                        <i class="fas fa-filter me-2"></i>
-                        Filtered by: ${parts.join(' | ')}
-                    </div>
-                    <button class="btn btn-sm btn-outline-info" id="clearFiltersBtn">Clear Filters</button>
+                <div class="rc-filter-chip" role="status">
+                    <i class="fas fa-filter"></i>
+                    <span>Showing cases for customer <strong>${escapeHtml(this.currentFilters.customer)}</strong>${pattern}</span>
+                    <button type="button" class="rc-filter-chip__clear" id="clearCustomerFilterBtn" aria-label="Show all customers">
+                        <i class="fas fa-xmark"></i>
+                    </button>
                 </div>
             `;
         }
-        
+
         const html = `
-            <div class="container-fluid py-4" style="max-width: 1280px; margin: 0 auto;">
+            <div class="kyro-page">
                 <!-- Page Header -->
-                <div class="mb-4">
-                    <h2 class="mb-1" style="font-weight: 600; font-size: 24px;">Review Cases</h2>
-                    <p class="text-muted mb-3" style="font-size: 13px;">Monitor and manage AML review case with intelligent risk assessment</p>
-                    <button class="btn px-4" id="refreshCasesBtn" style="background: #FF8D28; color: white; font-size: 13px; padding: 8px 24px;">
-                        Refresh
-                    </button>
+                <div class="kyro-page-head">
+                    <div>
+                        <span class="kyro-kicker">Case Management</span>
+                        <h1 class="kyro-page-title">Review Cases</h1>
+                        <p class="kyro-page-sub">Monitor and manage AML review cases with intelligent risk assessment.</p>
+                    </div>
+                    <div class="kyro-page-actions">
+                        <button class="btn btn-primary px-4" id="refreshCasesBtn">
+                            <i class="fas fa-rotate-right me-2"></i>Refresh
+                        </button>
+                    </div>
                 </div>
                 
                 <!-- Dashboard Grid - 3 Column Layout -->
@@ -166,96 +172,73 @@ const Cases = {
                     </div>
                 </div>
                 
-                <!-- Results Count -->
-                <div class="mb-3">
-                    <strong style="font-size: 14px; color: #374151;" id="resultsCountTop">0 Result</strong>
-                </div>
-                
-                <!-- Filters Section -->
-                <div class="card border-0 shadow-sm mb-4" style="background: #fff5f0; border-left: 4px solid #FF8D28 !important;">
-                    <div class="card-body p-3">
-                        <h6 class="mb-3" style="font-weight: 600; color: #FF8D28; font-size: 14px;">
-                            <i class="fas fa-filter me-2"></i>Filters
-                        </h6>
-                        <div class="row g-3">
-                            <div class="col-md-4">
-                                <label class="form-label text-muted mb-1" style="font-size: 12px;">Status</label>
-                                <select class="form-select" id="filterStatus" style="font-size: 13px;">
-                                    <option value="all">All Status</option>
+                <!-- Review Cases Table Section -->
+                <div class="card border-0 rc-table-card">
+                    <div class="card-body p-0">
+                        <div class="rc-toolbar">
+                            <div class="rc-toolbar__title">
+                                <h2>Review Cases</h2>
+                                <small class="text-muted" id="resultsCount">Showing 0 cases</small>
+                            </div>
+                            <div class="rc-toolbar__controls">
+                                <div class="rc-search">
+                                    <i class="fas fa-magnifying-glass" aria-hidden="true"></i>
+                                    <input type="search" class="form-control" id="caseSearch" placeholder="Search customer or case ID" aria-label="Search cases" autocomplete="off">
+                                </div>
+                                <select class="form-select" id="filterStatus" aria-label="Filter by status">
+                                    <option value="all">All statuses</option>
                                     <option value="OPEN">Open</option>
                                     <option value="ASSIGNED">Assigned</option>
                                     <option value="IN_REVIEW">In Review</option>
                                     <option value="ESCALATED">Escalated</option>
                                     <option value="RESOLVED">Resolved</option>
                                 </select>
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label text-muted mb-1" style="font-size: 12px;">Risk Level</label>
-                                <select class="form-select" id="filterRiskLevel" style="font-size: 13px;">
-                                    <option value="all">All Risk level</option>
+                                <select class="form-select" id="filterRiskLevel" aria-label="Filter by risk level">
+                                    <option value="all">All risk levels</option>
                                     <option value="HIGH">High</option>
                                     <option value="MEDIUM">Medium</option>
                                     <option value="LOW">Low</option>
                                 </select>
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label text-muted mb-1" style="font-size: 12px;">Trigger Type</label>
-                                <select class="form-select" id="filterTriggerType" style="font-size: 13px;">
-                                    <option value="all">All Trigger Types</option>
+                                <select class="form-select" id="filterTriggerType" aria-label="Filter by trigger type">
+                                    <option value="all">All triggers</option>
                                     <option value="BEHAVIOR BASED">Behavior Based</option>
                                     <option value="TIME BASED">Time Based</option>
                                     <option value="RULE BASED">Rule Based</option>
                                     <option value="MANUAL">Manual</option>
                                 </select>
+                                <button type="button" class="btn rc-clear d-none" id="clearFiltersBtn">
+                                    <i class="fas fa-xmark me-1"></i>Clear
+                                </button>
                             </div>
                         </div>
-                        <div class="mt-2">
-                            <button class="btn btn-sm" id="clearFiltersBtn" style="font-size: 12px; color: #FF8D28; background: white; border: 1px solid #FF8D28;">
-                                <i class="fas fa-times me-1"></i> Clear Filters
-                            </button>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Review Cases Table Section -->
-                <div class="card border-0 shadow-sm">
-                    <div class="card-body p-0">
-                        <div class="p-4 d-flex justify-content-between align-items-center" style="background: #fffbf5; border-bottom: 1px solid #f0f0f0;">
-                            <div>
-                                <div class="d-flex align-items-center gap-2 mb-1">
-                                    <i class="fas fa-clipboard-list" style="color: #FF8D28; font-size: 16px;"></i>
-                                    <h6 class="mb-0" style="font-weight: 600; font-size: 15px;">Review Cases</h6>
-                                </div>
-                                <small class="text-muted" id="resultsCount" style="font-size: 12px;">Showing 0 cases</small>
-                            </div>
-                        </div>
+                        ${filterInfo}
                         <div class="table-responsive">
                             <table class="table table-hover align-middle mb-0" style="font-size: 13px;">
-                                <thead style="background: #fafafa; border-bottom: 2px solid #e5e7eb;">
+                                <thead>
                                     <tr>
-                                        <th class="px-3 py-3" style="width: 100px;">
-                                            <span class="text-uppercase" style="font-size: 11px; font-weight: 600; color: #6c757d;">CUSTOMER</span>
+                                        <th class="px-3 py-3">
+                                            Customer
                                         </th>
                                         <th class="px-3 py-3">
-                                            <span class="text-uppercase" style="font-size: 11px; font-weight: 600; color: #6c757d;">TRIGGER TYPE</span>
+                                            Trigger Type
                                         </th>
                                         <th class="px-3 py-3">
-                                            <span class="text-uppercase" style="font-size: 11px; font-weight: 600; color: #6c757d;">PRIORITY</span>
+                                            Priority
                                         </th>
                                         <th class="px-3 py-3">
-                                            <span class="text-uppercase" style="font-size: 11px; font-weight: 600; color: #6c757d;">RISK ASSESSMENT</span>
+                                            Risk Assessment
                                         </th>
                                         <th class="px-3 py-3">
-                                            <span class="text-uppercase" style="font-size: 11px; font-weight: 600; color: #6c757d;">STATUS</span>
+                                            Status
                                         </th>
                                         <th class="px-3 py-3">
-                                            <span class="text-uppercase" style="font-size: 11px; font-weight: 600; color: #6c757d;">CREATED AT</span>
+                                            Created At
                                         </th>
                                         <th class="px-3 py-3">
-                                            <span class="text-uppercase" style="font-size: 11px; font-weight: 600; color: #6c757d;">ASSIGNED TO</span>
+                                            Assigned To
                                         </th>
                                         <th class="px-3 py-3">
-                                            <span class="text-uppercase" style="font-size: 11px; font-weight: 600; color: #6c757d;">ACTIONS</span>
+                                            <span class="visually-hidden">Actions</span>
                                         </th>
                                     </tr>
                                 </thead>
@@ -315,12 +298,14 @@ const Cases = {
         try {
             // Build customer map to convert UUIDs to clean CUST-XXX IDs
             let customerMap = {};
+            const customerNames = {};
             try {
                 const custResponse = await API.get("/customers", { page_size: 10000 });
                 if (custResponse && custResponse.items) {
                     custResponse.items.forEach((c, idx) => {
                         const code = `CUST-${String(idx + 1).padStart(3, '0')}`;
                         customerMap[c.id] = code;
+                        customerNames[c.id] = c.full_name || '';
                     });
                 }
             } catch (err) {
@@ -369,6 +354,7 @@ const Cases = {
                 return {
                     caseId:        alert.id,
                     customerId:    displayCustId,
+                    customerName:  customerNames[alert.customer_id] || '',
                     rawCustomerId: alert.customer_id,
                     triggerType,
                     priority,
@@ -510,12 +496,12 @@ const Cases = {
         const paginatedCases = filtered.slice(startIdx, endIdx);
         
         // Update counts
-        $("#resultsCount").text(`Showing ${startIdx + 1}-${endIdx} of ${total} cases`);
+        $("#resultsCount").text(total ? `Showing ${startIdx + 1}-${endIdx} of ${total} cases` : "No matching cases");
         $("#resultsCountTop").text(`${total} Result${total !== 1 ? 's' : ''}`);
         
         if (paginatedCases.length === 0) {
             $("#casesTableBody").html(`
-                <tr><td colspan="8" class="text-center py-5 text-muted">No cases found</td></tr>
+                <tr><td colspan="8" class="rc-empty"><i class="fas fa-folder-open"></i><strong>No cases match these filters</strong><span>Try clearing the search or filters.</span></td></tr>
             `);
             this.renderPaginationControls(0, 0);
             return;
@@ -538,17 +524,26 @@ const Cases = {
             const priority = priorityColors[c.priority] || priorityColors['MEDIUM'];
             const risk = riskColors[c.riskLevel] || riskColors['MEDIUM'];
             
-            // Extract customer number from CUST-044
-            const customerNum = c.customerId.split('-')[1];
-            
+            const statusColors = {
+                'OPEN':      { bg: '#e0f2fe', text: '#0369a1' },
+                'ASSIGNED':  { bg: '#ede9fe', text: '#6d28d9' },
+                'IN_REVIEW': { bg: '#fef3c7', text: '#b45309' },
+                'ESCALATED': { bg: '#fee2e2', text: '#b91c1c' },
+                'RESOLVED':  { bg: '#dcfce7', text: '#15803d' }
+            };
+            const status = statusColors[c.status] || statusColors['OPEN'];
+            const displayName = c.customerName || c.customerId;
+            const initials = displayName.split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
+
             return `
-                <tr style="border-bottom: 1px solid #f0f0f0;">
+                <tr>
                     <td class="px-3 py-3">
-                        <div style="display: flex; align-items: center; gap: 8px;">
-                            <span style="background: #ffe0e0; color: #dc2626; width: 28px; height: 28px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600;">
-                                ${customerNum}
+                        <div class="rc-customer">
+                            <span class="rc-customer__avatar" aria-hidden="true">${escapeHtml(initials)}</span>
+                            <span class="rc-customer__text">
+                                <strong>${escapeHtml(displayName)}</strong>
+                                <small>${escapeHtml(c.customerId)}</small>
                             </span>
-                            <span style="font-size: 13px; font-weight: 500;">${c.customerId}</span>
                         </div>
                     </td>
                     <td class="px-3 py-3">
@@ -567,22 +562,22 @@ const Cases = {
                         </span>
                     </td>
                     <td class="px-3 py-3">
-                        <span class="badge" style="background: #d4edda; color: #155724; font-size: 11px; font-weight: 600; padding: 5px 10px;">
-                            ${c.status}
+                        <span class="badge" style="background: ${status.bg}; color: ${status.text}; font-size: 11px; font-weight: 600; padding: 5px 10px;">
+                            ${c.status.replace(/_/g, ' ')}
                         </span>
                     </td>
                     <td class="px-3 py-3 text-muted" style="font-size: 12px;">${c.createdAt}</td>
                     <td class="px-3 py-3 text-muted" style="font-size: 12px;">${c.assignedTo}</td>
                     <td class="px-3 py-3">
-                        <div class="d-flex gap-2" style="font-size: 12px;">
-                            <button class="btn btn-sm view-case-btn" data-customer="${c.customerId}" data-case="${c.caseId}" style="color: #FF8D28; background: transparent; border: none; padding: 0; text-decoration: none; display: flex; align-items: center; gap: 4px;">
-                                <i class="far fa-eye"></i> View Case
+                        <div class="rc-actions">
+                            <button type="button" class="btn btn-sm rc-actions__view view-case-btn" data-customer="${c.customerId}" data-case="${c.caseId}">
+                                <i class="far fa-eye me-1"></i>View
                             </button>
-                            <button class="btn btn-sm assign-btn" data-customer="${c.customerId}" data-case="${c.caseId}" style="color: #3b82f6; background: transparent; border: none; padding: 0; text-decoration: none; display: flex; align-items: center; gap: 4px;">
-                                <i class="fas fa-user"></i> Assign
+                            <button type="button" class="btn btn-sm rc-actions__icon assign-btn" data-customer="${c.customerId}" data-case="${c.caseId}" title="Assign case" aria-label="Assign case for ${escapeHtml(displayName)}">
+                                <i class="fas fa-user-plus"></i>
                             </button>
-                            <button class="btn btn-sm export-btn" data-customer="${c.customerId}" data-case="${c.caseId}" style="color: #22c55e; background: transparent; border: none; padding: 0; text-decoration: none; display: flex; align-items: center; gap: 4px;">
-                                <i class="fas fa-download"></i> Export File
+                            <button type="button" class="btn btn-sm rc-actions__icon export-btn" data-customer="${c.customerId}" data-case="${c.caseId}" title="Export case report" aria-label="Export case report for ${escapeHtml(displayName)}">
+                                <i class="fas fa-file-arrow-down"></i>
                             </button>
                         </div>
                     </td>
@@ -693,113 +688,116 @@ const Cases = {
     },
     
     showCaseDetailsModal(caseData) {
+        const alert = caseData.fullData || {};
+        const score = Number(alert.risk_score);
+        const hasScore = Number.isFinite(score);
+        const scoreClass = !hasScore ? 'low' : score >= 80 ? 'high' : score >= 60 ? 'medium' : 'low';
+        const human = (v) => (v ? String(v).replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, c => c.toUpperCase()) : '—');
+        const created = alert.created_at
+            ? new Date(alert.created_at).toLocaleString(undefined, { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+            : caseData.createdAt;
+
+        const ruleCodes = (alert.triggered_rules && (alert.triggered_rules.rules || alert.triggered_rules)) || [];
+        const rules = (Array.isArray(ruleCodes) ? ruleCodes : []).map(code => {
+            const r = this.RULES[code] || [code, 'Rule triggered', '—'];
+            return { code, name: r[0], detail: r[1], severity: r[2] };
+        });
+
+        // Explanation assembled from the alert's own data
+        const parts = [`${caseData.riskLevel} risk`];
+        parts.push(hasScore ? `score ${score}/100` : 'no score recorded');
+        if (alert.confidence != null) parts.push(`confidence ${Number(alert.confidence).toFixed(0)}%`);
+        let explanation = `${parts.join(', ')}. `;
+        explanation += rules.length
+            ? `Triggered by ${rules.map(r => r.name.toLowerCase()).join(' and ')}. `
+            : 'No individual rule triggers were recorded for this alert. ';
+        if (alert.recommended_action) explanation += `Recommended action: ${human(alert.recommended_action).toLowerCase()}.`;
+
+        const severityClass = (sev) => (sev === 'CRITICAL' || sev === 'HIGH' ? 'high' : sev === 'MEDIUM' ? 'medium' : 'low');
+        const statusColors = {
+            OPEN: ['#e0f2fe', '#0369a1'], ASSIGNED: ['#ede9fe', '#6d28d9'], IN_REVIEW: ['#fef3c7', '#b45309'],
+            ESCALATED: ['#fee2e2', '#b91c1c'], RESOLVED: ['#dcfce7', '#15803d']
+        };
+        const [statusBg, statusFg] = statusColors[caseData.status] || statusColors.OPEN;
+        const displayName = caseData.customerName || caseData.customerId;
+
         const modalHtml = `
-            <div class="modal fade" id="caseDetailsModal" tabindex="-1" style="z-index: 9999;">
+            <div class="modal fade" id="caseDetailsModal" tabindex="-1" aria-labelledby="caseDetailsTitle" aria-hidden="true">
                 <div class="modal-dialog modal-dialog-centered modal-lg">
-                    <div class="modal-content" style="border-radius: 12px; border: none;">
-                        <div class="modal-header" style="border-bottom: 1px solid #e5e7eb; padding: 20px 24px;">
-                            <div class="d-flex align-items-center gap-2">
-                                <i class="fas fa-file-alt" style="color: #FF8D28; font-size: 20px;"></i>
-                                <div>
-                                    <h5 class="modal-title mb-0" style="font-weight: 600; font-size: 18px;">Case Details</h5>
-                                    <small class="text-muted" style="font-size: 12px;">Case ID: ${caseData.caseId}</small>
-                                </div>
+                    <div class="modal-content kx-modal">
+                        <div class="modal-header">
+                            <div>
+                                <h5 class="modal-title" id="caseDetailsTitle">${escapeHtml(displayName)}</h5>
+                                <small class="text-muted">${escapeHtml(caseData.customerId)} &middot; Case ${escapeHtml(caseData.caseId)}</small>
                             </div>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                         </div>
-                        <div class="modal-body" style="padding: 24px;">
-                            <!-- Basic Information -->
-                            <h6 class="mb-3" style="font-weight: 600; font-size: 15px;">Basic Information</h6>
-                            <div class="row g-3 mb-4">
-                                <div class="col-md-6">
-                                    <label class="text-muted mb-1" style="font-size: 12px;">Customer ID</label>
-                                    <div>
-                                        <span class="badge" style="background: #ffe8e0; color: #FF8D28; font-size: 13px; font-weight: 600; padding: 6px 12px;">
-                                            ${caseData.customerId}
-                                        </span>
-                                    </div>
+                        <div class="modal-body">
+                            <div class="cd-score cd-score--${scoreClass}">
+                                <div class="cd-score__value">
+                                    <span>Risk score</span>
+                                    <strong>${hasScore ? score : '—'}<small>/100</small></strong>
                                 </div>
-                                <div class="col-md-6">
-                                    <label class="text-muted mb-1" style="font-size: 12px;">Trigger Type</label>
-                                    <div>
-                                        <span class="badge" style="background: #fff5e6; color: #FF8D28; font-size: 13px; font-weight: 600; padding: 6px 12px;">
-                                            ${caseData.triggerType}
-                                        </span>
-                                    </div>
+                                <div class="cd-score__meter" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${hasScore ? score : 0}" aria-label="Risk score">
+                                    <span style="width: ${hasScore ? Math.max(0, Math.min(100, score)) : 0}%"></span>
                                 </div>
-                                <div class="col-md-6">
-                                    <label class="text-muted mb-1" style="font-size: 12px;">Risk Level</label>
-                                    <div>
-                                        <span class="badge" style="background: ${caseData.riskLevel === 'HIGH' ? '#fef2f2' : '#fef3c7'}; color: ${caseData.riskLevel === 'HIGH' ? '#dc2626' : '#d97706'}; font-size: 13px; font-weight: 600; padding: 6px 12px;">
-                                            ${caseData.riskLevel}
-                                        </span>
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="text-muted mb-1" style="font-size: 12px;">Risk Score</label>
-                                    <div style="font-weight: 600; font-size: 16px;">100.00</div>
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="text-muted mb-1" style="font-size: 12px;">Status</label>
-                                    <div>
-                                        <span class="badge" style="background: #d4edda; color: #155724; font-size: 13px; font-weight: 600; padding: 6px 12px;">
-                                            ${caseData.status}
-                                        </span>
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="text-muted mb-1" style="font-size: 12px;">Created At</label>
-                                    <div style="font-size: 14px;">${caseData.createdAt}, 5:49:56 AM</div>
+                                <div class="cd-score__meta">
+                                    <span class="cd-chip cd-chip--${scoreClass}">${escapeHtml(caseData.riskLevel)} risk</span>
+                                    ${alert.confidence != null ? `<span>Confidence ${Number(alert.confidence).toFixed(0)}%</span>` : ''}
                                 </div>
                             </div>
-                            
-                            <!-- Explanation -->
-                            <h6 class="mb-3" style="font-weight: 600; font-size: 15px;">Explanation</h6>
-                            <div class="p-3 mb-3" style="background: #f8f9fa; border-radius: 8px;">
-                                <p class="mb-0" style="font-size: 13px; line-height: 1.6; color: #374151;">
-                                    HIGH risk (score: 100.0) - Detected: Transaction size deviation, Geographic pattern shift, Counterparty pattern change, ML anomaly detection: MEDIUM severity. 5 behavioral anomaly(ies) detected. Review recommended to assess if account activity requires further investigation.
-                                </p>
+
+                            <div class="cd-grid">
+                                <div><label>Status</label><span class="badge" style="background:${statusBg};color:${statusFg};">${escapeHtml(human(caseData.status))}</span></div>
+                                <div><label>Priority</label><strong>${escapeHtml(human(caseData.priority))}</strong></div>
+                                <div><label>Trigger type</label><strong>${escapeHtml(human(caseData.triggerType))}</strong></div>
+                                <div><label>Alert type</label><strong>${escapeHtml(human(alert.alert_type))}</strong></div>
+                                <div><label>Created</label><strong>${escapeHtml(created)}</strong></div>
+                                <div><label>Assigned to</label><strong>${escapeHtml(caseData.assignedTo)}</strong></div>
                             </div>
+
+                            <h6 class="cd-heading">Why this case was flagged</h6>
+                            <p class="cd-explanation">${escapeHtml(explanation)}</p>
+
+                            <h6 class="cd-heading">Triggered rules</h6>
+                            ${rules.length ? `
+                                <ul class="cd-rules">
+                                    ${rules.map(r => `
+                                        <li>
+                                            <span class="cd-rules__code">${escapeHtml(r.code)}</span>
+                                            <span class="cd-rules__text"><strong>${escapeHtml(r.name)}</strong>${escapeHtml(r.detail)}</span>
+                                            <span class="cd-chip cd-chip--${severityClass(r.severity)}">${escapeHtml(r.severity)}</span>
+                                        </li>`).join('')}
+                                </ul>` : `<p class="cd-explanation text-muted">No rule triggers recorded.</p>`}
                         </div>
-                        <div class="modal-footer" style="border-top: 1px solid #e5e7eb; padding: 16px 24px;">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" style="font-size: 14px; padding: 8px 20px;">Close</button>
-                            <button type="button" class="btn export-case-btn" data-case="${caseData.caseId}" data-customer="${caseData.customerId}" style="background: #FF8D28; color: white; font-size: 14px; padding: 8px 20px; border: none;">
-                                Export Case
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-outline-primary" data-bs-dismiss="modal">Close</button>
+                            <button type="button" class="btn btn-primary" id="caseDetailsExportBtn">
+                                <i class="fas fa-file-arrow-down me-2"></i>Export report
                             </button>
                         </div>
                     </div>
                 </div>
             </div>
         `;
-        
-        // Remove existing modal if any
+
         $("#caseDetailsModal").remove();
-        
-        // Append modal to body
         $("body").append(modalHtml);
-        
-        // Show modal
-        const modal = new bootstrap.Modal(document.getElementById('caseDetailsModal'));
+        const modalEl = document.getElementById('caseDetailsModal');
+        const modal = new bootstrap.Modal(modalEl);
         modal.show();
-        
-        // Handle Export Case button in modal
-        $(".export-case-btn").off("click").on("click", function() {
-            const caseId = $(this).data("case");
-            const customerId = $(this).data("customer");
-            
-            if (window.Utils && Utils.showToast) {
-                Utils.showToast(`Exporting case ${caseId} for ${customerId}...`, "success");
-            }
-            
+
+        // Hand over to the export dialog once this modal has closed
+        $("#caseDetailsExportBtn").on("click", () => {
+            $(modalEl).one("hidden.bs.modal", () => this.showExportModal(caseData.caseId, caseData.customerId));
             modal.hide();
         });
-        
-        // Clean up modal after hidden
-        $("#caseDetailsModal").on("hidden.bs.modal", function() {
-            $(this).remove();
+
+        $(modalEl).on("hidden.bs.modal", function() {
+            setTimeout(() => $(this).remove(), 0);
         });
     },
-    
+
     generateMockCases() {
         // Generate mock cases with LIMITED customers (only 5 unique customers)
         const triggerTypes = ['BEHAVIOR BASED', 'TIME BASED', 'RULE BASED', 'MANUAL'];
@@ -840,7 +838,13 @@ const Cases = {
     },
     
     getFilteredCases() {
+        const q = (this.currentFilters.search || '').trim().toLowerCase();
         return this.casesData.filter(c => {
+            if (this.currentFilters.customer && c.customerId !== this.currentFilters.customer) return false;
+            if (q) {
+                const haystack = `${c.customerName || ''} ${c.customerId} ${c.caseId}`.toLowerCase();
+                if (!haystack.includes(q)) return false;
+            }
             if (this.currentFilters.riskLevel !== 'all' && c.riskLevel !== this.currentFilters.riskLevel) return false;
             if (this.currentFilters.triggerType !== 'all' && c.triggerType !== this.currentFilters.triggerType) return false;
             if (this.currentFilters.status !== 'all' && c.status !== this.currentFilters.status) return false;
@@ -852,16 +856,22 @@ const Cases = {
         const self = this;
         
         // Filter change handlers
-        $("#filterRiskLevel, #filterTriggerType, #filterStatus").on("change", function() {
+        const applyFilters = () => {
+            self.currentFilters.search = $("#caseSearch").val() || '';
             self.currentFilters.riskLevel = $("#filterRiskLevel").val();
             self.currentFilters.triggerType = $("#filterTriggerType").val();
             self.currentFilters.status = $("#filterStatus").val();
-            
+            const active = self.currentFilters.search.trim() !== '' ||
+                ['riskLevel', 'triggerType', 'status'].some(k => self.currentFilters[k] !== 'all');
+            $("#clearFiltersBtn").toggleClass("d-none", !active);
+
             // Reset to first page when filters change
             self.pagination.currentPage = 1;
             self.renderTable();
-        });
-        
+        };
+        $("#filterRiskLevel, #filterTriggerType, #filterStatus").on("change", applyFilters);
+        $("#caseSearch").on("input", debounce(applyFilters, 200));
+
         // Refresh button
         $("#refreshCasesBtn").on("click", () => this.fetchCasesData());
         
@@ -966,12 +976,21 @@ const Cases = {
             Cases.showExportModal(caseId, customerId);
         });
         
-        // Clear Filters button (from patterns page navigation)
+        // Clear search + dropdown filters
         $("#clearFiltersBtn").on("click", () => {
+            $("#caseSearch").val('');
+            $("#filterRiskLevel, #filterTriggerType, #filterStatus").val('all');
+            applyFilters();
+            $("#caseSearch").trigger("focus");
+        });
+
+        // Drop the customer filter that came from the Patterns page
+        $("#clearCustomerFilterBtn").on("click", () => {
             this.currentFilters.customer = null;
             this.currentFilters.pattern = null;
-            Utils.showToast("Filters cleared", "success");
-            this.loadDashboard();
+            $(".rc-filter-chip").remove();
+            this.pagination.currentPage = 1;
+            this.renderTable();
         });
     },
     
@@ -1090,565 +1109,606 @@ const Cases = {
     },
     
     async showExportModal(caseId, customerId) {
-        // Get case data
         const caseData = this.casesData.find(c => c.caseId === caseId);
-        
-        // Fetch customer name from API
-        let customerName = 'Unknown Customer';
-        try {
-            // Extract numeric ID from CUST-XXX format
-            const numericId = customerId.replace('CUST-', '');
-            const customerResponse = await API.get(`/customers`, { page_size: 10000 });
-            if (customerResponse && customerResponse.items) {
-                const customerIndex = parseInt(numericId) - 1;
-                if (customerIndex >= 0 && customerIndex < customerResponse.items.length) {
-                    const customer = customerResponse.items[customerIndex];
-                    customerName = customer.full_name || customer.name || 'Unknown Customer';
-                }
-            }
-        } catch (error) {
-            console.warn('Could not fetch customer name:', error);
-        }
-        
-        // Create modal HTML
+        const customerName = (caseData && caseData.customerName) || customerId;
+
         const modalHtml = `
             <div class="modal fade" id="exportCaseModal" tabindex="-1" aria-labelledby="exportCaseModalLabel" aria-hidden="true">
                 <div class="modal-dialog modal-dialog-centered">
-                    <div class="modal-content" style="border-radius: 14px; border: none;">
-                        <div class="modal-header" style="border-bottom: 1px solid #eceef2; padding: 20px 24px;">
-                            <h5 class="modal-title" id="exportCaseModalLabel" style="font-weight: 700; color: #1c2430;">
-                                <i class="fas fa-download" style="color: #22c55e; margin-right: 8px;"></i>
-                                Export Case
-                            </h5>
+                    <div class="modal-content kx-modal">
+                        <div class="modal-header">
+                            <div>
+                                <h5 class="modal-title" id="exportCaseModalLabel">
+                                    <i class="fas fa-file-arrow-down me-2" style="color: var(--kt-accent-strong);"></i>Export Case Report
+                                </h5>
+                                <small class="text-muted">${escapeHtml(customerName)} &middot; ${escapeHtml(customerId)}</small>
+                            </div>
                             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                         </div>
-                        <div class="modal-body" style="padding: 24px;">
+                        <div class="modal-body">
                             <div class="mb-3">
-                                <label class="form-label" style="font-weight: 600; font-size: 13px; color: #1c2430;">Case ID</label>
-                                <input type="text" class="form-control" value="${caseId}" disabled style="background: #f7f8fa; border: 1px solid #eceef2; border-radius: 8px;">
+                                <label class="form-label kx-label">Case ID</label>
+                                <input type="text" class="form-control" value="${escapeHtml(caseId)}" disabled>
                             </div>
                             <div class="mb-3">
-                                <label class="form-label" style="font-weight: 600; font-size: 13px; color: #1c2430;">Customer ID</label>
-                                <input type="text" class="form-control" value="${customerId}" disabled style="background: #f7f8fa; border: 1px solid #eceef2; border-radius: 8px;">
-                            </div>
-                            <div class="mb-3">
-                                <label for="exportFormat" class="form-label" style="font-weight: 600; font-size: 13px; color: #1c2430;">
-                                    Export Format <span style="color: #e53935;">*</span>
-                                </label>
-                                <select class="form-select" id="exportFormat" style="border: 1px solid #d1d5db; border-radius: 8px; padding: 10px 14px;">
-                                    <option value="">Select format...</option>
-                                    <option value="pdf">PDF Report (.pdf)</option>
-                                    <option value="excel">Excel Spreadsheet (.xlsx)</option>
-                                    <option value="csv">CSV File (.csv)</option>
-                                    <option value="json">JSON Data (.json)</option>
-                                </select>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label" style="font-weight: 600; font-size: 13px; color: #1c2430;">Include Sections</label>
-                                <div style="border: 1px solid #d1d5db; border-radius: 8px; padding: 12px 14px;">
-                                    <div class="form-check mb-2">
-                                        <input class="form-check-input" type="checkbox" value="summary" id="includeSummary" checked>
-                                        <label class="form-check-label" for="includeSummary" style="font-size: 13px;">
-                                            Case Summary
-                                        </label>
-                                    </div>
-                                    <div class="form-check mb-2">
-                                        <input class="form-check-input" type="checkbox" value="transactions" id="includeTransactions" checked>
-                                        <label class="form-check-label" for="includeTransactions" style="font-size: 13px;">
-                                            Transaction History
-                                        </label>
-                                    </div>
-                                    <div class="form-check mb-2">
-                                        <input class="form-check-input" type="checkbox" value="risk" id="includeRisk" checked>
-                                        <label class="form-check-label" for="includeRisk" style="font-size: 13px;">
-                                            Risk Analysis
-                                        </label>
-                                    </div>
-                                    <div class="form-check mb-2">
-                                        <input class="form-check-input" type="checkbox" value="timeline" id="includeTimeline" checked>
-                                        <label class="form-check-label" for="includeTimeline" style="font-size: 13px;">
-                                            Activity Timeline
-                                        </label>
-                                    </div>
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" value="attachments" id="includeAttachments">
-                                        <label class="form-check-label" for="includeAttachments" style="font-size: 13px;">
-                                            Attachments & Documents
-                                        </label>
-                                    </div>
+                                <label for="exportFormat" class="form-label kx-label">Format</label>
+                                <div class="kx-formats" role="radiogroup" aria-label="Export format">
+                                    <label class="kx-format"><input type="radio" name="exportFormat" value="pdf" checked><span><i class="fas fa-file-pdf"></i>PDF report</span></label>
+                                    <label class="kx-format"><input type="radio" name="exportFormat" value="csv"><span><i class="fas fa-file-csv"></i>CSV (opens in Excel)</span></label>
+                                    <label class="kx-format"><input type="radio" name="exportFormat" value="json"><span><i class="fas fa-file-code"></i>JSON data</span></label>
                                 </div>
                             </div>
-                            <div class="alert alert-success" style="background: #e4f7ee; border: 1px solid #a7f3d0; border-radius: 8px; padding: 12px; font-size: 13px; margin-bottom: 0;">
-                                <i class="fas fa-info-circle" style="color: #1fb877; margin-right: 6px;"></i>
-                                Export includes all case data, analysis, and selected sections.
+                            <div class="mb-1">
+                                <label class="form-label kx-label">Include sections</label>
+                                <div class="kx-sections">
+                                    <label class="form-check"><input class="form-check-input" type="checkbox" id="includeSummary" checked><span class="form-check-label">Case &amp; customer summary</span></label>
+                                    <label class="form-check"><input class="form-check-input" type="checkbox" id="includeRisk" checked><span class="form-check-label">Risk assessment &amp; screening</span></label>
+                                    <label class="form-check"><input class="form-check-input" type="checkbox" id="includeTransactions" checked><span class="form-check-label">Transaction analysis</span></label>
+                                    <label class="form-check"><input class="form-check-input" type="checkbox" id="includeTimeline" checked><span class="form-check-label">Activity timeline</span></label>
+                                </div>
                             </div>
+                            <p class="kx-note"><i class="fas fa-circle-info me-1"></i>Reports are built from live case, customer and transaction data at the time of export.</p>
                         </div>
-                        <div class="modal-footer" style="border-top: 1px solid #eceef2; padding: 16px 24px; background: #f7f8fa;">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" style="border-radius: 8px; padding: 8px 20px; font-size: 14px; font-weight: 600;">
-                                Cancel
-                            </button>
-                            <button type="button" class="btn btn-success" id="confirmExportBtn" style="background: #22c55e; border: none; border-radius: 8px; padding: 8px 20px; font-size: 14px; font-weight: 600;">
-                                <i class="fas fa-download"></i> Export Now
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-outline-primary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="button" class="btn btn-primary" id="confirmExportBtn">
+                                <i class="fas fa-download me-2"></i>Export
                             </button>
                         </div>
                     </div>
                 </div>
             </div>
         `;
-        
-        // Remove existing modal if any
+
         $('#exportCaseModal').remove();
-        
-        // Add modal to body
         $('body').append(modalHtml);
-        
-        // Show modal
         const modal = new bootstrap.Modal(document.getElementById('exportCaseModal'));
         modal.show();
-        
-        // Handle confirm button
-        $('#confirmExportBtn').off('click').on('click', function() {
-            const format = $('#exportFormat').val();
-            
-            if (!format) {
-                showToast('error', 'Please select an export format');
-                return;
-            }
-            
-            // Get selected sections
+
+        $('#confirmExportBtn').off('click').on('click', async function() {
+            const format = $('input[name="exportFormat"]:checked').val();
             const sections = [];
             if ($('#includeSummary').is(':checked')) sections.push('summary');
-            if ($('#includeTransactions').is(':checked')) sections.push('transactions');
             if ($('#includeRisk').is(':checked')) sections.push('risk');
+            if ($('#includeTransactions').is(':checked')) sections.push('transactions');
             if ($('#includeTimeline').is(':checked')) sections.push('timeline');
-            if ($('#includeAttachments').is(':checked')) sections.push('attachments');
-            
-            // Show loading state
-            $(this).prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Exporting...');
-            
-            // Create export data
-            const exportData = {
-                caseId: caseId,
-                customerId: customerId,
-                customerName: customerName,
-                exportDate: new Date().toISOString(),
-                format: format,
-                sections: sections,
-                caseDetails: caseData
-            };
-            
-            // Generate download immediately (no timeout)
-            Cases.generateExport(exportData, format);
-            
-            // Close modal
-            setTimeout(() => {
+            if (!sections.length) {
+                showToast('warning', 'Select at least one section to export');
+                return;
+            }
+
+            const $btn = $(this);
+            $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin me-2"></i>Preparing report...');
+            try {
+                const report = await Cases.collectReportData(caseData, caseId, customerId);
+                report.sections = sections;
+                report.format = format;
+                await Cases.generateExport(report, format);
                 modal.hide();
                 showToast('success', `Case report downloaded as ${format.toUpperCase()}`);
-            }, 500);
+            } catch (error) {
+                console.error('Export failed:', error);
+                showToast('error', 'Could not build the case report. Please try again.');
+                $btn.prop('disabled', false).html('<i class="fas fa-download me-2"></i>Export');
+            }
         });
-        
-        // Clean up modal on hide
+
         $('#exportCaseModal').on('hidden.bs.modal', function() {
             $(this).remove();
         });
     },
-    
-    generateExport(data, format) {
-        const filename = `case_${data.caseId.substring(0, 8)}_${Date.now()}`;
-        
-        switch(format) {
+
+    /** Gathers everything the report shows from the live API. */
+    async collectReportData(caseData, caseId, customerCode) {
+        const rawCustomerId = caseData && caseData.rawCustomerId;
+        const settled = await Promise.allSettled([
+            API.get(`/alerts/${caseId}`),
+            rawCustomerId ? API.get(`/customers/${rawCustomerId}`) : Promise.resolve(null),
+            rawCustomerId ? API.get('/transactions', { customer_id: rawCustomerId, page_size: 2000 }) : Promise.resolve(null),
+            rawCustomerId ? API.get(`/customers/${rawCustomerId}/screening`) : Promise.resolve(null),
+            rawCustomerId ? API.get(`/customers/${rawCustomerId}/kyc-reviews`) : Promise.resolve(null)
+        ]);
+        const value = (i) => (settled[i].status === 'fulfilled' ? settled[i].value : null);
+        const user = (window.Auth && Auth.getUser && Auth.getUser()) || {};
+
+        return {
+            caseId,
+            customerId: customerCode,
+            customerName: (value(1) && value(1).full_name) || (caseData && caseData.customerName) || customerCode,
+            exportDate: new Date().toISOString(),
+            preparedBy: user.full_name || user.username || 'KYRO user',
+            caseDetails: caseData || {},
+            alert: value(0) || (caseData && caseData.fullData) || {},
+            customer: value(1),
+            transactions: (value(2) && (value(2).items || value(2))) || [],
+            screening: value(3) || [],
+            kycReviews: value(4) || []
+        };
+    },
+
+    async generateExport(data, format) {
+        const filename = `KYRO_case_${String(data.caseId).substring(0, 8)}_${new Date().toISOString().slice(0, 10)}`;
+        switch (format) {
             case 'pdf':
-                // Generate HTML-based PDF with print styling
-                console.log('Generating PDF:', data);
-                this.generateHTMLPDF(data, filename);
+                await this.generateHTMLPDF(data, filename);
                 break;
-                
-            case 'excel':
             case 'csv':
-                // Generate CSV data
-                const csvContent = this.generateCSVContent(data);
-                const mimeType = format === 'excel' ? 'application/vnd.ms-excel' : 'text/csv';
-                const ext = format === 'excel' ? '.xlsx' : '.csv';
-                this.downloadFile(`${filename}${ext}`, mimeType, csvContent);
+                this.downloadFile(`${filename}.csv`, 'text/csv;charset=utf-8', '﻿' + this.generateCSVContent(data));
                 break;
-                
             case 'json':
-                // Generate JSON
-                const jsonContent = JSON.stringify(data, null, 2);
-                this.downloadFile(`${filename}.json`, 'application/json', jsonContent);
+                this.downloadFile(`${filename}.json`, 'application/json', JSON.stringify(data, null, 2));
                 break;
         }
     },
-    
-    generateHTMLPDF(data, filename) {
-        // Use jsPDF to generate real PDF file with detailed report
-        const { jsPDF } = window.jspdf;
-        const doc = new jsPDF();
-        
-        // Set document properties
-        doc.setProperties({
-            title: `Case Report - ${data.caseId}`,
-            subject: 'KYRO AML Case Export - Detailed Report',
-            author: 'KYRO Risk Assessment System',
-            keywords: 'AML, compliance, risk, case, detailed report',
-            creator: 'KYRO'
-        });
-        
-        const pageWidth = 210;
-        const margin = 20;
-        const contentWidth = pageWidth - (2 * margin);
-        let yPos = 20;
-        
-        // Helper function to add new page if needed
-        const checkPageBreak = (requiredSpace = 20) => {
-            if (yPos > 270 - requiredSpace) {
-                doc.addPage();
-                yPos = 20;
-                return true;
+
+    RULES: {
+        R001: ['Amount Threshold', 'Transaction amount above the reporting threshold', 'MEDIUM'],
+        R002: ['Velocity (daily)', 'More transactions per day than the configured limit', 'MEDIUM'],
+        R003: ['Velocity (hourly)', 'More transactions per hour than the configured limit', 'LOW'],
+        R004: ['High-Risk Country', 'Counterparty in a sanctioned or high-risk jurisdiction', 'HIGH'],
+        R005: ['PEP Match', 'Customer is a Politically Exposed Person', 'HIGH'],
+        R006: ['Sanctions Match', 'Customer matched on a sanctions list', 'CRITICAL'],
+        R007: ['New Counterparty', 'First transaction with this counterparty', 'LOW'],
+        R008: ['Weekend Activity', 'Transaction made on a weekend', 'LOW'],
+        R009: ['Round Amount', 'Suspiciously round transaction amount', 'MEDIUM'],
+        R010: ['Rapid Succession', 'Multiple transactions within one minute', 'HIGH']
+    },
+
+    /** Summary numbers for the transaction section (amounts kept per currency). */
+    summarizeTransactions(transactions) {
+        const byCurrency = {};
+        let flagged = 0;
+        let first = null;
+        let last = null;
+        const countries = new Set();
+        const counterparties = {};
+        transactions.forEach(t => {
+            const cur = t.currency || '---';
+            byCurrency[cur] = byCurrency[cur] || { count: 0, total: 0 };
+            byCurrency[cur].count += 1;
+            byCurrency[cur].total += Number(t.amount) || 0;
+            const hasFlags = t.risk_flags && Object.keys(t.risk_flags).length > 0;
+            if ((t.risk_score || 0) >= 50 || hasFlags) flagged += 1;
+            const d = new Date(t.transaction_date);
+            if (!isNaN(d)) {
+                if (!first || d < first) first = d;
+                if (!last || d > last) last = d;
             }
-            return false;
+            if (t.meta_country) countries.add(t.meta_country);
+            if (t.meta_counterparty) counterparties[t.meta_counterparty] = (counterparties[t.meta_counterparty] || 0) + 1;
+        });
+        const topCounterparties = Object.entries(counterparties).sort((a, b) => b[1] - a[1]).slice(0, 3);
+        return { byCurrency, flagged, first, last, countries: [...countries], topCounterparties, count: transactions.length };
+    },
+
+    /** Renders the KYRO mark (same paths as the app logo) to a PNG for jsPDF. */
+    async kyroLogoPng() {
+        if (this._logoPng) return this._logoPng;
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="88" height="104" viewBox="0 0 44 52">
+            <path d="M17.3573 25.4845C20.1188 25.4845 22.4006 23.2307 21.9439 20.5073C21.6589 18.808 21.228 17.142 20.6555 15.5347C19.5319 12.3802 17.8851 9.51402 15.809 7.0997C13.733 4.68537 11.2683 2.77023 8.55578 1.46361C7.38388 0.899101 6.17563 0.452955 4.94442 0.128265C2.27429 -0.575893 0 1.72305 0 4.48447V20.4845C0 23.2459 2.23858 25.4845 5 25.4845H17.3573Z" fill="#ffffff" fill-opacity="0.9" transform="translate(0 13)"/>
+            <path d="M4.64504 25.4845C1.88362 25.4845 -0.39823 23.2307 0.0585117 20.5073C0.343506 18.808 0.774422 17.142 1.3469 15.5347C2.47046 12.3802 4.11729 9.51402 6.19336 7.0997C8.26943 4.68537 10.7341 2.77023 13.4466 1.46361C14.6185 0.899101 15.8267 0.452955 17.058 0.128265C19.7281 -0.575893 22.0024 1.72305 22.0024 4.48447V20.4845C22.0024 23.2459 19.7638 25.4845 17.0024 25.4845H4.64504Z" fill="#FF6A00" fill-opacity="0.95" transform="translate(11 13)"/>
+        </svg>`;
+        this._logoPng = await new Promise((resolve) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = 88; canvas.height = 104;
+                canvas.getContext('2d').drawImage(img, 0, 0);
+                resolve(canvas.toDataURL('image/png'));
+            };
+            img.onerror = () => resolve(null);
+            img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+        });
+        return this._logoPng;
+    },
+
+    async generateHTMLPDF(data, filename) {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+        const hasTable = typeof doc.autoTable === 'function';
+
+        const C = {
+            accent: [249, 115, 22], accentSoft: [255, 243, 234], dark: [26, 26, 26],
+            ink: [28, 36, 48], body: [75, 85, 99], muted: [107, 114, 128],
+            line: [240, 228, 218], zebra: [255, 250, 246],
+            high: [185, 28, 28], medium: [194, 65, 12], low: [21, 128, 61]
         };
-        
-        // Helper function to add section header
-        const addSectionHeader = (title) => {
-            checkPageBreak(15);
-            doc.setFillColor(255, 141, 40);
-            doc.rect(margin, yPos, contentWidth, 8, 'F');
-            doc.setFontSize(12);
-            doc.setTextColor(255, 255, 255);
-            doc.setFont(undefined, 'bold');
-            doc.text(title, margin + 3, yPos + 5.5);
-            yPos += 12;
-            doc.setTextColor(0, 0, 0);
-            doc.setFont(undefined, 'normal');
+        const W = 210, H = 297, M = 16, CW = W - 2 * M;
+        const alert = data.alert || {};
+        const cust = data.customer || {};
+        const det = data.caseDetails || {};
+        const has = (s) => data.sections.includes(s);
+        const fmtDate = (v, withTime) => {
+            if (!v) return '—';
+            const d = new Date(v);
+            if (isNaN(d)) return String(v);
+            const dateOnly = typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
+            return withTime && !dateOnly
+                ? d.toLocaleString(undefined, { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+                : d.toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' });
         };
-        
-        // ===== PAGE 1: HEADER & EXECUTIVE SUMMARY =====
-        
-        // Main Header
-        doc.setFontSize(22);
-        doc.setTextColor(255, 141, 40);
-        doc.setFont(undefined, 'bold');
-        doc.text('KYRO AML CASE REPORT', pageWidth / 2, yPos, { align: 'center' });
-        
-        yPos += 8;
-        doc.setFontSize(10);
-        doc.setTextColor(100, 100, 100);
-        doc.setFont(undefined, 'normal');
-        doc.text('Anti-Money Laundering Investigation Report', pageWidth / 2, yPos, { align: 'center' });
-        
-        yPos += 3;
-        doc.setDrawColor(255, 141, 40);
-        doc.setLineWidth(0.5);
-        doc.line(margin, yPos, pageWidth - margin, yPos);
-        
-        yPos += 10;
-        
-        // Report Metadata Box
-        doc.setDrawColor(220, 220, 220);
-        doc.setFillColor(250, 250, 250);
-        doc.roundedRect(margin, yPos, contentWidth, 32, 2, 2, 'FD');
-        
-        yPos += 7;
-        doc.setFontSize(9);
-        doc.setTextColor(80, 80, 80);
-        doc.setFont(undefined, 'bold');
-        doc.text('Case ID:', margin + 5, yPos);
-        doc.setFont(undefined, 'normal');
-        doc.text(data.caseId, margin + 30, yPos);
-        
-        doc.setFont(undefined, 'bold');
-        doc.text('Customer ID:', margin + 105, yPos);
-        doc.setFont(undefined, 'normal');
-        doc.text(data.customerId, margin + 135, yPos);
-        
-        yPos += 6;
-        doc.setFont(undefined, 'bold');
-        doc.text('Customer Name:', margin + 5, yPos);
-        doc.setFont(undefined, 'normal');
-        doc.text(data.customerName || 'Unknown Customer', margin + 35, yPos);
-        
-        yPos += 6;
-        doc.setFont(undefined, 'bold');
-        doc.text('Report Generated:', margin + 5, yPos);
-        doc.setFont(undefined, 'normal');
-        doc.text(new Date(data.exportDate).toLocaleString(), margin + 35, yPos);
-        
-        doc.setFont(undefined, 'bold');
-        doc.text('Report Type:', margin + 105, yPos);
-        doc.setFont(undefined, 'normal');
-        doc.text('Detailed Analysis', margin + 135, yPos);
-        
-        yPos += 6;
-        doc.setFont(undefined, 'bold');
-        doc.text('Classification:', margin + 5, yPos);
-        doc.setFont(undefined, 'normal');
-        doc.setTextColor(220, 38, 38);
-        doc.text('CONFIDENTIAL', margin + 30, yPos);
-        doc.setTextColor(0, 0, 0);
-        
-        yPos += 15;
-        
-        // Executive Summary
-        addSectionHeader('EXECUTIVE SUMMARY');
-        
-        doc.setFontSize(9);
-        const customerNameText = data.customerName || 'the customer';
-        const summaryText = `This report provides a comprehensive analysis of Case ${data.caseId} for ${customerNameText} (Customer ID: ${data.customerId}). The case was flagged by KYRO's automated risk assessment system due to suspicious activity patterns. Risk assessment indicates ${data.caseDetails?.riskLevel || 'MEDIUM'} risk level requiring ${data.caseDetails?.priority || 'STANDARD'} priority attention.`;
-        
-        const summaryLines = doc.splitTextToSize(summaryText, contentWidth - 10);
-        doc.text(summaryLines, margin + 5, yPos);
-        yPos += summaryLines.length * 5 + 5;
-        
-        // Case Summary Section
-        addSectionHeader('CASE INFORMATION');
-        
-        const caseInfo = [
-            ['Status:', data.caseDetails?.status || 'N/A'],
-            ['Risk Level:', data.caseDetails?.riskLevel || 'N/A'],
-            ['Priority:', data.caseDetails?.priority || 'N/A'],
-            ['Trigger Type:', data.caseDetails?.triggerType || 'N/A'],
-            ['Created At:', data.caseDetails?.createdAt || 'N/A'],
-            ['Assigned To:', data.caseDetails?.assignedTo || 'Unassigned'],
-            ['Last Updated:', new Date().toLocaleDateString()]
-        ];
-        
-        doc.setFontSize(9);
-        caseInfo.forEach(([label, value]) => {
-            checkPageBreak(7);
-            doc.setTextColor(80, 80, 80);
-            doc.setFont(undefined, 'bold');
-            doc.text(label, margin + 5, yPos);
-            doc.setFont(undefined, 'normal');
-            doc.setTextColor(0, 0, 0);
-            doc.text(value, margin + 45, yPos);
-            yPos += 6;
+        const human = (v) => (v ? String(v).replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, c => c.toUpperCase()) : '—');
+        const money = (n) => Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const riskLevel = det.riskLevel || cust.risk_level || 'MEDIUM';
+        const riskRGB = riskLevel === 'HIGH' ? C.high : riskLevel === 'LOW' ? C.low : C.medium;
+        const reportId = `KYRO-${String(data.caseId).substring(0, 8).toUpperCase()}`;
+
+        doc.setProperties({
+            title: `AML Case Report ${reportId}`,
+            subject: `AML case report for ${data.customerName}`,
+            author: data.preparedBy,
+            keywords: 'AML, case, KYC, risk',
+            creator: 'KYRO AML Risk Assessment'
         });
-        
-        yPos += 5;
-        
-        // ===== PAGE 2: RISK ASSESSMENT =====
-        doc.addPage();
-        yPos = 20;
-        
-        addSectionHeader('RISK ASSESSMENT DETAILS');
-        
-        doc.setFontSize(9);
-        const riskLevel = data.caseDetails?.riskLevel || 'MEDIUM';
-        const riskColor = riskLevel === 'HIGH' ? [220, 38, 38] : riskLevel === 'MEDIUM' ? [217, 119, 6] : [22, 163, 74];
-        
-        doc.setTextColor(80, 80, 80);
-        doc.text('Overall Risk Classification:', margin + 5, yPos);
-        doc.setFont(undefined, 'bold');
-        doc.setTextColor(...riskColor);
-        doc.text(riskLevel, margin + 70, yPos);
-        yPos += 8;
-        
-        doc.setFont(undefined, 'normal');
-        doc.setTextColor(0, 0, 0);
-        doc.text('Risk Indicators:', margin + 5, yPos);
-        yPos += 7;
-        
-        const riskIndicators = [
-            '• Transaction pattern deviation detected',
-            '• Elevated transaction velocity observed',
-            '• Geographic risk factors present',
-            '• Customer behavior anomalies identified',
-            '• Regulatory reporting threshold approached'
+
+        let y = 0;
+        const ensure = (space) => {
+            if (y + space > H - 22) {
+                doc.addPage();
+                y = 20;
+            }
+        };
+        const text = (str, x, yy, opts = {}) => {
+            doc.setFont('helvetica', opts.bold ? 'bold' : 'normal');
+            doc.setFontSize(opts.size || 9);
+            doc.setTextColor(...(opts.color || C.body));
+            doc.text(str, x, yy, opts.align ? { align: opts.align } : undefined);
+        };
+        const section = (title, subtitle, need = 24) => {
+            ensure(need);
+            y += 4;
+            doc.setFillColor(...C.accent);
+            doc.rect(M, y - 4.2, 1.6, 6.4, 'F');
+            text(title, M + 4.5, y + 0.6, { size: 12.5, bold: true, color: C.ink });
+            if (subtitle) text(subtitle, W - M, y + 0.6, { size: 8, color: C.muted, align: 'right' });
+            y += 4;
+            doc.setDrawColor(...C.line);
+            doc.setLineWidth(0.3);
+            doc.line(M, y, W - M, y);
+            y += 5;
+        };
+        const keyValues = (rows) => {
+            // Two columns of label/value pairs
+            const colW = CW / 2;
+            for (let i = 0; i < rows.length; i += 2) {
+                ensure(10);
+                let rowHeight = 11;
+                [rows[i], rows[i + 1]].forEach((row, col) => {
+                    if (!row) return;
+                    const x = M + col * colW;
+                    text(row[0].toUpperCase(), x, y, { size: 7, bold: true, color: C.muted });
+                    doc.setFontSize(9.5);
+                    const lines = doc.splitTextToSize(String(row[1] ?? '—'), colW - 6);
+                    text(lines, x, y + 4.6, { size: 9.5, color: row[2] || C.ink, bold: !!row[2] });
+                    rowHeight = Math.max(rowHeight, 6.5 + lines.length * 4.4);
+                });
+                y += rowHeight;
+            }
+        };
+        const table = (head, body, opts = {}) => {
+            if (!body.length) {
+                ensure(10);
+                text(opts.empty || 'No records.', M, y + 2, { size: 9, color: C.muted });
+                y += 8;
+                return;
+            }
+            if (body.length <= 6) ensure(14 + body.length * 9);
+            if (!hasTable) {
+                body.forEach(r => { ensure(6); text(r.join('   '), M, y, { size: 8 }); y += 5; });
+                return;
+            }
+            doc.autoTable({
+                startY: y,
+                head: [head],
+                body,
+                margin: { left: M, right: M, bottom: 22, top: 20 },
+                rowPageBreak: 'avoid',
+                styles: { font: 'helvetica', fontSize: 8, cellPadding: 2.4, textColor: C.body, lineColor: C.line, lineWidth: 0.2 },
+                headStyles: { fillColor: C.accentSoft, textColor: C.ink, fontStyle: 'bold', fontSize: 7.5 },
+                alternateRowStyles: { fillColor: C.zebra },
+                columnStyles: opts.columnStyles || {},
+                didParseCell: opts.didParseCell
+            });
+            y = doc.lastAutoTable.finalY + 6;
+        };
+
+        // ── Header band ──────────────────────────────────────────────
+        doc.setFillColor(...C.dark);
+        doc.rect(0, 0, W, 46, 'F');
+        doc.setFillColor(...C.accent);
+        doc.rect(0, 46, W, 1.4, 'F');
+        const logo = await this.kyroLogoPng();
+        if (logo) doc.addImage(logo, 'PNG', M, 11, 9, 10.6);
+        text('KYRO', M + (logo ? 12 : 0), 18.6, { size: 15, bold: true, color: [255, 255, 255] });
+        text('AML Risk Assessment', M + (logo ? 12 : 0), 23.4, { size: 8, color: [156, 163, 175] });
+        text('AML Case Investigation Report', M, 37, { size: 17, bold: true, color: [255, 255, 255] });
+        // Confidential tag
+        doc.setDrawColor(248, 113, 113);
+        doc.setLineWidth(0.4);
+        doc.roundedRect(W - M - 34, 12, 34, 7, 1.5, 1.5, 'S');
+        text('CONFIDENTIAL', W - M - 17, 16.8, { size: 7.5, bold: true, color: [248, 113, 113], align: 'center' });
+        text(`Report ID  ${reportId}`, W - M, 31, { size: 8, color: [209, 213, 219], align: 'right' });
+        text(`Generated  ${fmtDate(data.exportDate, true)}`, W - M, 36, { size: 8, color: [209, 213, 219], align: 'right' });
+        text(`Prepared by  ${data.preparedBy}`, W - M, 41, { size: 8, color: [209, 213, 219], align: 'right' });
+        y = 58;
+
+        // ── Subject line + risk strip ────────────────────────────────
+        text(data.customerName, M, y, { size: 15, bold: true, color: C.ink });
+        text(`${data.customerId}   ·   Case ${data.caseId}`, M, y + 5.5, { size: 8.5, color: C.muted });
+        y += 12;
+        const tiles = [
+            ['RISK LEVEL', riskLevel, riskRGB],
+            ['RISK SCORE', `${alert.risk_score ?? '—'} / 100`, C.ink],
+            ['PRIORITY', human(det.priority), C.ink],
+            ['STATUS', human(alert.status || det.status), C.ink]
         ];
-        
-        riskIndicators.forEach(indicator => {
-            checkPageBreak(6);
-            doc.setFontSize(8);
-            doc.text(indicator, margin + 10, yPos);
-            yPos += 5;
+        const tw = (CW - 9) / 4;
+        tiles.forEach(([label, val, col], i) => {
+            const x = M + i * (tw + 3);
+            doc.setFillColor(...(i === 0 ? C.accentSoft : [249, 250, 251]));
+            doc.setDrawColor(...(i === 0 ? [255, 220, 194] : [229, 231, 235]));
+            doc.setLineWidth(0.3);
+            doc.roundedRect(x, y, tw, 17, 2, 2, 'FD');
+            text(label, x + 4, y + 6, { size: 6.8, bold: true, color: C.muted });
+            text(String(val), x + 4, y + 13, { size: 11.5, bold: true, color: col });
         });
-        
-        yPos += 8;
-        
-        // Transaction Analysis
-        addSectionHeader('TRANSACTION ANALYSIS');
-        
-        doc.setFontSize(9);
-        doc.text('Transaction Summary:', margin + 5, yPos);
-        yPos += 7;
-        
-        const txnSummary = [
-            ['Total Transactions Reviewed:', '47'],
-            ['Flagged Transactions:', '12'],
-            ['Total Value (Flagged):', '$284,593.00'],
-            ['Average Transaction Size:', '$23,716.08'],
-            ['Transaction Period:', 'Last 30 days'],
-            ['Suspicious Patterns:', 'Rapid succession, Round amounts']
-        ];
-        
-        doc.setFontSize(8);
-        txnSummary.forEach(([label, value]) => {
-            checkPageBreak(6);
-            doc.setTextColor(80, 80, 80);
-            doc.text(label, margin + 10, yPos);
-            doc.setTextColor(0, 0, 0);
-            doc.setFont(undefined, 'bold');
-            doc.text(value, margin + 80, yPos);
-            doc.setFont(undefined, 'normal');
-            yPos += 5;
-        });
-        
-        yPos += 8;
-        
-        // Customer Profile
-        addSectionHeader('CUSTOMER PROFILE');
-        
-        doc.setFontSize(9);
-        const customerProfile = [
-            ['Customer Name:', data.customerName || 'Unknown Customer'],
-            ['Customer ID:', data.customerId],
-            ['Account Type:', 'Business - Corporate'],
-            ['Account Tenure:', '3.5 years'],
-            ['KYC Status:', 'Verified'],
-            ['Previous Cases:', '2 (Both resolved)'],
-            ['Industry:', 'Import/Export'],
-            ['Geographic Region:', 'Southeast Asia'],
-            ['Average Monthly Volume:', '$450,000']
-        ];
-        
-        doc.setFontSize(8);
-        customerProfile.forEach(([label, value]) => {
-            checkPageBreak(6);
-            doc.setTextColor(80, 80, 80);
-            doc.text(label, margin + 5, yPos);
-            doc.setTextColor(0, 0, 0);
-            doc.text(value, margin + 60, yPos);
-            yPos += 5;
-        });
-        
-        yPos += 8;
-        
-        // ===== PAGE 3: INVESTIGATION FINDINGS =====
-        doc.addPage();
-        yPos = 20;
-        
-        addSectionHeader('INVESTIGATION FINDINGS');
-        
-        doc.setFontSize(9);
-        doc.text('Key Findings:', margin + 5, yPos);
-        yPos += 7;
-        
-        const findings = [
-            '1. Pattern Analysis: Customer exhibited sudden change in transaction behavior starting ' +
-            '   15 days ago. Transaction frequency increased from 5 transactions per week to 20 ' +
-            '   transactions per week (4x increase).',
-            '',
-            '2. Geographic Anomaly: Multiple transactions routed through high-risk jurisdictions ' +
-            '   not previously associated with this customer\'s business profile.',
-            '',
-            '3. Amount Structuring: Multiple transactions kept just below the $10,000 reporting ' +
-            '   threshold. For example: $9,500, $9,700, $9,900. This appears intentional.',
-            '',
-            '4. Counterparty Analysis: Introduction of 8 new counterparties within a 10-day period, ' +
-            '   all with limited transaction history and unclear business relationships.'
-        ];
-        
-        doc.setFontSize(8);
-        findings.forEach(finding => {
-            checkPageBreak(6);
-            const lines = doc.splitTextToSize(finding, contentWidth - 10);
-            doc.text(lines, margin + 5, yPos);
-            yPos += lines.length * 4.5 + 2;
-        });
-        
-        yPos += 5;
-        
-        // Recommendation
-        addSectionHeader('RECOMMENDATIONS');
-        
-        doc.setFontSize(9);
-        const recommendations = [
-            '• Immediate escalation to senior compliance officer for review',
-            '• Enhanced due diligence (EDD) procedures to be initiated',
-            '• Request additional documentation from customer regarding business justification',
-            '• Review of all counterparty relationships and beneficial ownership structures',
-            '• Consider filing Suspicious Activity Report (SAR) if pattern continues',
-            '• Implement enhanced monitoring for next 90 days',
-            '• Customer interview recommended to clarify transaction purposes'
-        ];
-        
-        doc.setFontSize(8);
-        recommendations.forEach(rec => {
-            checkPageBreak(6);
-            doc.text(rec, margin + 5, yPos);
-            yPos += 5;
-        });
-        
-        yPos += 8;
-        
-        // Next Actions
-        addSectionHeader('NEXT ACTIONS REQUIRED');
-        
-        doc.setFontSize(9);
-        const actions = [
-            { action: 'Senior Analyst Review', deadline: '24 hours', owner: 'Compliance Manager' },
-            { action: 'Customer Documentation Request', deadline: '48 hours', owner: 'Relationship Manager' },
-            { action: 'EDD Completion', deadline: '5 business days', owner: 'AML Team' },
-            { action: 'Management Decision', deadline: '7 business days', owner: 'Head of Compliance' }
-        ];
-        
-        doc.setFontSize(8);
-        doc.setFont(undefined, 'bold');
-        doc.text('Action', margin + 5, yPos);
-        doc.text('Deadline', margin + 90, yPos);
-        doc.text('Owner', margin + 130, yPos);
-        doc.setFont(undefined, 'normal');
-        yPos += 6;
-        
-        actions.forEach(item => {
-            checkPageBreak(6);
-            doc.text(item.action, margin + 5, yPos);
-            doc.text(item.deadline, margin + 90, yPos);
-            doc.text(item.owner, margin + 130, yPos);
-            yPos += 5;
-        });
-        
-        // ===== FOOTER ON EVERY PAGE =====
-        const totalPages = doc.internal.getNumberOfPages();
-        for (let i = 1; i <= totalPages; i++) {
-            doc.setPage(i);
-            doc.setFontSize(7);
-            doc.setTextColor(150, 150, 150);
-            doc.text('Generated by KYRO AML Risk Assessment System', pageWidth / 2, 285, { align: 'center' });
-            doc.text('This report is confidential and intended for authorized personnel only.', pageWidth / 2, 290, { align: 'center' });
-            doc.text(`Page ${i} of ${totalPages}`, pageWidth - margin, 290, { align: 'right' });
-            doc.text(`Report ID: ${data.caseId.substring(0, 8).toUpperCase()}`, margin, 290);
+        y += 25;
+
+        // ── Summary ──────────────────────────────────────────────────
+        if (has('summary')) {
+            section('Case Summary');
+            const rules = ((alert.triggered_rules && (alert.triggered_rules.rules || alert.triggered_rules)) || []);
+            const ruleNames = (Array.isArray(rules) ? rules : []).map(r => (this.RULES[r] ? this.RULES[r][0] : r));
+            const summary = `${data.customerName} (${data.customerId}) was flagged by KYRO on ${fmtDate(alert.created_at)} ` +
+                `with a risk score of ${alert.risk_score ?? 'n/a'}${alert.confidence != null ? ` (confidence ${Number(alert.confidence).toFixed(0)}%)` : ''}` +
+                `${ruleNames.length ? `, triggered by: ${ruleNames.join(', ')}` : ''}. ` +
+                `The case is ${human(alert.status || det.status).toLowerCase()} and ${det.assignedTo === 'Assigned' ? 'assigned to an analyst' : 'not yet assigned'}.`;
+            doc.setFontSize(9.5);
+            const lines = doc.splitTextToSize(summary, CW);
+            ensure(lines.length * 4.6 + 4);
+            text(lines, M, y, { size: 9.5, color: C.body });
+            y += lines.length * 4.6 + 5;
+
+            keyValues([
+                ['Alert type', human(alert.alert_type)],
+                ['Trigger', human(det.triggerType)],
+                ['Opened', fmtDate(alert.created_at, true)],
+                ['Recommended action', human(alert.recommended_action)],
+                ['Assigned to', det.assignedTo || 'Unassigned'],
+                ['Resolved', alert.resolved_at ? fmtDate(alert.resolved_at, true) : 'Not resolved']
+            ]);
+
+            section('Customer Profile');
+            if (data.customer) {
+                keyValues([
+                    ['Full name', cust.full_name],
+                    ['Customer type', human(cust.customer_type)],
+                    ['Country', cust.country || '—'],
+                    ['Residency', cust.residency_country || '—'],
+                    ['Customer risk rating', `${cust.risk_level || '—'} (score ${cust.risk_score ?? '—'})`, cust.risk_level === 'HIGH' ? C.high : null],
+                    ['KYC status', human(cust.kyc_status)],
+                    ['Last KYC review', fmtDate(cust.kyc_last_review)],
+                    ['Customer since', fmtDate(cust.created_at)]
+                ]);
+            } else {
+                text('Customer record could not be loaded.', M, y, { size: 9, color: C.muted });
+                y += 8;
+            }
         }
-        
-        // Save the PDF
+
+        // ── Risk assessment ──────────────────────────────────────────
+        if (has('risk')) {
+            section('Risk Assessment', alert.ml_version ? `Model ${alert.ml_version}` : '');
+            const flag = (on) => (on ? 'Yes' : 'No');
+            keyValues([
+                ['PEP', flag(cust.pep_flag), cust.pep_flag ? C.high : null],
+                ['Sanctions match', flag(cust.sanctions_flag), cust.sanctions_flag ? C.high : null],
+                ['Adverse media', flag(cust.adverse_media_flag), cust.adverse_media_flag ? C.medium : null],
+                ['Last screened', fmtDate(cust.last_screened_at, true)]
+            ]);
+
+            const rules = (alert.triggered_rules && (alert.triggered_rules.rules || alert.triggered_rules)) || [];
+            const ruleRows = (Array.isArray(rules) ? rules : []).map(code => {
+                const r = this.RULES[code] || [code, 'Rule triggered', '—'];
+                return [code, r[0], r[1], r[2]];
+            });
+            ensure(16 + Math.max(ruleRows.length, 1) * 9);
+            text('Triggered rules', M, y, { size: 9.5, bold: true, color: C.ink });
+            y += 3;
+            table(['Rule', 'Name', 'What it detects', 'Severity'], ruleRows, {
+                empty: 'No rule triggers recorded for this alert.',
+                columnStyles: { 0: { cellWidth: 16, fontStyle: 'bold' }, 1: { cellWidth: 36 }, 3: { cellWidth: 22 } },
+                didParseCell: (h) => {
+                    if (h.section === 'body' && h.column.index === 3) {
+                        const sev = String(h.cell.raw);
+                        h.cell.styles.fontStyle = 'bold';
+                        h.cell.styles.textColor = sev === 'CRITICAL' || sev === 'HIGH' ? C.high : sev === 'MEDIUM' ? C.medium : C.low;
+                    }
+                }
+            });
+
+            if (alert.ml_explanation && typeof alert.ml_explanation === 'object') {
+                const feats = alert.ml_explanation.top_features || alert.ml_explanation.features || alert.ml_explanation;
+                const rows = Array.isArray(feats)
+                    ? feats.slice(0, 6).map(f => [human(f.feature || f.name), String(f.value ?? ''), String(f.contribution ?? f.shap ?? '')])
+                    : Object.entries(feats).slice(0, 6).map(([k, v]) => [human(k), typeof v === 'object' ? JSON.stringify(v) : String(v), '']);
+                ensure(16 + rows.length * 9);
+                text('Model explanation (top factors)', M, y, { size: 9.5, bold: true, color: C.ink });
+                y += 3;
+                table(['Factor', 'Value', 'Contribution'], rows);
+            }
+
+            if (Array.isArray(data.screening) && data.screening.length) {
+                ensure(16 + Math.min(data.screening.length, 8) * 9);
+                text('Watchlist screening results', M, y, { size: 9.5, bold: true, color: C.ink });
+                y += 3;
+                table(['Type', 'List / source', 'Match', 'Score', 'Status', 'Screened'],
+                    data.screening.slice(0, 8).map(s => [
+                        human(s.screening_type),
+                        (s.match_details && (s.match_details.source || s.match_details.list || s.match_details.list_name)) || s.screened_by || '—',
+                        (s.match_details && (s.match_details.matched_name || s.match_details.name)) || '—',
+                        s.match_score != null ? Number(s.match_score).toFixed(0) : '—', human(s.match_status), fmtDate(s.screened_at)
+                    ]));
+            }
+        }
+
+        // ── Transactions ─────────────────────────────────────────────
+        if (has('transactions')) {
+            const tx = data.transactions || [];
+            const s = this.summarizeTransactions(tx);
+            section('Transaction Analysis', tx.length ? `${fmtDate(s.first)} – ${fmtDate(s.last)}` : '');
+            keyValues([
+                ['Transactions on record', s.count.toLocaleString()],
+                ['Flagged (score >= 50 or rule flags)', `${s.flagged.toLocaleString()}${s.count ? ` (${Math.round(s.flagged / s.count * 100)}%)` : ''}`, s.flagged ? C.medium : null],
+                ['Countries involved', s.countries.length ? s.countries.slice(0, 8).join(', ') : '—'],
+                ['Most frequent counterparties', s.topCounterparties.length ? s.topCounterparties.map(([n, c]) => `${n} (${c})`).join(', ') : '—']
+            ]);
+            const curRows = Object.entries(s.byCurrency).sort((a, b) => b[1].total - a[1].total)
+                .map(([cur, v]) => [cur, v.count.toLocaleString(), money(v.total), money(v.total / v.count)]);
+            ensure(16 + Math.max(curRows.length, 1) * 9);
+            text('Volume by currency (not converted)', M, y, { size: 9.5, bold: true, color: C.ink });
+            y += 3;
+            table(['Currency', 'Transactions', 'Total amount', 'Average amount'], curRows, {
+                empty: 'No transactions on record for this customer.',
+                columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right' } }
+            });
+
+            const recent = [...tx].sort((a, b) => (b.risk_score || 0) - (a.risk_score || 0) || new Date(b.transaction_date) - new Date(a.transaction_date)).slice(0, 12);
+            if (recent.length) {
+                ensure(16 + 4 * 9);
+                text('Highest-risk transactions', M, y, { size: 9.5, bold: true, color: C.ink });
+                y += 3;
+                table(['Date', 'Type', 'Amount', 'Counterparty', 'Country', 'Risk'],
+                    recent.map(t => [fmtDate(t.transaction_date), human(t.transaction_type), `${money(t.amount)} ${t.currency || ''}`,
+                        t.meta_counterparty || '—', t.meta_country || '—', String(t.risk_score ?? 0)]),
+                    {
+                        columnStyles: { 2: { halign: 'right' }, 5: { halign: 'center', cellWidth: 14 } },
+                        didParseCell: (h) => {
+                            if (h.section === 'body' && h.column.index === 5) {
+                                const v = Number(h.cell.raw);
+                                h.cell.styles.fontStyle = 'bold';
+                                h.cell.styles.textColor = v >= 70 ? C.high : v >= 40 ? C.medium : C.low;
+                            }
+                        }
+                    });
+            }
+        }
+
+        // ── Timeline ─────────────────────────────────────────────────
+        if (has('timeline')) {
+            const events = [];
+            if (alert.created_at) events.push([alert.created_at, 'Alert raised', `${human(alert.alert_type)} · risk score ${alert.risk_score ?? '—'}`]);
+            if (alert.assigned_to) events.push([alert.created_at, 'Assigned', 'Case assigned to an analyst']);
+            if (alert.resolved_at) events.push([alert.resolved_at, 'Resolved', alert.resolution_notes || (alert.is_false_positive ? 'Closed as false positive' : 'Case resolved')]);
+            (data.kycReviews || []).forEach(r => {
+                events.push([r.completed_date || r.scheduled_date || r.created_at,
+                    `KYC review ${human(r.review_status).toLowerCase()}`,
+                    `${human(r.review_type)} review${r.risk_level_after ? ` · risk ${r.risk_level_after}` : ''}${r.findings ? ` · ${r.findings}` : ''}`]);
+            });
+            if (cust.last_screened_at) events.push([cust.last_screened_at, 'Watchlist screening', 'Customer screened against sanctions lists']);
+            events.sort((a, b) => new Date(a[0]) - new Date(b[0]));
+            section('Activity Timeline', '', 22 + Math.min(Math.max(events.length, 1), 6) * 9);
+            table(['Date', 'Event', 'Details'], events.map(e => [fmtDate(e[0], true), e[1], e[2]]), {
+                empty: 'No recorded activity.',
+                columnStyles: { 0: { cellWidth: 38 }, 1: { cellWidth: 40, fontStyle: 'bold' } }
+            });
+        }
+
+        // ── Suggested next steps (system guidance, not findings) ─────
+        const steps = [];
+        const action = alert.recommended_action;
+        if (cust.sanctions_flag) steps.push('Confirm or dismiss the sanctions match before any further transactions are processed.');
+        if (cust.pep_flag) steps.push('Apply enhanced due diligence for a Politically Exposed Person, including source of wealth.');
+        if (action === 'SAR') steps.push('The model recommends a SAR: confirm the suspicion and prepare the filing.');
+        if (action === 'ENHANCED_DUE_DILIGENCE') steps.push('Start enhanced due diligence: verify source of funds and the business rationale.');
+        if (action === 'IMMEDIATE_REVIEW' || riskLevel === 'HIGH') steps.push('Escalate to a senior compliance officer for a decision.');
+        if (['REVIEW', 'BATCH_REVIEW', 'IMMEDIATE_REVIEW'].includes(action) || riskLevel !== 'LOW') steps.push('Review the triggered rules against the customer\'s expected activity profile.');
+        steps.push('Document the investigation outcome and, if suspicion is confirmed, prepare a SAR/STR filing.');
+        section('Suggested Next Steps', 'System guidance based on alert and risk data');
+        steps.forEach((step, i) => {
+            doc.setFontSize(9.5);
+            const lines = doc.splitTextToSize(step, CW - 10);
+            ensure(lines.length * 4.6 + 3);
+            doc.setFillColor(...C.accentSoft);
+            doc.circle(M + 2.5, y - 1.2, 2.5, 'F');
+            text(String(i + 1), M + 2.5, y, { size: 7.5, bold: true, color: C.accent, align: 'center' });
+            text(lines, M + 8, y, { size: 9.5 });
+            y += lines.length * 4.6 + 3;
+        });
+
+        // ── Analyst sign-off ─────────────────────────────────────────
+        ensure(46);
+        section('Review & Sign-off');
+        const box = (x, label) => {
+            doc.setDrawColor(209, 213, 219);
+            doc.setLineWidth(0.3);
+            doc.rect(x, y - 3.2, 3.6, 3.6);
+            text(label, x + 5.5, y, { size: 9 });
+        };
+        text('Decision:', M, y, { size: 9, bold: true, color: C.ink });
+        box(M + 20, 'No further action');
+        box(M + 62, 'Enhanced monitoring');
+        box(M + 108, 'Escalate');
+        box(M + 135, 'File SAR/STR');
+        y += 13;
+        const signLine = (x, label) => {
+            doc.setDrawColor(156, 163, 175);
+            doc.line(x, y, x + 52, y);
+            text(label, x, y + 4.5, { size: 7.5, color: C.muted });
+        };
+        signLine(M, 'Prepared by (analyst)');
+        signLine(M + 62, 'Reviewed by (compliance officer)');
+        signLine(M + 124, 'Date');
+        text(data.preparedBy, M, y - 1.8, { size: 9, color: C.ink });
+        y += 10;
+
+        // ── Footer on every page ─────────────────────────────────────
+        const pages = doc.internal.getNumberOfPages();
+        for (let i = 1; i <= pages; i++) {
+            doc.setPage(i);
+            doc.setDrawColor(...C.accent);
+            doc.setLineWidth(0.6);
+            doc.line(M, H - 15, W - M, H - 15);
+            text('KYRO · AML Case Investigation Report · Confidential — for authorized personnel only', M, H - 10, { size: 7, color: C.muted });
+            text(`${reportId}   ·   Page ${i} of ${pages}`, W - M, H - 10, { size: 7, color: C.muted, align: 'right' });
+        }
+
         doc.save(`${filename}.pdf`);
     },
-    
+
     generateCSVContent(data) {
-        // Generate CSV format
-        const headers = ['Field', 'Value'];
+        const alert = data.alert || {};
+        const cust = data.customer || {};
+        const det = data.caseDetails || {};
+        const rules = (alert.triggered_rules && (alert.triggered_rules.rules || alert.triggered_rules)) || [];
+        const s = this.summarizeTransactions(data.transactions || []);
         const rows = [
             ['Case ID', data.caseId],
             ['Customer ID', data.customerId],
-            ['Status', data.caseDetails.status],
-            ['Risk Level', data.caseDetails.riskLevel],
-            ['Priority', data.caseDetails.priority],
-            ['Trigger Type', data.caseDetails.triggerType],
-            ['Created At', data.caseDetails.createdAt],
-            ['Assigned To', data.caseDetails.assignedTo],
-            ['Export Date', new Date(data.exportDate).toLocaleString()],
-            ['Sections', data.sections.join('; ')]
+            ['Customer name', data.customerName],
+            ['Alert type', alert.alert_type],
+            ['Risk score', alert.risk_score],
+            ['Risk level', det.riskLevel],
+            ['Priority', det.priority],
+            ['Status', alert.status || det.status],
+            ['Triggered rules', Array.isArray(rules) ? rules.join('; ') : ''],
+            ['Recommended action', alert.recommended_action],
+            ['Opened', alert.created_at],
+            ['Assigned to', det.assignedTo],
+            ['Customer risk rating', cust.risk_level],
+            ['KYC status', cust.kyc_status],
+            ['PEP', cust.pep_flag],
+            ['Sanctions match', cust.sanctions_flag],
+            ['Transactions on record', s.count],
+            ['Flagged transactions', s.flagged],
+            ...Object.entries(s.byCurrency).map(([cur, v]) => [`Total ${cur} (${v.count} txns)`, v.total.toFixed(2)]),
+            ['Exported', data.exportDate],
+            ['Exported by', data.preparedBy]
         ];
-        
-        let csv = headers.join(',') + '\n';
-        rows.forEach(row => {
-            csv += row.map(cell => `"${cell}"`).join(',') + '\n';
-        });
-        
-        return csv;
+        const cell = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+        return ['Field,Value', ...rows.map(r => r.map(cell).join(','))].join('\n') + '\n';
     },
-    
+
     downloadFile(filename, mimeType, content) {
         // Create blob and download
         const blob = new Blob([content], { type: mimeType });

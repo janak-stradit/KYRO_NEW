@@ -71,10 +71,36 @@ const Auth = {
     storeAuthData(authResponse) {
         localStorage.setItem(this.tokenKey, authResponse.access_token);
         localStorage.setItem(this.refreshTokenKey, authResponse.refresh_token);
-        localStorage.setItem(this.userKey, JSON.stringify(authResponse.user));
-        
-        // Update UI
-        this.updateUserDisplay(authResponse.user);
+        // The login response carries tokens only; the profile is fetched
+        // separately by ensureUser() once the app loads.
+        if (authResponse.user) {
+            localStorage.setItem(this.userKey, JSON.stringify(authResponse.user));
+            this.updateUserDisplay(authResponse.user);
+        } else {
+            localStorage.removeItem(this.userKey);
+        }
+    },
+
+    /**
+     * Load the signed-in user's profile if it isn't stored yet, then update
+     * the header and notify listeners via the "kyro:user" event.
+     */
+    async ensureUser() {
+        const stored = this.getUser();
+        if (stored && stored.username) return stored;
+        if (!window.API || !API.get) return null;
+        try {
+            const user = await API.get("/auth/me");
+            if (user && user.username) {
+                localStorage.setItem(this.userKey, JSON.stringify(user));
+                this.updateUserDisplay(user);
+                $(document).trigger("kyro:user", [user]);
+                return user;
+            }
+        } catch (error) {
+            console.warn("Could not load user profile:", error);
+        }
+        return null;
     },
     
     /**
@@ -218,8 +244,10 @@ const Auth = {
         
         if (this.isAuthenticated()) {
             const user = this.getUser();
-            if (user) {
+            if (user && user.username) {
                 this.updateUserDisplay(user);
+            } else {
+                this.ensureUser();
             }
             
             // Redirect to dashboard if on login page (but NOT landing page)
@@ -365,6 +393,7 @@ const LoginForm = {
         const username = $("#username").val().trim();
         const password = $("#password").val();
         const rememberMe = $("#rememberMe").is(":checked");
+        $("#loginError").removeClass("is-visible");
         
         // Validate form
         const isUsernameValid = this.validateField("username");
@@ -394,6 +423,8 @@ const LoginForm = {
         } catch (error) {
             console.error("Login error:", error);
             showToast("error", error.message, "Login Failed");
+            $("#loginErrorText").text(error.message || "Sign-in failed. Please try again.");
+            $("#loginError").addClass("is-visible");
             this.setFormEnabled(true);
             $("#password").focus().select();
         }
@@ -416,7 +447,7 @@ const LoginForm = {
         $("#username, #password, #rememberMe, #loginBtn").prop("disabled", !enabled);
         
         if (enabled) {
-            $("#loginBtn").html('<i class="fas fa-sign-in-alt me-2"></i>Sign In');
+            $("#loginBtn").text('Log In');
         } else {
             $("#loginBtn").html('<i class="fas fa-spinner fa-spin me-2"></i>Signing In...');
         }

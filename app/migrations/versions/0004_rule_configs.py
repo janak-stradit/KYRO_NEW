@@ -76,6 +76,7 @@ def upgrade() -> None:
         sa.column("jurisdiction", sa.String),
         sa.column("value", JSONB),
         sa.column("description", sa.Text),
+        schema=SCHEMA,
     )
     op.bulk_insert(
         rule_configs_table,

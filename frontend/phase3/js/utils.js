@@ -174,6 +174,13 @@ function formatDateTime(dateString, options = {}) {
     return date.toLocaleDateString('en-US', defaultOptions);
 }
 
+/**
+ * Escape text for safe insertion into HTML template strings.
+ */
+function escapeHtml(value) {
+    return String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
 function formatRelativeTime(dateString) {
     const date = new Date(dateString);
     const now = new Date();

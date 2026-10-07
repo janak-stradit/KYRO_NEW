@@ -50,49 +50,39 @@ const KyroChat = {
             <div class="kc-wrapper bg-[#F9FBFF]">
 
                 <!-- Page Title -->
-                <div class="kc-page-header max-w-7xl mx-auto px-6">
-                    <div class="kc-page-icon"><i class="fas fa-comment-dots"></i></div>
-                    <div>
-                        <h2 class="kc-page-title">Kyro - AI powered AML agent</h2>
-                        <p class="kc-page-subtitle">Chat with AI &bull; Autonomous operations &bull; Background compliance automation</p>
+                <div class="kyro-page" style="padding-bottom: 0;">
+                    <div class="kyro-page-head kc-hero">
+                        <div class="kc-hero__avatar" id="kcHeroAvatar">
+                            <img src="assets/Kyro1.png" alt="" onerror="this.style.display='none'">
+                        </div>
+                        <div class="kc-hero__body">
+                            <span class="kyro-kicker">AI Assistant</span>
+                            <h1 class="kyro-page-title">Kyro &ndash; AI-powered AML agent <span class="kc-v-badge">v2.0</span></h1>
+                            <div class="kc-hero__meta">
+                                <span class="kc-state-pill" id="kcStateBadge">STOPPED</span>
+                                <span class="kc-sync-time" id="kcSyncTime">Synced --</span>
+                            </div>
+                            <p class="kc-instruction" id="kcInstruction">
+                                Click <strong>Start Kyro</strong> to begin automated monitoring.
+                            </p>
+                        </div>
+                        <div class="kc-controls kc-hero__actions">
+                            <button class="kc-btn kc-btn-start"   id="startBtn"><i class="fas fa-play me-2"></i>Start Kyro</button>
+                            <button class="kc-btn kc-btn-pause"   id="pauseBtn"   style="display:none;"><i class="fas fa-pause me-2"></i>Pause</button>
+                            <button class="kc-btn kc-btn-resume"  id="resumeBtn"  style="display:none;"><i class="fas fa-play me-2"></i>Resume</button>
+                            <button class="kc-btn kc-btn-stop"    id="stopBtn"    style="display:none;"><i class="fas fa-stop me-2"></i>Stop</button>
+                            <button class="kc-btn kc-btn-handoff" id="handoffBtn" style="display:none;"><i class="fas fa-user-check me-2"></i>Handoff</button>
+                        </div>
                     </div>
                 </div>
 
                 <!-- Main two-col layout -->
-                <div class="kc-layout max-w-7xl mx-auto px-6 py-8">
+                <div class="kc-layout kyro-page">
 
                     <!-- ── LEFT: single bordered card ── -->
                     <div class="kc-left-panel">
                     <div class="kc-main-card">
 
-                        <!-- Agent info row -->
-                        <div class="kc-agent-card">
-                            <img src="assets/Kyro1.png" class="kc-agent-avatar" alt="Kyro"
-                                 onerror="this.style.display='none'">
-                            <div class="kc-agent-info">
-                                <div class="kc-agent-name-row">
-                                    <span class="kc-agent-name">Kyro &nbsp;– AI powered AML agent</span>
-                                    <span class="kc-v-badge">v2.0</span>
-                                </div>
-                                <div class="kc-neural">✦ Neural network active</div>
-                                <div style="display: flex; align-items: center; gap: 10px; margin: 6px 0;">
-                                    <span class="kc-state-pill" id="kcStateBadge">STOPPED</span>
-                                    <span class="kc-sync-time" id="kcSyncTime">Synced --</span>
-                                </div>
-                                <p class="kc-agent-desc">Kyro monitors compliance, executes actions, and requests human help when needed.</p>
-                            </div>
-                        </div>
-
-                        <!-- Run stats (hidden until RUNNING) -->
-                        <div class="kc-stats-card" id="kcStatsCard" style="display:none;">
-                            <div class="kc-stats-title">Run Statistics</div>
-                            <div class="kc-stats-grid">
-                                <div><div class="kc-sl">Actions</div><div class="kc-sv" id="kcStatActions">0</div></div>
-                                <div><div class="kc-sl">Success</div><div class="kc-sv kc-sv-ok" id="kcStatSuccess">0</div></div>
-                                <div><div class="kc-sl">Failure</div><div class="kc-sv kc-sv-err" id="kcStatFailure">0</div></div>
-                                <div><div class="kc-sl">Cases</div><div class="kc-sv" id="kcStatCases">0</div></div>
-                            </div>
-                        </div>
 
                         <!-- Chat messages -->
                         <div class="kc-messages" id="kcMessages"></div>
@@ -105,31 +95,28 @@ const KyroChat = {
                             🟢 Autonomous mode active — monitoring compliance events.
                         </div>
 
-                        <!-- Control buttons -->
-                        <div class="kc-controls">
-                            <button class="kc-btn kc-btn-start"   id="startBtn">Start Kyro</button>
-                            <button class="kc-btn kc-btn-pause"   id="pauseBtn"   style="display:none;">Pause Kyro</button>
-                            <button class="kc-btn kc-btn-resume"  id="resumeBtn"  style="display:none;">Resume Kyro</button>
-                            <button class="kc-btn kc-btn-stop"    id="stopBtn"    style="display:none;">Stop Kyro</button>
-                            <button class="kc-btn kc-btn-handoff" id="handoffBtn" style="display:none;">Handoff</button>
-                        </div>
 
-                        <!-- Instruction -->
-                        <p class="kc-instruction" id="kcInstruction">
-                            Click <strong>Start Kyro</strong> to begin automated monitoring.
-                        </p>
+
+                        <div class="kc-composer">
+                        <!-- Suggested questions -->
+                        <div class="kc-suggestions" id="kcSuggestions" aria-label="Suggested questions">
+                            <button type="button" class="kc-suggestion" data-prompt="Which open cases are high risk?">Which open cases are high risk?</button>
+                            <button type="button" class="kc-suggestion" data-prompt="Summarize today's alerts">Summarize today's alerts</button>
+                            <button type="button" class="kc-suggestion" data-prompt="Which periodic reviews are overdue?">Which reviews are overdue?</button>
+                            <button type="button" class="kc-suggestion" data-prompt="Explain the velocity spike pattern">Explain velocity spikes</button>
+                        </div>
 
                         <!-- Input row -->
                         <div class="kc-input-row">
-                            <input type="text" class="kc-input" id="kcInput"
-                                   placeholder="Ask about cases, transactions, compliance...">
-                            <button class="kc-send-btn" id="sendBtn">
-                                <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                          d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
-                                </svg>
+                            <input type="text" class="kc-input" id="kcInput" autocomplete="off"
+                                   aria-label="Message Kyro"
+                                   placeholder="Ask Kyro about cases, alerts, reviews or a customer ID (e.g. CUST-001)...">
+                            <button class="kc-send-btn" id="sendBtn" aria-label="Send message">
+                                <i class="fas fa-paper-plane" aria-hidden="true"></i>
                             </button>
                         </div>
+                        <p class="kc-composer__hint">Press <kbd>Enter</kbd> to send</p>
+                        </div><!-- /kc-composer -->
 
                     </div><!-- /kc-main-card -->
                     </div><!-- /kc-left-panel -->
@@ -145,6 +132,26 @@ const KyroChat = {
                                    muted loop playsinline preload="auto">
                                 <source src="assets/kyrochat.mp4" type="video/mp4">
                             </video>
+                        </div>
+
+                        <!-- Run stats (hidden until RUNNING) -->
+                        <div class="kc-stats-card kc-side-card" id="kcStatsCard" style="display:none;">
+                            <div class="kc-stats-title">Run Statistics</div>
+                            <div class="kc-stats-grid">
+                                <div><div class="kc-sl">Actions</div><div class="kc-sv" id="kcStatActions">0</div></div>
+                                <div><div class="kc-sl">Success</div><div class="kc-sv kc-sv-ok" id="kcStatSuccess">0</div></div>
+                                <div><div class="kc-sl">Failure</div><div class="kc-sv kc-sv-err" id="kcStatFailure">0</div></div>
+                                <div><div class="kc-sl">Cases</div><div class="kc-sv" id="kcStatCases">0</div></div>
+                            </div>
+                        </div>
+
+                        <div class="kc-side-card kc-capabilities">
+                            <h3>What Kyro can do</h3>
+                            <ul>
+                                <li><img src="assets/template/icons/investigation.svg" alt=""><span><strong>Investigate cases</strong>Summarize alerts and pull customer context.</span></li>
+                                <li><img src="assets/template/icons/review-checklist.svg" alt=""><span><strong>Track reviews</strong>Find overdue and upcoming periodic reviews.</span></li>
+                                <li><img src="assets/template/icons/analytics-search.svg" alt=""><span><strong>Explain patterns</strong>Describe why behavior was flagged.</span></li>
+                            </ul>
                         </div>
                     </div>
 
@@ -194,8 +201,11 @@ const KyroChat = {
         const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
         $("#kcSyncTime").text(`Synced ${timeStr}`);
 
-        // Status badge
+        // Status badge + ring around the header avatar
         $("#kcStateBadge").text(status);
+        $("#kcHeroAvatar")
+            .toggleClass("is-running", status === "RUNNING")
+            .toggleClass("is-paused", status === "PAUSED");
 
         // Status badge background color
         const styles = {
@@ -260,7 +270,7 @@ const KyroChat = {
         if (isUser) {
             html = `<div class="kc-msg kc-msg-user">
                 <div class="kc-bubble kc-bubble-user">
-                    <div class="kc-msg-text">${content}</div>
+                    <div class="kc-msg-text">${escapeHtml(content)}</div>
                     <div class="kc-msg-time kc-time-user">${timestamp}</div>
                 </div>
                </div>`;
@@ -268,7 +278,7 @@ const KyroChat = {
             // Check if this message should have expandable details
             if (options.showViewDetails && options.caseDetails) {
                 html = `<div class="kc-msg kc-msg-bot">
-                    <img src="assets/Kyro1.png" class="kc-msg-avatar" alt="Kyro"
+                    <img src="assets/Kyro1.png" class="kc-msg-avatar" alt=""
                          onerror="this.style.display='none'">
                     <div class="kc-bubble kc-bubble-bot">
                         <div class="kc-msg-text">${content}</div>
@@ -283,7 +293,7 @@ const KyroChat = {
                    </div>`;
             } else {
                 html = `<div class="kc-msg kc-msg-bot">
-                    <img src="assets/Kyro1.png" class="kc-msg-avatar" alt="Kyro"
+                    <img src="assets/Kyro1.png" class="kc-msg-avatar" alt=""
                          onerror="this.style.display='none'">
                     <div class="kc-bubble kc-bubble-bot">
                         <div class="kc-msg-text">${content}</div>
@@ -328,6 +338,12 @@ const KyroChat = {
         // Send button
         $("#sendBtn").on("click", () => this.sendMessage());
 
+        // Suggested questions send straight away
+        $(".kc-suggestion").on("click", (e) => {
+            $("#kcInput").val($(e.currentTarget).data("prompt"));
+            this.sendMessage();
+        });
+
         // Control buttons
         $("#startBtn").on("click",   () => this.startAgent());
         $("#pauseBtn").on("click",   () => this.pauseAgent());
@@ -368,15 +384,16 @@ const KyroChat = {
         if (!input) return;
 
         $("#kcInput").val("");
+        $("#kcSuggestions").addClass("is-hidden");
         this.addMessage("user", input);
 
         // Loading indicator
         const loadId = "kc-loading-" + Date.now();
         $("#kcMessages").append(`
             <div class="kc-msg kc-msg-bot" id="${loadId}">
-                <div class="kc-bubble kc-bubble-bot">
-                    <span class="spinner-border spinner-border-sm text-secondary me-2" style="width:10px;height:10px;"></span>
-                    <span style="font-size:12px;color:#64748b;">Kyro is typing...</span>
+                <img src="assets/Kyro1.png" class="kc-msg-avatar" alt="">
+                <div class="kc-bubble kc-bubble-bot kc-typing" aria-label="Kyro is typing">
+                    <span></span><span></span><span></span>
                 </div>
             </div>
         `);
@@ -549,8 +566,8 @@ const KyroChat = {
             // Full welcome message requested by user
             const welcomeMessage = kyroScripts.welcome.full;
             
-            // Speak the welcome message immediately when Start button is pressed
-            await this.speak(welcomeMessage);
+            // Speak the welcome in the background so the UI responds at once
+            Promise.resolve(this.speak(welcomeMessage)).catch(err => console.warn("Welcome speech failed:", err));
             
             // Update state - Initialize stats properly
             this.agentState.autonomous_status = "RUNNING";

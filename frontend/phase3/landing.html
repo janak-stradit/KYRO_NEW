@@ -2,235 +2,274 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>KYRO AML - Your AI Agent for Operational Excellence</title>
-    
+    <meta name="description" content="KYRO is an AI-powered AML agent for periodic reviews, transaction monitoring, sanctions screening and explainable alerts.">
+
     <!-- Favicon -->
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
     <link rel="alternate icon" href="favicon.ico">
-    
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/landing.css">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <link rel="stylesheet" href="css/landing.css?v=3">
 </head>
 <body>
-    <!-- Modern Navbar -->
-    <nav class="landing-nav">
-        <div class="nav-container">
-            <!-- Left: Logo with SVG shapes only -->
-            <a href="#" class="logo-link">
-                <div class="logo-svg-container" style="margin-left: -12px;">
-                    <!-- Left Dark Shape -->
-                    <svg width="22" height="26" viewBox="0 0 22 26" fill="none" xmlns="http://www.w3.org/2000/svg" class="logo-svg">
+    <!-- Utility bar -->
+    <div class="lp-topbar">
+        <div class="lp-container lp-topbar__inner">
+            <span><i class="fas fa-shield-halved"></i> AI-Powered AML Risk Assessment</span>
+            <span class="lp-topbar__center">Sanctions screening against <strong>OFAC, UN &amp; UK OFSI</strong> lists</span>
+
+        </div>
+    </div>
+
+    <!-- Header -->
+    <header class="lp-header" id="lpHeader">
+        <div class="lp-container lp-header__inner">
+            <a href="landing.html" class="lp-logo" aria-label="KYRO home">
+                <span class="lp-logo__mark" aria-hidden="true">
+                    <svg width="24" height="28" viewBox="0 0 22 26" fill="none" xmlns="http://www.w3.org/2000/svg">
                         <path d="M17.3573 25.4845C20.1188 25.4845 22.4006 23.2307 21.9439 20.5073C21.6589 18.808 21.228 17.142 20.6555 15.5347C19.5319 12.3802 17.8851 9.51402 15.809 7.0997C13.733 4.68537 11.2683 2.77023 8.55578 1.46361C7.38388 0.899101 6.17563 0.452955 4.94442 0.128265C2.27429 -0.575893 0 1.72305 0 4.48447V20.4845C0 23.2459 2.23858 25.4845 5 25.4845H17.3573Z" fill="black" fill-opacity="0.75"/>
                     </svg>
-                    <!-- Right Orange Overlapping Shape -->
-                    <svg width="22" height="26" viewBox="0 0 22 26" fill="none" xmlns="http://www.w3.org/2000/svg" class="logo-svg" style="margin-left: -12px;">
+                    <svg width="24" height="28" viewBox="0 0 22 26" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin-left: -12px;">
                         <path d="M4.64504 25.4845C1.88362 25.4845 -0.39823 23.2307 0.0585117 20.5073C0.343506 18.808 0.774422 17.142 1.3469 15.5347C2.47046 12.3802 4.11729 9.51402 6.19336 7.0997C8.26943 4.68537 10.7341 2.77023 13.4466 1.46361C14.6185 0.899101 15.8267 0.452955 17.058 0.128265C19.7281 -0.575893 22.0024 1.72305 22.0024 4.48447V20.4845C22.0024 23.2459 19.7638 25.4845 17.0024 25.4845H4.64504Z" fill="#FF6A00" fill-opacity="0.75"/>
                     </svg>
-                </div>
+                </span>
+                <span class="lp-logo__name">KYRO</span>
             </a>
-            
-            <!-- Right: Auth Buttons -->
-            <div class="nav-actions">
-                <a href="login.html" class="nav-signin">
-                    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="margin-right: 6px;">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
-                    </svg>
-                    Sign In
-                </a>
-                <a href="login.html" class="nav-cta">Get Started</a>
+
+            <nav class="lp-nav" id="lpNav" aria-label="Main">
+                <a href="#how-it-works">How It Works</a>
+                <a href="#capabilities">Capabilities</a>
+                <a href="#products">Products</a>
+            </nav>
+
+            <div class="lp-header__actions">
+                <a href="login.html" class="lp-btn lp-btn--outline">Sign In</a>
+                <a href="login.html" class="lp-btn lp-btn--primary">Get Started</a>
+                <button class="lp-menu-btn" id="lpMenuBtn" aria-label="Open menu" aria-expanded="false" aria-controls="lpNav">
+                    <i class="fas fa-bars"></i>
+                </button>
             </div>
         </div>
-    </nav>
+    </header>
 
-    <!-- Hero Section -->
-    <section class="hero-section">
-        <video class="hero-video" autoplay muted loop playsinline id="hero-video">
-            <source src="assets/Kyro.mp4" type="video/mp4">
-        </video>
-        
-        <!-- Volume Control -->
-        <button class="volume-control" id="volumeBtn" aria-label="Toggle sound">
-            <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
-            </svg>
-        </button>
-
-        <!-- Dark Overlay -->
-        <div class="hero-overlay"></div>
-
-        <!-- Hero Content -->
-        <div class="hero-content">
-            <div class="hero-grid">
-                <div class="hero-text">
-                    <h1 class="hero-title animate-fade-in">
-                        Introducing KYRO Your AML AI Agent: Your dedicated partner in operational excellence.
-                    </h1>
-                    <div class="hero-cta animate-fade-in-delay">
-                        <a href="login.html" class="btn-primary">Get Started →</a>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- How KYRO Works Section -->
-    <section class="section-how" id="how-it-works">
-        <div class="container">
-            <div class="section-header">
-                <h2 class="section-title">How KYRO works</h2>
-            </div>
-
-            <div class="how-grid">
-                <div class="how-image">
-                    <img src="assets/Globe.webp" alt="How KYRO works" class="rounded-image">
-                </div>
-                <div class="how-text">
-                    <p class="how-description">
-                        Performs periodic reviews by monitoring investor transactions and risk scores (high, medium, low) using rules and AI to detect anomalies, reduce false positives, and provide clear review justifications.
+    <main>
+        <!-- Hero -->
+        <section class="lp-hero">
+            <div class="lp-container lp-hero__grid">
+                <div class="lp-hero__text">
+                    <span class="lp-kicker">Introducing KYRO &middot; Your AML AI Agent</span>
+                    <h1 class="lp-hero__title">Your dedicated partner in operational excellence</h1>
+                    <p class="lp-hero__desc">
+                        KYRO runs periodic reviews, monitors transactions and screens customers against sanctions lists,
+                        using rules and AI to surface real risk, cut false positives and explain every decision.
                     </p>
+                    <div class="lp-hero__cta">
+                        <a href="login.html" class="lp-btn lp-btn--primary lp-btn--lg">Get Started <i class="fas fa-arrow-right"></i></a>
+                        <a href="#how-it-works" class="lp-btn lp-btn--outline lp-btn--lg">See How It Works</a>
+                    </div>
+                    <ul class="lp-hero__points">
+                        <li><i class="fas fa-check"></i> Rules + ML risk scoring</li>
+                        <li><i class="fas fa-check"></i> Explainable alerts</li>
+                        <li><i class="fas fa-check"></i> Full audit trail</li>
+                    </ul>
                 </div>
+
+                <div class="lp-hero__media">
+                    <div class="lp-hero__frame">
+                        <video class="lp-hero__video" autoplay muted loop playsinline id="hero-video" poster="assets/Kyro1.png">
+                            <source src="assets/Kyro.mp4" type="video/mp4">
+                        </video>
+                        <button class="lp-volume" id="volumeBtn" aria-label="Unmute video">
+                            <i class="fas fa-volume-xmark" aria-hidden="true"></i>
+                        </button>
+                    </div>
+                    <div class="lp-hero__badge">
+                        <span class="lp-hero__badge-icon"><i class="fas fa-shield-halved"></i></span>
+                        <span>
+                            <strong>Real-time monitoring</strong>
+                            <small>Risk scored as transactions arrive</small>
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Trust strip -->
+        <section class="lp-trust">
+            <div class="lp-container">
+                <h2 class="lp-trust__title">Built for compliance teams that need <span>defensible</span> AML decisions.</h2>
+                <div class="lp-trust__grid">
+                    <div class="lp-trust__item"><i class="fas fa-scale-balanced"></i><span>Sanctions &amp; PEP screening</span></div>
+                    <div class="lp-trust__item"><i class="fas fa-calendar-check"></i><span>Periodic KYC reviews</span></div>
+                    <div class="lp-trust__item"><i class="fas fa-chart-line"></i><span>Transaction monitoring</span></div>
+                    <div class="lp-trust__item"><i class="fas fa-brain"></i><span>Anomaly detection</span></div>
+                    <div class="lp-trust__item"><i class="fas fa-file-shield"></i><span>Audit-ready evidence</span></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- How KYRO works -->
+        <section class="lp-section" id="how-it-works">
+            <div class="lp-container lp-how">
+                <div class="lp-how__image">
+                    <img src="assets/Globe.webp" alt="KYRO monitoring customer activity across regions" loading="lazy">
+                </div>
+                <div class="lp-how__text">
+                    <span class="lp-kicker">How KYRO works</span>
+                    <h2 class="lp-section__title lp-section__title--left">Continuous reviews, clear justifications</h2>
+                    <p class="lp-section__desc lp-section__desc--left">
+                        KYRO performs periodic reviews by monitoring investor transactions and risk scores (high, medium, low)
+                        using rules and AI to detect anomalies, reduce false positives, and provide clear review justifications.
+                    </p>
+                    <ul class="lp-checklist">
+                        <li><i class="fas fa-circle-check"></i> Scores every customer and transaction as Low, Medium or High risk</li>
+                        <li><i class="fas fa-circle-check"></i> Flags deviations from each customer's behavioral baseline</li>
+                        <li><i class="fas fa-circle-check"></i> Routes high-confidence alerts to analysts for review</li>
+                        <li><i class="fas fa-circle-check"></i> Records why every alert fired, for auditors and regulators</li>
+                    </ul>
+                    <a href="login.html" class="lp-btn lp-btn--primary">Start Reviewing <i class="fas fa-arrow-right"></i></a>
+                </div>
+            </div>
+        </section>
+
+        <!-- Capabilities -->
+        <section class="lp-section lp-section--tint" id="capabilities">
+            <div class="lp-container">
+                <div class="lp-section__head">
+                    <h2 class="lp-section__title">Core Functions &amp; Capabilities</h2>
+                    <p class="lp-section__desc">Everything an AML program needs to monitor, investigate and explain risk, in one AI agent.</p>
+                </div>
+
+                <div class="lp-cards">
+                    <article class="lp-card">
+                        <div class="lp-card__icon"><img src="assets/template/icons/review-checklist.svg" alt=""></div>
+                        <h3 class="lp-card__title">Periodic Review &amp; Ongoing Monitoring</h3>
+                        <p class="lp-card__text">Automated periodic reviews that continuously monitor customer profiles and transactional behavior, catching changes in risk posture from activity trends, thresholds and behavioral deviations.</p>
+                        <a href="login.html" class="lp-card__link">View Details <i class="fas fa-arrow-right"></i></a>
+                    </article>
+
+                    <article class="lp-card">
+                        <div class="lp-card__icon"><img src="assets/template/icons/transaction-report.svg" alt=""></div>
+                        <h3 class="lp-card__title">Transaction Monitoring &amp; Risk Scoring</h3>
+                        <p class="lp-card__text">Real-time and batch monitoring that assigns Low / Medium / High scores with rules and AI models, detecting unusual size, frequency, geography or counterparties.</p>
+                        <a href="login.html" class="lp-card__link">View Details <i class="fas fa-arrow-right"></i></a>
+                    </article>
+
+                    <article class="lp-card">
+                        <div class="lp-card__icon"><img src="assets/template/icons/analytics-search.svg" alt=""></div>
+                        <h3 class="lp-card__title">AI-Driven Anomaly Detection</h3>
+                        <p class="lp-card__text">Machine learning establishes a normal pattern for each investor and flags deviations that may indicate AML, fraud or sanctions risk, improving through analyst feedback.</p>
+                        <a href="login.html" class="lp-card__link">View Details <i class="fas fa-arrow-right"></i></a>
+                    </article>
+
+                    <article class="lp-card">
+                        <div class="lp-card__icon"><img src="assets/template/icons/risk-gauge.svg" alt=""></div>
+                        <h3 class="lp-card__title">False Positive Reduction</h3>
+                        <p class="lp-card__text">Rules-based logic combined with AI modeling minimizes unnecessary alerts and prioritizes high-risk, high-confidence cases for human review.</p>
+                        <a href="login.html" class="lp-card__link">View Details <i class="fas fa-arrow-right"></i></a>
+                    </article>
+
+                    <article class="lp-card">
+                        <div class="lp-card__icon"><img src="assets/template/icons/investigation.svg" alt=""></div>
+                        <h3 class="lp-card__title">Explainability &amp; Audit Support</h3>
+                        <p class="lp-card__text">Clear, regulator-friendly explanations of why an alert fired and why a review is required, backed by a complete audit trail for examinations.</p>
+                        <a href="login.html" class="lp-card__link">View Details <i class="fas fa-arrow-right"></i></a>
+                    </article>
+
+                    <article class="lp-card">
+                        <div class="lp-card__icon"><img src="assets/template/icons/sanctions-shield.svg" alt=""></div>
+                        <h3 class="lp-card__title">Sanctions &amp; PEP Screening</h3>
+                        <p class="lp-card__text">Fuzzy name matching against OFAC, UN and UK OFSI lists, with customers and beneficial owners re-screened automatically whenever the lists update.</p>
+                        <a href="login.html" class="lp-card__link">View Details <i class="fas fa-arrow-right"></i></a>
+                    </article>
+                </div>
+            </div>
+        </section>
+
+        <!-- Products -->
+        <section class="lp-section" id="products">
+            <div class="lp-container">
+                <div class="lp-section__head">
+                    <h2 class="lp-section__title">Recommended For You</h2>
+                    <p class="lp-section__desc">More AI agents from the KYRO family for your operations team.</p>
+                </div>
+
+                <div class="lp-products">
+                    <article class="lp-product">
+                        <div class="lp-product__media"><img src="assets/Character%2002.webp" alt="" loading="lazy"></div>
+                        <h3 class="lp-product__name">StatementIQ</h3>
+                    </article>
+                    <article class="lp-product lp-product--featured">
+                        <div class="lp-product__media"><img src="assets/Character%2003.webp" alt="" loading="lazy"></div>
+                        <h3 class="lp-product__name">AltsIQ</h3>
+                    </article>
+                    <article class="lp-product">
+                        <div class="lp-product__media"><img src="assets/Character%2004.webp" alt="" loading="lazy"></div>
+                        <h3 class="lp-product__name">PortfolioQ</h3>
+                    </article>
+                    <article class="lp-product">
+                        <div class="lp-product__media"><img src="assets/Character%2005.webp" alt="" loading="lazy"></div>
+                        <h3 class="lp-product__name">FundScan</h3>
+                    </article>
+                </div>
+            </div>
+        </section>
+
+        <!-- Call to action -->
+        <section class="lp-cta">
+            <div class="lp-container lp-cta__inner">
+                <div>
+                    <h2 class="lp-cta__title">Ready to put KYRO to work?</h2>
+                    <p class="lp-cta__text">Sign in to review cases, schedule periodic reviews and chat with Kyro.</p>
+                </div>
+                <a href="login.html" class="lp-btn lp-btn--light lp-btn--lg">Get Started <i class="fas fa-arrow-right"></i></a>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="lp-footer">
+        <div class="lp-container lp-footer__grid">
+            <div>
+                <a href="landing.html" class="lp-logo lp-logo--light" aria-label="KYRO home">
+                    <span class="lp-logo__mark" aria-hidden="true">
+                        <svg width="24" height="28" viewBox="0 0 22 26" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M17.3573 25.4845C20.1188 25.4845 22.4006 23.2307 21.9439 20.5073C21.6589 18.808 21.228 17.142 20.6555 15.5347C19.5319 12.3802 17.8851 9.51402 15.809 7.0997C13.733 4.68537 11.2683 2.77023 8.55578 1.46361C7.38388 0.899101 6.17563 0.452955 4.94442 0.128265C2.27429 -0.575893 0 1.72305 0 4.48447V20.4845C0 23.2459 2.23858 25.4845 5 25.4845H17.3573Z" fill="white" fill-opacity="0.85"/>
+                        </svg>
+                        <svg width="24" height="28" viewBox="0 0 22 26" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin-left: -12px;">
+                            <path d="M4.64504 25.4845C1.88362 25.4845 -0.39823 23.2307 0.0585117 20.5073C0.343506 18.808 0.774422 17.142 1.3469 15.5347C2.47046 12.3802 4.11729 9.51402 6.19336 7.0997C8.26943 4.68537 10.7341 2.77023 13.4466 1.46361C14.6185 0.899101 15.8267 0.452955 17.058 0.128265C19.7281 -0.575893 22.0024 1.72305 22.0024 4.48447V20.4845C22.0024 23.2459 19.7638 25.4845 17.0024 25.4845H4.64504Z" fill="#FF6A00" fill-opacity="0.9"/>
+                        </svg>
+                    </span>
+                    <span class="lp-logo__name">KYRO</span>
+                </a>
+                <p class="lp-footer__about">AI-powered AML risk assessment: periodic reviews, transaction monitoring, sanctions screening and explainable alerts.</p>
+            </div>
+            <div>
+                <h3 class="lp-footer__heading">Platform</h3>
+                <ul class="lp-footer__links">
+                    <li><a href="#how-it-works">How It Works</a></li>
+                    <li><a href="#capabilities">Capabilities</a></li>
+                    <li><a href="#products">Products</a></li>
+                </ul>
+            </div>
+            <div>
+                <h3 class="lp-footer__heading">Account</h3>
+                <ul class="lp-footer__links">
+                    <li><a href="login.html">Sign In</a></li>
+                    <li><a href="login.html">Get Started</a></li>
+                </ul>
             </div>
         </div>
-    </section>
-
-    <!-- Core Functions & Capabilities Section -->
-    <section class="section-capabilities" id="capabilities">
-        <div class="container">
-            <div class="section-header">
-                <h2 class="section-title">Core Functions & Capabilities</h2>
-            </div>
-
-            <div class="capabilities-grid">
-                <!-- Card 1 -->
-                <div class="capability-card" data-color="purple">
-                    <div class="card-media">
-                        <video autoplay muted loop playsinline class="card-video">
-                            <source src="assets/envato_video_gen_Feb_27_2026_14_39_51.mp4" type="video/mp4">
-                        </video>
-                        <div class="card-gradient purple"></div>
-                        <div class="card-title-bottom">
-                            <h3>Periodic Review & Ongoing Monitoring</h3>
-                        </div>
-                        <div class="card-overlay">
-                            <h3>Periodic Review & Ongoing Monitoring</h3>
-                            <p>Conducts automated periodic reviews by continuously monitoring customer profiles and transactional behavior. Identifies changes in risk posture based on activity trends, thresholds, and behavioral deviations.</p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Card 2 -->
-                <div class="capability-card" data-color="blue">
-                    <div class="card-media">
-                        <video autoplay muted loop playsinline class="card-video">
-                            <source src="assets/Kyro Transaction.mp4" type="video/mp4">
-                        </video>
-                        <div class="card-gradient blue"></div>
-                        <div class="card-title-bottom">
-                            <h3>Transaction Monitoring & Risk Scoring</h3>
-                        </div>
-                        <div class="card-overlay">
-                            <h3>Transaction Monitoring & Risk Scoring</h3>
-                            <p>Monitors investor transactions in real time and batch mode. Assigns risk scores (Low / Medium / High) using predefined rules and AI-driven risk models. Detects suspicious activity including unusual transaction size, frequency, geography, or counterparties.</p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Card 3 -->
-                <div class="capability-card" data-color="pink">
-                    <div class="card-media">
-                        <video autoplay muted loop playsinline class="card-video">
-                            <source src="assets/envato_video_gen_Feb_27_2026_15_00_51.mp4" type="video/mp4">
-                        </video>
-                        <div class="card-gradient pink"></div>
-                        <div class="card-title-bottom">
-                            <h3>AI-Driven Anomaly Detection</h3>
-                        </div>
-                        <div class="card-overlay">
-                            <h3>AI-Driven Anomaly Detection</h3>
-                            <p>Uses machine learning models to establish normal behavioral patterns for each investor. Flags abnormal deviations from historical patterns that may indicate AML, fraud, or sanctions risks. Continuously improves detection accuracy through feedback loops.</p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Card 4 -->
-                <div class="capability-card" data-color="green">
-                    <div class="card-media">
-                        <video autoplay muted loop playsinline class="card-video">
-                            <source src="assets/envato_video_gen_Feb_27_2026_15_06_12.mp4" type="video/mp4">
-                        </video>
-                        <div class="card-gradient green"></div>
-                        <div class="card-title-bottom">
-                            <h3>False Positive Reduction</h3>
-                        </div>
-                        <div class="card-overlay">
-                            <h3>False Positive Reduction</h3>
-                            <p>Combines rules-based logic with AI modeling to minimize unnecessary alerts. Prioritizes high-risk and high-confidence alerts for human review. Improves operational efficiency and reduces compliance workload.</p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Card 5 -->
-                <div class="capability-card" data-color="orange">
-                    <div class="card-media">
-                        <video autoplay muted loop playsinline class="card-video">
-                            <source src="assets/envato_video_gen_Feb_27_2026_15_03_30.mp4" type="video/mp4">
-                        </video>
-                        <div class="card-gradient orange"></div>
-                        <div class="card-title-bottom">
-                            <h3>Explainability & Audit Support</h3>
-                        </div>
-                        <div class="card-overlay">
-                            <h3>Explainability & Audit Support</h3>
-                            <p>Clearly explains why an alert was triggered and why a review is required. Provides transparent, regulator-friendly justifications for decisions. Supports audit trails and regulatory examinations.</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
+        <div class="lp-container lp-footer__bottom">
+            <span>&copy; <span id="lpYear">2026</span> KYRO. All rights reserved.</span>
         </div>
-    </section>
+    </footer>
 
-    <!-- Recommended For You Section -->
-    <section class="section-recommended">
-        <div class="container">
-            <div class="section-header">
-                <h2 class="section-title">Recommended For You</h2>
-            </div>
-
-            <div class="recommended-grid">
-                <div class="recommended-card blue">
-                    <div class="recommended-image">
-                        <img src="assets/Character 02.webp" alt="StatementIQ">
-                    </div>
-                    <h3>StatementIQ</h3>
-                </div>
-
-                <div class="recommended-card purple">
-                    <div class="recommended-image">
-                        <img src="assets/Character 03.webp" alt="AltsIQ">
-                    </div>
-                    <h3>AltsIQ</h3>
-                </div>
-
-                <div class="recommended-card pink">
-                    <div class="recommended-image">
-                        <img src="assets/Character 04.webp" alt="PortfolioQ">
-                    </div>
-                    <h3>PortfolioQ</h3>
-                </div>
-
-                <div class="recommended-card green">
-                    <div class="recommended-image">
-                        <img src="assets/Character 05.webp" alt="FundScan">
-                    </div>
-                    <h3>FundScan</h3>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <script src="js/landing.js"></script>
+    <script src="js/landing.js?v=2"></script>
 </body>
 </html>

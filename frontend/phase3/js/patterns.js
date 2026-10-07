@@ -22,6 +22,7 @@ const Patterns = {
     },
     currentFilters: {
         customer: 'all',
+        search: '',
         patternType: 'all'
     },
     
@@ -142,50 +143,22 @@ const Patterns = {
         ).join('');
         
         const html = `
-            <div class="container-fluid py-4" style="max-width: 1280px; margin: 0 auto;">
+            <div class="kyro-page">
                 <!-- Header -->
-                <div class="d-flex justify-content-between align-items-center mb-4">
+                <div class="kyro-page-head">
                     <div>
-                        <h2 class="mb-1" style="font-weight: 600;">Behavior Patterns</h2>
-                        <p class="text-muted mb-0" style="font-size: 14px;">Customer behavioral baselines and anomaly detection analytics</p>
-                        <div class="mt-2">
+                        <span class="kyro-kicker">Behavior Analytics</span>
+                        <h1 class="kyro-page-title">Behavior Patterns</h1>
+                        <p class="kyro-page-sub">Customer behavioral baselines and anomaly detection analytics.</p>
+                        <div class="mt-3">
                             <span class="badge bg-success d-inline-flex align-items-center" style="font-size: 12px;">
                                 <i class="fas fa-circle me-1" style="font-size: 6px;"></i>
                                 Real-Time pattern monitoring active
                             </span>
                         </div>
                     </div>
-                    <button class="btn btn-danger px-4" id="refreshPatternsBtn" style="font-size: 14px;">Refresh</button>
-                </div>
-                
-                <!-- Filters & Search Section -->
-                <div class="mb-4" style="background: #fffbf5; padding: 16px 20px; border-radius: 8px;">
-                    <div class="row g-3 align-items-end">
-                        <div class="col-md-5">
-                            <select class="form-select" id="filterCustomers" style="font-size: 14px; border: 1px solid #e5e7eb;">
-                                <option value="all">All Customers</option>
-                                ${customerOptions}
-                            </select>
-                        </div>
-                        <div class="col-md-5">
-                            <select class="form-select" id="filterPatternType" style="font-size: 14px; border: 1px solid #e5e7eb;">
-                                <option value="all">All Pattern types</option>
-                                <option value="complexity_shift">Complexity shift</option>
-                                <option value="counterparty_changes">Counterparty changes</option>
-                                <option value="geographic_shift">Geographic shift</option>
-                                <option value="inactive_reactivation">Inactive reactivation</option>
-                                <option value="threshold_breach">Threshold breach</option>
-                                <option value="velocity_spike">Velocity spike</option>
-                            </select>
-                        </div>
-                        <div class="col-md-2">
-                            <button class="btn btn-outline-secondary w-100" id="clearFiltersBtn" style="font-size: 14px;">
-                                Clear Filters
-                            </button>
-                        </div>
-                    </div>
-                    <div class="mt-2">
-                        <small class="text-muted" id="filterStatus" style="font-size: 13px;">No filters applied</small>
+                    <div class="kyro-page-actions">
+                        <button class="btn btn-primary px-4" id="refreshPatternsBtn"><i class="fas fa-rotate-right me-2"></i>Refresh</button>
                     </div>
                 </div>
                 
@@ -200,8 +173,8 @@ const Patterns = {
                                     </div>
                                 </div>
                                 <div class="flex-grow-1">
-                                    <small class="text-muted d-block mb-1" style="font-size: 12px;">Total Patterns</small>
-                                    <h2 class="mb-0" style="font-weight: 700; font-size: 2rem;" id="totalPatternsCount">500</h2>
+                                    <small class="text-muted d-block mb-1" style="font-size: 12px;">Pattern Hits (30 days)</small>
+                                    <h2 class="mb-0" style="font-weight: 700; font-size: 2rem;" id="totalPatternsCount">&ndash;</h2>
                                 </div>
                             </div>
                         </div>
@@ -216,7 +189,7 @@ const Patterns = {
                                 </div>
                                 <div class="flex-grow-1">
                                     <small class="text-muted d-block mb-1" style="font-size: 12px;">Customers</small>
-                                    <h2 class="mb-0" style="font-weight: 700; font-size: 2rem;" id="customersCount">1000</h2>
+                                    <h2 class="mb-0" style="font-weight: 700; font-size: 2rem;" id="customersCount">&ndash;</h2>
                                 </div>
                             </div>
                         </div>
@@ -245,8 +218,8 @@ const Patterns = {
                                     </div>
                                 </div>
                                 <div class="flex-grow-1">
-                                    <small class="text-muted d-block mb-1" style="font-size: 12px;">Anomalies</small>
-                                    <h2 class="mb-0" style="font-weight: 700; font-size: 2rem;" id="anomaliesCount">333</h2>
+                                    <small class="text-muted d-block mb-1" style="font-size: 12px;">Transactions Analysed (30 days)</small>
+                                    <h2 class="mb-0" style="font-weight: 700; font-size: 2rem;" id="anomaliesCount">&ndash;</h2>
                                 </div>
                             </div>
                         </div>
@@ -260,7 +233,7 @@ const Patterns = {
                             <div class="card-body p-4">
                                 <div class="d-flex align-items-center mb-3">
                                     <i class="fas fa-chart-area me-2" style="color: #8b5cf6; font-size: 18px;"></i>
-                                    <h6 class="mb-0" style="font-weight: 600;">Transaction Size Baseline</h6>
+                                    <h6 class="mb-0" style="font-weight: 600;">Transaction Size Baseline</h6><span class="kp-sample" title="Illustrative values: per-customer baselines are not calculated by the backend yet">Sample data</span>
                                 </div>
                                 <div style="height: 280px;">
                                     <canvas id="transactionSizeChart"></canvas>
@@ -274,7 +247,7 @@ const Patterns = {
                             <div class="card-body p-4">
                                 <div class="d-flex align-items-center mb-3">
                                     <i class="fas fa-chart-line me-2" style="color: #22c55e; font-size: 18px;"></i>
-                                    <h6 class="mb-0" style="font-weight: 600;">Transaction Frequency Baselines</h6>
+                                    <h6 class="mb-0" style="font-weight: 600;">Transaction Frequency Baselines</h6><span class="kp-sample" title="Illustrative values: per-customer baselines are not calculated by the backend yet">Sample data</span>
                                 </div>
                                 <div style="height: 280px;">
                                     <canvas id="transactionFrequencyChart"></canvas>
@@ -296,47 +269,47 @@ const Patterns = {
                                 <div style="height: 180px; display: flex; align-items: center; justify-content: center;">
                                     <canvas id="patternTypeDonutChart" style="max-height: 180px;"></canvas>
                                 </div>
-                                <div class="mt-3 row g-2" style="font-size: 12px;">
+                                <div class="mt-3 row g-2" style="font-size: 12px;" id="patternDonutLegend">
                                     <div class="col-6">
                                         <div class="d-flex align-items-center mb-2">
                                             <i class="fas fa-circle me-2" style="font-size: 8px; color: #FF8D28;"></i>
                                             <span class="text-muted">Counterparty Changes</span>
-                                            <strong class="ms-auto">16.7%</strong>
+                                            <strong class="ms-auto">&ndash;</strong>
                                         </div>
                                     </div>
                                     <div class="col-6">
                                         <div class="d-flex align-items-center mb-2">
                                             <i class="fas fa-circle me-2" style="font-size: 8px; color: #1f2937;"></i>
                                             <span class="text-muted">Geographic Shift</span>
-                                            <strong class="ms-auto">16.7%</strong>
+                                            <strong class="ms-auto">&ndash;</strong>
                                         </div>
                                     </div>
                                     <div class="col-6">
                                         <div class="d-flex align-items-center mb-2">
                                             <i class="fas fa-circle me-2" style="font-size: 8px; color: #9ca3af;"></i>
                                             <span class="text-muted">Threshold Breach</span>
-                                            <strong class="ms-auto">16.7%</strong>
+                                            <strong class="ms-auto">&ndash;</strong>
                                         </div>
                                     </div>
                                     <div class="col-6">
                                         <div class="d-flex align-items-center mb-2">
                                             <i class="fas fa-circle me-2" style="font-size: 8px; color: #6b7280;"></i>
                                             <span class="text-muted">Velocity Spike</span>
-                                            <strong class="ms-auto">16.7%</strong>
+                                            <strong class="ms-auto">&ndash;</strong>
                                         </div>
                                     </div>
                                     <div class="col-6">
                                         <div class="d-flex align-items-center">
                                             <i class="fas fa-circle me-2" style="font-size: 8px; color: #d1d5db;"></i>
                                             <span class="text-muted">Complexity Shift</span>
-                                            <strong class="ms-auto">16.7%</strong>
+                                            <strong class="ms-auto">&ndash;</strong>
                                         </div>
                                     </div>
                                     <div class="col-6">
                                         <div class="d-flex align-items-center">
                                             <i class="fas fa-circle me-2" style="font-size: 8px; color: #374151;"></i>
                                             <span class="text-muted">Inactive Reactivation</span>
-                                            <strong class="ms-auto">16.7%</strong>
+                                            <strong class="ms-auto">&ndash;</strong>
                                         </div>
                                     </div>
                                 </div>
@@ -350,9 +323,9 @@ const Patterns = {
                                 <div class="d-flex align-items-center justify-content-between mb-3">
                                     <div class="d-flex align-items-center">
                                         <i class="fas fa-chart-area me-2" style="color: #FF8D28; font-size: 18px;"></i>
-                                        <h6 class="mb-0" style="font-weight: 600;">Pattern Type Distribution</h6>
+                                        <h6 class="mb-0" style="font-weight: 600;">Detected vs. Flagged Patterns</h6>
                                     </div>
-                                    <span class="text-muted" style="font-size: 11px;">ID:36797/91</span>
+                                    <span class="text-muted" style="font-size: 12px;">By month</span>
                                 </div>
                                 <div style="height: 280px;">
                                     <canvas id="patternTypeAreaChart"></canvas>
@@ -380,7 +353,7 @@ const Patterns = {
                                     </div>
                                 </div>
                                 <div class="text-end">
-                                    <h3 class="mb-0" style="font-weight: 700; color: #8b5cf6;" id="complexityCount">78</h3>
+                                    <h3 class="mb-0" style="font-weight: 700; color: #8b5cf6;" id="complexityCount">&ndash;</h3>
                                 </div>
                             </div>
                         </div>
@@ -402,7 +375,7 @@ const Patterns = {
                                     </div>
                                 </div>
                                 <div class="text-end">
-                                    <h3 class="mb-0" style="font-weight: 700; color: #22c55e;" id="counterpartyCount">92</h3>
+                                    <h3 class="mb-0" style="font-weight: 700; color: #22c55e;" id="counterpartyCount">&ndash;</h3>
                                 </div>
                             </div>
                         </div>
@@ -424,7 +397,7 @@ const Patterns = {
                                     </div>
                                 </div>
                                 <div class="text-end">
-                                    <h3 class="mb-0" style="font-weight: 700; color: #0ea5e9;" id="geographicCount">65</h3>
+                                    <h3 class="mb-0" style="font-weight: 700; color: #0ea5e9;" id="geographicCount">&ndash;</h3>
                                 </div>
                             </div>
                         </div>
@@ -446,7 +419,7 @@ const Patterns = {
                                     </div>
                                 </div>
                                 <div class="text-end">
-                                    <h3 class="mb-0" style="font-weight: 700; color: #eab308;" id="inactiveCount">43</h3>
+                                    <h3 class="mb-0" style="font-weight: 700; color: #eab308;" id="inactiveCount">&ndash;</h3>
                                 </div>
                             </div>
                         </div>
@@ -468,7 +441,7 @@ const Patterns = {
                                     </div>
                                 </div>
                                 <div class="text-end">
-                                    <h3 class="mb-0" style="font-weight: 700; color: #ef4444;" id="thresholdCount">126</h3>
+                                    <h3 class="mb-0" style="font-weight: 700; color: #ef4444;" id="thresholdCount">&ndash;</h3>
                                 </div>
                             </div>
                         </div>
@@ -490,7 +463,7 @@ const Patterns = {
                                     </div>
                                 </div>
                                 <div class="text-end">
-                                    <h3 class="mb-0" style="font-weight: 700; color: #FF8D28;" id="velocityCount">96</h3>
+                                    <h3 class="mb-0" style="font-weight: 700; color: #FF8D28;" id="velocityCount">&ndash;</h3>
                                 </div>
                             </div>
                         </div>
@@ -498,16 +471,33 @@ const Patterns = {
                 </div>
                 
                 <!-- Customer Behavioral Patterns Table -->
-                <div class="card border-0 shadow-sm mt-4">
-                    <div class="card-body p-4">
-                        <div class="d-flex justify-content-between align-items-center mb-4">
-                            <div>
-                                <h5 class="mb-1" style="font-weight: 600;">Customer Behavioral Patterns</h5>
-                                <p class="text-muted mb-0" style="font-size: 13px;">Detailed view of all customer patterns and baselines</p>
+                <div class="card rc-table-card mt-4">
+                    <div class="card-body p-0">
+                        <div class="rc-toolbar">
+                            <div class="rc-toolbar__title">
+                                <h2>Customer Behavioral Patterns <span class="kp-sample" title="Illustrative values: per-customer baselines are not calculated by the backend yet">Sample data</span></h2>
+                                <small class="text-muted" id="patternsCount">Loading patterns...</small>
                             </div>
-                            <button class="btn btn-sm" style="background: #FF8D28; color: white; font-size: 13px;">Show More</button>
+                            <div class="rc-toolbar__controls">
+                                <div class="rc-search">
+                                    <i class="fas fa-magnifying-glass" aria-hidden="true"></i>
+                                    <input type="search" class="form-control" id="patternSearch" placeholder="Search customer name or ID" aria-label="Search customers" autocomplete="off">
+                                </div>
+                                <select class="form-select" id="filterPatternType" aria-label="Filter by pattern type">
+                                    <option value="all">All pattern types</option>
+                                    <option value="complexity_shift">Complexity shift</option>
+                                    <option value="counterparty_changes">Counterparty changes</option>
+                                    <option value="geographic_shift">Geographic shift</option>
+                                    <option value="inactive_reactivation">Inactive reactivation</option>
+                                    <option value="threshold_breach">Threshold breach</option>
+                                    <option value="velocity_spike">Velocity spike</option>
+                                </select>
+                                <button type="button" class="btn rc-clear d-none" id="clearFiltersBtn">
+                                    <i class="fas fa-xmark me-1"></i>Clear
+                                </button>
+                            </div>
                         </div>
-                        
+
                         <div class="table-responsive">
                             <table class="table table-hover align-middle mb-0" style="font-size: 13px;">
                                 <thead style="background: #f8f9fa; border-bottom: 2px solid #dee2e6;">
@@ -568,49 +558,110 @@ const Patterns = {
         `;
         
         $("#mainContent").html(html);
-        this.updateStats();
         this.renderTable();
         this.initCharts();
+        this.updateStats();
         this.setupEventListeners();
     },
     
     async updateStats() {
-        // Calculate real-time stats from customerPatternData
-        const totalPatterns = this.customerPatternData.length;
-        const uniqueCustomers = new Set(this.customerPatternData.map(d => d.customerId)).size;
-        const patternTypes = 6; // Fixed: 6 canonical pattern types
-        
-        // For anomalies, we can use a multiplier
-        const totalPatternsAllTime = totalPatterns;
-        const anomalies = Math.round(totalPatternsAllTime * 0.666); // ~66% are anomalies
-        
-        // Use actual unique customers from pattern data (5 in our case)
-        let actualCustomerCount = uniqueCustomers;
-        
-        // Try to fetch from API but don't override if we have local data
-        try {
-            const kpiData = await API.get(API.endpoints.kpis);
-            if (kpiData && kpiData.total_customers) {
-                // Use API data if available, otherwise stick with our local count
-                actualCustomerCount = kpiData.total_customers || uniqueCustomers;
-            }
-        } catch (e) {
-            console.warn("Could not fetch customer count from API, using local count:", uniqueCustomers);
-        }
+        // Pattern hits and transactions come from the backend pattern detector
+        const [patternsRes, kpisRes, chartsRes] = await Promise.allSettled([
+            API.get("/dashboard/patterns"),
+            API.get(API.endpoints.kpis),
+            API.get("/dashboard/charts")
+        ]);
+        const summary = patternsRes.status === "fulfilled" ? patternsRes.value : null;
+        const kpis = kpisRes.status === "fulfilled" ? kpisRes.value : null;
+        const charts = chartsRes.status === "fulfilled" ? chartsRes.value : null;
 
-        // Update the DOM with formatted numbers
-        $("#totalPatternsCount").text(totalPatternsAllTime.toLocaleString());
-        $("#customersCount").text(actualCustomerCount.toLocaleString());
-        $("#patternTypesCount").text(patternTypes.toLocaleString());
-        $("#anomaliesCount").text(anomalies.toLocaleString());
+        $("#customersCount").text(kpis ? Number(kpis.total_customers || 0).toLocaleString() : "–");
+        $("#patternTypesCount").text("6");
+        $("#totalPatternsCount").text(summary ? Number(summary.total_pattern_hits || 0).toLocaleString() : "–");
+        $("#anomaliesCount").text(summary ? Number(summary.total_transactions || 0).toLocaleString() : "–");
+
+        if (summary && Array.isArray(summary.patterns)) {
+            this.applyPatternSummary(summary.patterns);
+        }
+        if (charts && charts.behavior_trends) {
+            this.applyTrend(charts.behavior_trends);
+        }
     },
-    
+
+    applyPatternSummary(patterns) {
+        const cardIds = {
+            COMPLEXITY_SHIFT: "#complexityCount",
+            COUNTERPARTY_CHANGES: "#counterpartyCount",
+            GEOGRAPHIC_SHIFT: "#geographicCount",
+            INACTIVE_REACTIVATION: "#inactiveCount",
+            THRESHOLD_BREACH: "#thresholdCount",
+            VELOCITY_SPIKE: "#velocityCount"
+        };
+        patterns.forEach(p => {
+            if (cardIds[p.id]) $(cardIds[p.id]).text(Number(p.hit_count || 0).toLocaleString());
+        });
+
+        const colors = ["#FF8D28", "#1f2937", "#9ca3af", "#6b7280", "#d1d5db", "#374151"];
+        const sorted = [...patterns].sort((a, b) => (b.hit_count || 0) - (a.hit_count || 0));
+        const total = sorted.reduce((sum, p) => sum + (p.hit_count || 0), 0);
+
+        if (this.charts.patternTypeDonut) {
+            const chart = this.charts.patternTypeDonut;
+            chart.data.labels = sorted.map(p => p.label);
+            chart.data.datasets[0].data = sorted.map(p => p.hit_count || 0);
+            chart.data.datasets[0].backgroundColor = colors;
+            chart.options.plugins.tooltip.callbacks.label = (ctx) => {
+                const pct = total ? ((ctx.parsed / total) * 100).toFixed(1) : "0.0";
+                return `${ctx.label}: ${ctx.parsed.toLocaleString()} (${pct}%)`;
+            };
+            chart.update();
+        }
+        $("#patternDonutLegend").html(sorted.map((p, i) => `
+            <div class="col-6">
+                <div class="d-flex align-items-center mb-2">
+                    <i class="fas fa-circle me-2" style="font-size: 8px; color: ${colors[i]};"></i>
+                    <span class="text-muted">${escapeHtml(p.label)}</span>
+                    <strong class="ms-auto">${total ? ((p.hit_count || 0) / total * 100).toFixed(1) : "0.0"}%</strong>
+                </div>
+            </div>
+        `).join(""));
+    },
+
+    applyTrend(trend) {
+        const chart = this.charts.patternTypeArea;
+        if (!chart || !trend.labels || !trend.labels.length) return;
+        chart.data.labels = trend.labels;
+        chart.data.datasets = [
+            {
+                label: "Detected",
+                data: trend.detected || [],
+                borderColor: "#1f2937",
+                backgroundColor: "rgba(31, 41, 55, 0.06)",
+                borderWidth: 3, fill: true, tension: 0.4,
+                pointRadius: 4, pointBackgroundColor: "#1f2937", pointBorderColor: "#fff", pointBorderWidth: 2
+            },
+            {
+                label: "Flagged",
+                data: trend.flagged || [],
+                borderColor: "#FF8D28",
+                backgroundColor: "rgba(255, 141, 40, 0.15)",
+                borderWidth: 3, fill: true, tension: 0.4,
+                pointRadius: 4, pointBackgroundColor: "#FF8D28", pointBorderColor: "#fff", pointBorderWidth: 2
+            }
+        ];
+        chart.options.plugins.legend = { display: true, position: "bottom", labels: { usePointStyle: true, boxWidth: 8 } };
+        chart.options.scales.y.max = undefined;
+        chart.options.scales.y.ticks.callback = (value) => Number(value).toLocaleString();
+        chart.update();
+    },
+
     renderTable() {
         let filteredData = this.customerPatternData;
         
         // Apply filters
-        if (this.currentFilters.customer !== 'all') {
-            filteredData = filteredData.filter(d => d.customerId === this.currentFilters.customer);
+        const q = (this.currentFilters.search || '').trim().toLowerCase();
+        if (q) {
+            filteredData = filteredData.filter(d => `${d.customerName || ''} ${d.customerId}`.toLowerCase().includes(q));
         }
         if (this.currentFilters.patternType !== 'all') {
             filteredData = filteredData.filter(d => d.patternType === this.currentFilters.patternType);
@@ -622,6 +673,9 @@ const Patterns = {
         const startIdx = (this.pagination.currentPage - 1) * this.pagination.pageSize;
         const endIdx = Math.min(startIdx + this.pagination.pageSize, total);
         const paginatedData = filteredData.slice(startIdx, endIdx);
+        $("#patternsCount").text(total
+            ? `Showing ${startIdx + 1}-${endIdx} of ${total.toLocaleString()} pattern records`
+            : "No matching pattern records");
         
         // Generate table rows
         const rows = paginatedData.map(data => {
@@ -644,7 +698,7 @@ const Patterns = {
                     </td>
                     <td class="px-3 py-3">${data.lastUpdated}</td>
                     <td class="px-3 py-3">
-                        <button class="btn btn-sm px-3 view-cases-btn" data-customer="${data.customerId}" data-pattern="${data.patternType}" style="background: #FF8D28; color: white; font-size: 12px;">
+                        <button type="button" class="btn btn-sm rc-actions__view view-cases-btn" data-customer="${data.customerId}" data-pattern="${data.patternType}">
                             View Cases
                         </button>
                     </td>
@@ -1012,51 +1066,33 @@ const Patterns = {
         
         // Refresh button
         $("#refreshPatternsBtn").on("click", async () => {
-            if (typeof Utils !== 'undefined' && Utils.showToast) {
-                Utils.showToast("Refreshing pattern data...", "info");
-            }
             await this.fetchRealCustomersAndGeneratePatterns();
             this.renderTable();
+            this.updateStats();
             this.updateChartsForPattern(this.currentFilters.patternType);
         });
         
-        // Clear Filters button
-        $("#clearFiltersBtn").on("click", function() {
-            $("#filterCustomers").val("all");
-            $("#filterPatternType").val("all");
-            self.currentFilters.customer = "all";
-            self.currentFilters.patternType = "all";
-            self.pagination.currentPage = 1; // Reset pagination
-            self.renderTable();
-            self.updateChartsForPattern("all");
-            Utils.showToast("Filters cleared", "success");
-        });
-        
-        // Filter dropdowns with table update
-        $("#filterCustomers, #filterPatternType").on("change", function() {
-            self.currentFilters.customer = $("#filterCustomers").val();
+        // Search + pattern filter (table only; baseline charts follow the pattern)
+        const applyFilters = () => {
+            self.currentFilters.search = $("#patternSearch").val() || '';
             self.currentFilters.patternType = $("#filterPatternType").val();
-            self.pagination.currentPage = 1; // Reset to first page when filtering
-            
-            // Update table with filtered data
+            self.pagination.currentPage = 1;
+            $("#clearFiltersBtn").toggleClass("d-none",
+                self.currentFilters.search.trim() === '' && self.currentFilters.patternType === 'all');
             self.renderTable();
-            
-            // Update charts based on selected pattern type
             self.updateChartsForPattern(self.currentFilters.patternType);
-            
-            const patternName = self.currentFilters.patternType === 'all' 
-                ? 'All Pattern Types' 
-                : self.currentFilters.patternType.replace(/_/g, ' ');
-            
-            const customerName = self.currentFilters.customer === 'all'
-                ? 'All Customers'
-                : self.currentFilters.customer;
-            
-            Utils.showToast(`Viewing: ${customerName} - ${patternName}`, "success");
+        };
+        $("#filterPatternType").on("change", applyFilters);
+        $("#patternSearch").on("input", debounce(applyFilters, 200));
+        $("#clearFiltersBtn").on("click", () => {
+            $("#patternSearch").val('');
+            $("#filterPatternType").val('all');
+            $(".pattern-card").removeClass("border-primary");
+            applyFilters();
         });
-        
+
         // Pattern card clicks
-        $(document).on("click", ".pattern-card", function() {
+        $(document).off("click.patterns", ".pattern-card").on("click.patterns", ".pattern-card", function() {
             const pattern = $(this).data("pattern");
             
             // Highlight selected card
@@ -1078,9 +1114,6 @@ const Patterns = {
             
             console.log("View Cases clicked:", customerId, patternType);
             
-            if (window.Utils && Utils.showToast) {
-                Utils.showToast(`Opening cases for ${customerId} - ${patternName}`, "info");
-            }
             
             // Navigate to cases page using App.navigateTo
             if (window.App && App.navigateTo) {
@@ -1117,8 +1150,9 @@ const Patterns = {
             e.stopPropagation();
             
             let filteredData = self.customerPatternData;
-            if (self.currentFilters.customer !== 'all') {
-                filteredData = filteredData.filter(d => d.customerId === self.currentFilters.customer);
+            const q = (self.currentFilters.search || '').trim().toLowerCase();
+            if (q) {
+                filteredData = filteredData.filter(d => `${d.customerName || ''} ${d.customerId}`.toLowerCase().includes(q));
             }
             if (self.currentFilters.patternType !== 'all') {
                 filteredData = filteredData.filter(d => d.patternType === self.currentFilters.patternType);
@@ -1150,17 +1184,6 @@ const Patterns = {
             }
         });
         
-        // Show More button
-        $(document).on("click", ".card-body .btn-sm", function() {
-            if ($(this).text() === 'Show More') {
-                $(this).text('Show Less');
-                Utils.showToast("Showing all patterns", "info");
-            } else {
-                $(this).text('Show More');
-                Utils.showToast("Showing limited patterns", "info");
-            }
-        });
-        
         // Table row click to highlight (but not when clicking button)
         $(document).on("click", ".pattern-table-row", function(e) {
             // Don't highlight if clicking the button
@@ -1175,9 +1198,6 @@ const Patterns = {
             const patternType = $(this).data("pattern");
             const patternName = patternType.replace(/_/g, ' ');
             
-            if (window.Utils && Utils.showToast) {
-                Utils.showToast(`Selected: ${customerId} - ${patternName}`, "info");
-            }
         });
     }
 };

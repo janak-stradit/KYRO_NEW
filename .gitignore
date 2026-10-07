@@ -1,5 +1,6 @@
 # ── Python ────────────────────────────────────────────────────
 venv/
+.venv/
 .venv-api/
 __pycache__/
 *.pyc
@@ -26,6 +27,7 @@ logs/
 output/
 *.xlsx
 .env
+local.env
 pyrightconfig.json
 
 # ── IDE ───────────────────────────────────────────────────────

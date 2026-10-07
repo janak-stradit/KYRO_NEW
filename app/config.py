@@ -39,7 +39,14 @@ class Settings(BaseSettings):
     def cors_origins(self) -> list[str]:
         return [o.strip() for o in self.cors_allowed_origins.split(",") if o.strip() and o.strip() != "*"]
 
+    # ── Local (non-Docker) run ─────────────────────────────────────
+    # Path to frontend/phase3 to serve it from the API itself; empty in Docker,
+    # where nginx serves the frontend.
+    serve_frontend_dir: str = ""
+
     # ── ML (Phase 2) ─────────────────────────────────────────────
+    # True = start without /api/v1/ml endpoints if the ML stack can't import.
+    ml_optional: bool = False
     model_registry_path: str = "./models"
     default_risk_model_version: int | None = None
     default_anomaly_model_version: int | None = None

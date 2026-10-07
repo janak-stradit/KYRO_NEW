@@ -417,35 +417,13 @@ const App = {
     },
     
     showNotification(notification) {
-        // Update notification badge
-        const currentCount = parseInt($("#notificationBadge").text()) || 0;
-        $("#notificationBadge").text(currentCount + 1);
-        $("#sidebarAlertCount").text(currentCount + 1);
-        
-        // Add to notification dropdown
-        const notificationHtml = `
-            <li>
-                <a class="dropdown-item d-flex align-items-start" href="/alerts/${notification.id}">
-                    <div class="flex-shrink-0 me-3">
-                        <i class="fas fa-exclamation-triangle text-${getRiskColor(notification.risk_score)}"></i>
-                    </div>
-                    <div class="flex-grow-1">
-                        <div class="fw-semibold">${notification.customer_name}</div>
-                        <small class="text-muted">${notification.alert_type} • ${formatRelativeTime(notification.created_at)}</small>
-                    </div>
-                </a>
-            </li>
-        `;
-        
-        // Remove "no notifications" message if present
-        $("#notificationList").find(".dropdown-item-text").parent().remove();
-        $("#notificationList").prepend(notificationHtml);
-        
-        // Limit to 10 notifications
-        $("#notificationList li").slice(10).remove();
+        // Badge and dropdown are owned by notifications.js
+        if (window.Notifications) {
+            Notifications.add(notification);
+        }
         
         // Show toast notification
-        showToast("info", `New ${notification.alert_type} alert for ${notification.customer_name}`, "New Alert");
+        showToast("info", `New ${Notifications.humanize(notification.alert_type)} alert for ${Notifications.escape(notification.customer_name)}`, "New Alert");
         
         // Play notification sound
         playNotificationSound("alert");
@@ -456,6 +434,34 @@ const App = {
         }
     }
 };
+
+// Template artwork for each page's heading band, keyed by route. The dashboard
+// renders its own; pages not listed here get none.
+const PAGE_HEAD_ART = {
+    cases: "investigation",
+    "periodic-reviews": "review-checklist",
+    patterns: "analytics-search"
+};
+
+function decoratePageHeads() {
+    const page = window.location.pathname.replace(/^\/+/, "").split("/")[0];
+    const art = PAGE_HEAD_ART[page];
+    if (!art) return;
+    document.querySelectorAll("#mainContent .kyro-page-head:not(.has-art)").forEach((head) => {
+        head.classList.add("has-art");
+        head.insertAdjacentHTML(
+            "beforeend",
+            `<div class="kyro-page-art" aria-hidden="true"><img src="assets/template/icons/${art}.svg" alt=""></div>`
+        );
+    });
+}
+
+$(function() {
+    const main = document.getElementById("mainContent");
+    if (main) {
+        new MutationObserver(decoratePageHeads).observe(main, { childList: true, subtree: true });
+    }
+});
 
 // Initialize application when DOM is ready
 $(document).ready(function() {

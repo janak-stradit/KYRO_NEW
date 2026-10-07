@@ -150,6 +150,7 @@ def upgrade() -> None:
         sa.column("name", sa.String),
         sa.column("list_category", sa.String),
         sa.column("url", sa.Text),
+        schema=SCHEMA,
     )
     op.bulk_insert(sources_table, SOURCE_SEEDS)
 

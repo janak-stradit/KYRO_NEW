@@ -18,7 +18,7 @@
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <!-- Font Awesome 6 -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
     <!-- DataTables CSS -->
@@ -33,15 +33,31 @@
     <link rel="stylesheet" href="css/dashboard.css">
     <link rel="stylesheet" href="css/action-cards.css">
     <link rel="stylesheet" href="css/kyrochat.css">
+    <!-- Theme layer (template layout/cards/typography, KYRO colours) - keep last -->
+    <link rel="stylesheet" href="css/theme.css?v=17">
     
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡️</text></svg>">
 </head>
 <body class="d-flex flex-column min-vh-100">
+    <script>
+        // Visitors who aren't signed in see the public landing page first.
+        try {
+            if (!localStorage.getItem("access_token")) { window.location.replace("/landing.html"); }
+        } catch (e) { window.location.replace("/landing.html"); }
+    </script>
     <!-- Navigation Bar -->
     <header class="fixed-top kyro-navbar">
-        <!-- Single Row: Logo + Search on Right -->
-        <div class="d-flex justify-content-between align-items-center py-3 px-4" style="border-bottom: 1px solid #e5e7eb;">
-            <!-- Left: Logo + Navigation Links -->
+        <!-- Utility bar -->
+        <div class="kyro-topbar">
+            <div class="kyro-topbar__inner">
+                <span class="kyro-topbar__item"><i class="fas fa-shield-halved"></i>AI-Powered AML Risk Assessment</span>
+                <span class="kyro-topbar__item"><span class="kyro-topbar__live"></span>Real-time monitoring active</span>
+                <a class="kyro-topbar__item" href="/kyrochat"><i class="fas fa-comment-dots"></i>Ask Kyro</a>
+            </div>
+        </div>
+
+        <!-- Main bar: logo | navigation | search + user controls -->
+        <div class="d-flex justify-content-between align-items-center kyro-mainbar">
             <div class="d-flex align-items-center gap-2 kyro-header-left">
                 <!-- Hamburger Menu Button (Mobile/Tablet) -->
                 <button class="btn border-0 text-dark p-2 d-lg-none" id="hamburgerMenuBtn" aria-label="Toggle Navigation">
@@ -61,8 +77,15 @@
                     <span class="fw-bold ms-2" style="font-size: 1.25rem; color: #1f2937;">AML</span>
                 </a>
             </div>
+
+            <nav class="kyro-mainnav kyro-desktop-nav-row" aria-label="Main">
+                <a class="nav-link" href="/dashboard" data-page="dashboard">Dashboard</a>
+                <a class="nav-link" href="/periodic-reviews" data-page="periodic-reviews">Periodic Reviews</a>
+                <a class="nav-link" href="/cases" data-page="cases">Review Cases</a>
+                <a class="nav-link" href="/patterns" data-page="patterns">Patterns</a>
+                <a class="nav-link" href="/kyrochat" data-page="kyrochat">Kyro Chat</a>
+            </nav>
             
-            <!-- Right: Search + User Controls -->
             <div class="d-flex align-items-center gap-3">
                 <!-- Search -->
                 <div class="position-relative d-none d-md-block">
@@ -71,14 +94,12 @@
                 </div>
                 
                 <!-- Notifications -->
-                <div class="dropdown d-none d-sm-block">
-                    <button class="btn border-0 bg-transparent text-muted p-2 position-relative" type="button" id="notificationsDropdown" data-bs-toggle="dropdown">
-                        <i class="fas fa-bell"></i>
-                        <span id="notificationBadge" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="font-size: 0.6rem;">0</span>
+                <div class="dropdown d-none d-sm-block kn-wrap">
+                    <button class="kn-bell" type="button" id="notificationsDropdown" data-bs-toggle="dropdown" data-bs-auto-close="outside" data-bs-display="static" aria-expanded="false" aria-label="Notifications">
+                        <i class="fas fa-bell" aria-hidden="true"></i>
+                        <span id="notificationBadge" class="kn-badge d-none">0</span>
                     </button>
-                    <ul id="notificationList" class="dropdown-menu dropdown-menu-end">
-                        <li class="dropdown-item-text text-center text-muted">No alerts</li>
-                    </ul>
+                    <div id="notificationList" class="dropdown-menu dropdown-menu-end kn-panel" aria-labelledby="notificationsDropdown"></div>
                 </div>
                 
                 <!-- User Menu -->
@@ -115,17 +136,6 @@
                         </li>
                     </ul>
                 </div>
-            </div>
-        </div>
-        
-        <!-- Second Row: Navigation Links (Hidden on mobile/tablet because Hamburger Menu is present) -->
-        <div class="px-4 py-0 kyro-desktop-nav-row" style="border-bottom: 1px solid #e5e7eb;">
-            <div class="d-flex gap-1 kyro-header-nav-wrap">
-                <a class="nav-link px-3 py-2" href="/dashboard" data-page="dashboard" style="font-size: 0.875rem; font-weight: 600; color: #6b7280; border-bottom: 2px solid transparent; text-decoration: none;">Dashboard</a>
-                <a class="nav-link px-3 py-2" href="/periodic-reviews" data-page="periodic-reviews" style="font-size: 0.875rem; font-weight: 600; color: #6b7280; border-bottom: 2px solid transparent; text-decoration: none;">Periodic Reviews</a>
-                <a class="nav-link px-3 py-2" href="/cases" data-page="cases" style="font-size: 0.875rem; font-weight: 600; color: #6b7280; border-bottom: 2px solid transparent; text-decoration: none;">Review Cases</a>
-                <a class="nav-link px-3 py-2" href="/patterns" data-page="patterns" style="font-size: 0.875rem; font-weight: 600; color: #6b7280; border-bottom: 2px solid transparent; text-decoration: none;">Patterns</a>
-                <a class="nav-link px-3 py-2" href="/kyrochat" data-page="kyrochat" style="font-size: 0.875rem; font-weight: 600; color: #6b7280; border-bottom: 2px solid transparent; text-decoration: none;">Kyro Chat</a>
             </div>
         </div>
         <div style="display: none;">
@@ -171,8 +181,22 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <!-- Chart.js 4.4 -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
+    <script>
+        // Canvas charts don't inherit CSS fonts. Use Roboto, and redraw once the
+        // web font has loaded so axis labels aren't measured with a fallback font.
+        if (window.Chart) {
+            Chart.defaults.font.family = "'Roboto', sans-serif";
+            if (document.fonts && document.fonts.ready) {
+                document.fonts.ready.then(() => {
+                    Object.values(Chart.instances || {}).forEach((chart) => chart.update());
+                });
+            }
+        }
+    </script>
     <!-- jsPDF for PDF generation -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <!-- jsPDF tables for the case report -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
     <!-- DataTables JS -->
     <script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
     <script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
@@ -183,22 +207,23 @@
     
     <!-- KYRO Application Scripts -->
     <script src="js/api.js?v=9999999991"></script>
-    <script src="js/auth.js?v=9999999999"></script>
-    <script src="js/utils.js?v=9999"></script>
+    <script src="js/auth.js?v=20261007b"></script>
+    <script src="js/utils.js?v=20261008"></script>
     <script src="js/real-time.js?v=2"></script>
-    <script src="js/dashboard.js?v=9999999999999999"></script>
+    <script src="js/dashboard.js?v=20261007f"></script>
     <script src="js/customers.js?v=2"></script>
     <script src="js/transactions.js?v=2"></script>
     <script src="js/alerts.js?v=2"></script>
-    <script src="js/cases.js?v=1784288900"></script>
-    <script src="js/periodic-reviews.js?v=99999999999999"></script>
-    <script src="js/patterns.js?v=1784300300"></script>
+    <script src="js/cases.js?v=20261008f"></script>
+    <script src="js/periodic-reviews.js?v=20261008d"></script>
+    <script src="js/patterns.js?v=20261008c"></script>
     <script src="js/reports.js?v=2"></script>
     <script src="js/kyroScripts.js?v=2"></script>
-    <script src="js/kyrochat.js?v=5"></script>
+    <script src="js/kyrochat.js?v=20261008c"></script>
     <script src="js/settings.js?v=2"></script>
     <script src="js/profile.js?v=2"></script>
-    <script src="js/app.js?v=99999999999"></script>
+    <script src="js/notifications.js?v=1"></script>
+    <script src="js/app.js?v=20261008"></script>
     
     <!-- Mobile Hamburger Offcanvas Drawer -->
     <div class="kyro-mobile-drawer" id="kyroMobileDrawer">
@@ -234,16 +259,10 @@
             // Handle nav link clicks
             $('.nav-link[data-page]').on('click', function(e) {
                 // Remove active class from all nav links
-                $('.nav-link[data-page]').removeClass('active').css({
-                    'color': '#6b7280',
-                    'border-bottom': '2px solid transparent'
-                });
+                $('.nav-link[data-page]').removeClass('active');
                 
                 // Add active class to clicked link
-                $(this).addClass('active').css({
-                    'color': '#f97316',
-                    'border-bottom': '2px solid #f97316'
-                });
+                $(this).addClass('active');
             });
             
             // Set active based on current page on load
@@ -251,10 +270,7 @@
             $('.nav-link[data-page]').each(function() {
                 const href = $(this).attr('href');
                 if (currentPath.includes(href) || (currentPath === '/' && href === '/dashboard')) {
-                    $(this).addClass('active').css({
-                        'color': '#f97316',
-                        'border-bottom': '2px solid #f97316'
-                    });
+                    $(this).addClass('active');
                 }
             });
         });
