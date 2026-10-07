@@ -33,6 +33,7 @@ class Customer(Base, UUIDPrimaryKeyMixin):
     residency_country: Mapped[str | None] = mapped_column(String(100))
     kyc_status: Mapped[str] = mapped_column(String(50), nullable=False, default="PENDING")
     kyc_last_review: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_screened_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     pep_flag: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     sanctions_flag: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     adverse_media_flag: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
@@ -110,6 +111,13 @@ class PEPSanctionsScreening(Base, UUIDPrimaryKeyMixin):
     customer_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey(f"{SCHEMA}.customers.id", ondelete="CASCADE"), nullable=False, index=True
     )
+    watchlist_entity_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey(f"{SCHEMA}.watchlist_entities.id", ondelete="SET NULL"), index=True
+    )
+    beneficial_owner_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey(f"{SCHEMA}.beneficial_owners.id", ondelete="SET NULL"), index=True
+    )
+    match_score: Mapped[float | None] = mapped_column(Numeric(5, 2))
     screening_type: Mapped[str | None] = mapped_column(String(50))
     match_status: Mapped[str | None] = mapped_column(String(50))
     match_details: Mapped[dict | None] = mapped_column(JSONB)

@@ -11,10 +11,13 @@ import os
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import sessionmaker
 
+# The suite logs in far more often than the production login limit allows;
+# tests that exercise rate limiting re-enable the limiter explicitly.
+os.environ.setdefault("RATE_LIMIT_ENABLED", "false")
 os.environ.setdefault(
     "DATABASE_URL", "postgresql+psycopg://kyro_user:kyro_pass@localhost:5434/kyro_aml"
 )
@@ -23,6 +26,7 @@ from app.deps import get_db
 from app.main import app as fastapi_app
 from app.models import Base
 from app.models.user import User
+from app.services.rule_config_service import invalidate_cache as _invalidate_rule_config_cache
 from app.utils.security import hash_password
 
 TEST_DATABASE_URL = os.environ["DATABASE_URL"]
@@ -37,6 +41,8 @@ def _require_live_db():
             pass
     except OperationalError as exc:
         pytest.skip(f"Live PostgreSQL required for app/ tests (see docker-compose.yml): {exc}")
+    with engine.begin() as conn:
+        conn.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
     Base.metadata.create_all(engine)
     yield
 
@@ -54,11 +60,18 @@ def db_session():
         if not nested.is_active:
             nested = connection.begin_nested()
 
+    # rule_config_service caches RuleConfig rows in a process-wide dict with
+    # a short TTL, independent of this SAVEPOINT-per-test isolation — without
+    # clearing it, one test's config row (or its absence) can leak into the
+    # next test's cache hit.
+    _invalidate_rule_config_cache()
+
     yield session
 
     session.close()
     outer_txn.rollback()
     connection.close()
+    _invalidate_rule_config_cache()
 
 
 @pytest.fixture

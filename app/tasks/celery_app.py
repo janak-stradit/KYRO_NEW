@@ -14,7 +14,7 @@ celery_app = Celery(
     "kyro_api",
     broker=settings.redis_url,
     backend=settings.redis_url,
-    include=["app.tasks.etl_tasks", "app.tasks.ml_tasks"],
+    include=["app.tasks.etl_tasks", "app.tasks.ml_tasks", "app.tasks.watchlist_tasks"],
 )
 
 celery_app.conf.update(
@@ -27,6 +27,10 @@ celery_app.conf.update(
 )
 
 celery_app.conf.beat_schedule = {
+    "refresh-watchlists-daily": {
+        "task": "app.tasks.watchlist_tasks.run_watchlist_refresh_pipeline",
+        "schedule": crontab(hour=1, minute=0),
+    },
     "run-daily-etl-pipeline": {
         "task": "app.tasks.etl_tasks.run_daily_etl_pipeline",
         "schedule": crontab(hour=2, minute=0),

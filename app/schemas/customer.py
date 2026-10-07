@@ -52,6 +52,7 @@ class CustomerOut(CustomerBase):
     id: uuid.UUID
     kyc_status: KycStatus
     kyc_last_review: datetime | None = None
+    last_screened_at: datetime | None = None
     pep_flag: bool
     sanctions_flag: bool
     adverse_media_flag: bool
@@ -106,6 +107,8 @@ class ScreeningOut(BaseModel):
 
     id: uuid.UUID
     customer_id: uuid.UUID
+    watchlist_entity_id: uuid.UUID | None = None
+    match_score: float | None = None
     screening_type: str | None = None
     match_status: str | None = None
     match_details: dict[str, Any] | None = None

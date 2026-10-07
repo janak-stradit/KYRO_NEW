@@ -98,3 +98,7 @@ start_server.sh
 CHANGES_SUMMARY.md
 E2E_TEST_REPORT.md
 GITHUB_STATUS.md
+
+# ── Editor/backup leftovers ─────────────────────────────────────
+*.backup
+*.bak

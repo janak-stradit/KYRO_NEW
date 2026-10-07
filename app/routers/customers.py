@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.deps import PaginationParams, get_current_user
+from app.deps import PaginationParams, get_current_user, require_role
 from app.models.customer import CustomerRiskProfile, KYCReview, PEPSanctionsScreening
 from app.models.customer import Customer as CustomerModel
 from app.models.user import User
@@ -25,6 +25,7 @@ from app.schemas.customer import (
 )
 from app.services.audit_service import log_action
 from app.services.customer_service import create_customer, update_customer
+from app.services.screening_service import screen_customer
 
 router = APIRouter(prefix="/api/v1/customers", tags=["customers"], dependencies=[Depends(get_current_user)])
 
@@ -119,3 +120,23 @@ def get_screening(customer_id: uuid.UUID, db: Session = Depends(get_db)) -> list
         .order_by(PEPSanctionsScreening.screened_at.desc())
         .all()
     )
+
+
+@router.post("/{customer_id}/screen", response_model=list[ScreeningOut])
+def screen(
+    customer_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_role("ANALYST", "COMPLIANCE_OFFICER", "ADMIN")),
+) -> list[PEPSanctionsScreening]:
+    customer = _get_customer_or_404(db, customer_id)
+    results = screen_customer(db, customer, triggered_by=str(user.id))
+    log_action(
+        db,
+        entity_type="CUSTOMER",
+        entity_id=customer.id,
+        action="REVIEW",
+        performed_by=user.id,
+        new_values={"screening_matches": len(results)},
+    )
+    db.commit()
+    return results

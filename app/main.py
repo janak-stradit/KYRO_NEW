@@ -8,9 +8,27 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 
 from app.config import get_settings
-from app.routers import accounts, alerts, auth, customers, dashboard, kyc, ml, transactions, kyrochat, tts
+from app.rate_limit import limiter
+from app.routers import (
+    accounts,
+    alerts,
+    auth,
+    beneficial_owners,
+    customers,
+    dashboard,
+    kyc,
+    kyrochat,
+    ml,
+    rule_configs,
+    transactions,
+    tts,
+    watchlists,
+)
 
 settings = get_settings()
 
@@ -68,26 +86,34 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title=settings.app_name, version="0.1.0", debug=settings.debug, lifespan=lifespan)
 
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.cors_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 app.include_router(auth.router)
 app.include_router(dashboard.router)
 app.include_router(customers.router)
+app.include_router(beneficial_owners.router)
 app.include_router(accounts.router)
 app.include_router(transactions.router)
 app.include_router(alerts.router)
 app.include_router(kyc.router)
+app.include_router(watchlists.router)
+app.include_router(rule_configs.router)
 app.include_router(ml.router)
 app.include_router(kyrochat.router)
 app.include_router(tts.router)
 
 
 @app.get("/api/v1/health", tags=["health"])
+@limiter.exempt
 def health() -> dict[str, str]:
     return {"status": "ok", "service": settings.app_name}

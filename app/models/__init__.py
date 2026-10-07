@@ -6,6 +6,9 @@ from app.models.alert import Alert
 from app.models.audit import AuditLog
 from app.models.user import User
 from app.models.ml_score import MLScore
+from app.models.watchlist import WatchlistSource, WatchlistEntity, WatchlistIngestionRun
+from app.models.rule_config import RuleConfig
+from app.models.beneficial_ownership import BeneficialOwner
 
 __all__ = [
     "Base",
@@ -24,4 +27,9 @@ __all__ = [
     "AuditLog",
     "User",
     "MLScore",
+    "WatchlistSource",
+    "WatchlistEntity",
+    "WatchlistIngestionRun",
+    "RuleConfig",
+    "BeneficialOwner",
 ]

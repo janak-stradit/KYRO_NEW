@@ -81,6 +81,13 @@ def test_screening_list_empty_for_new_customer(client, auth_headers):
     assert resp.json() == []
 
 
+def test_on_demand_screen_returns_no_matches_without_watchlist_data(client, auth_headers):
+    customer = _create_customer(client, auth_headers, email="ondemand.screen@example.com")
+    resp = client.post(f"/api/v1/customers/{customer['id']}/screen", headers=auth_headers)
+    assert resp.status_code == 200
+    assert resp.json() == []
+
+
 def test_delete_customer_soft_deletes(client, auth_headers):
     customer = _create_customer(client, auth_headers, email="delete.me@example.com")
     resp = client.delete(f"/api/v1/customers/{customer['id']}", headers=auth_headers)

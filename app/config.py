@@ -23,6 +23,22 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 30
     refresh_token_expire_days: int = 7
 
+    # ── HTTP hardening ─────────────────────────────────────────────
+    # Comma-separated list of origins allowed to make cross-origin calls.
+    # The bundled frontend is served same-origin via nginx and needs none;
+    # the defaults only cover local dev servers. Never use "*" here.
+    cors_allowed_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
+    rate_limit_enabled: bool = True
+    rate_limit_default: str = "300/minute"
+    rate_limit_login: str = "10/minute"
+    # Empty = per-process in-memory counters; set to e.g. redis://redis:6379/1
+    # so limits are shared across API workers/replicas.
+    rate_limit_storage_uri: str = ""
+
+    @property
+    def cors_origins(self) -> list[str]:
+        return [o.strip() for o in self.cors_allowed_origins.split(",") if o.strip() and o.strip() != "*"]
+
     # ── ML (Phase 2) ─────────────────────────────────────────────
     model_registry_path: str = "./models"
     default_risk_model_version: int | None = None
@@ -31,6 +47,11 @@ class Settings(BaseSettings):
     performance_threshold: float = 0.85
     training_data_days: int = 365
     shap_explanation_top_k: int = 5
+
+    # ── Watchlist screening (Phase 4.1) ─────────────────────────────
+    watchlist_confirmed_match_score: float = 92.0
+    watchlist_potential_match_score: float = 75.0
+    watchlist_http_timeout_seconds: int = 60
 
 
 @lru_cache(maxsize=1)

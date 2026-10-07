@@ -1,0 +1,47 @@
+name: Security
+
+# Automated gates for the SECURITY.md checklist: secret scanning and Python
+# dependency vulnerability scanning. Runs on every PR and on pushes to the
+# long-lived branches, plus weekly so new CVEs surface without a code change.
+
+on:
+  pull_request:
+  push:
+    branches: [main, kyrodatacollection]
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # scan full history, not just the tip
+
+      - name: Gitleaks
+        run: |
+          docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:latest \
+            detect --source /repo --redact --verbose --exit-code 1
+
+  dependency-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install pip-audit
+
+      - name: pip-audit
+        run: |
+          pip-audit --strict --desc \
+            -r requirements-api.txt \
+            -r requirements-ml.txt \
+            -r requirements-pipeline.txt

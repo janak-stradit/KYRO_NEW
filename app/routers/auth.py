@@ -7,13 +7,15 @@ import uuid
 from datetime import datetime, timezone
 
 import jwt
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.database import get_db
 from app.deps import get_current_user
 from app.models.user import User
+from app.rate_limit import limiter
 from app.schemas.auth import RefreshRequest, Token, UserCreate, UserOut
 from app.utils.security import create_access_token, create_refresh_token, decode_token, hash_password, verify_password
 
@@ -44,7 +46,8 @@ def register(data: UserCreate, db: Session = Depends(get_db)) -> User:
 
 
 @router.post("/login", response_model=Token)
-def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)) -> Token:
+@limiter.limit(get_settings().rate_limit_login)
+def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)) -> Token:
     user = db.query(User).filter(User.username == form_data.username).first()
     if user is None or not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Incorrect username or password")

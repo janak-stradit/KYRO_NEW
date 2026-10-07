@@ -1,0 +1,26 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": "ecr:GetAuthorizationToken",
+      "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ecr:BatchCheckLayerAvailability",
+        "ecr:PutImage",
+        "ecr:InitiateLayerUpload",
+        "ecr:UploadLayerPart",
+        "ecr:CompleteLayerUpload",
+        "ecr:BatchGetImage"
+      ],
+      "Resource": [
+        "arn:aws:ecr:us-east-1:799708875285:repository/kyro-api",
+        "arn:aws:ecr:us-east-1:799708875285:repository/kyro-frontend",
+        "arn:aws:ecr:us-east-1:799708875285:repository/kyro-pipeline"
+      ]
+    }
+  ]
+}
