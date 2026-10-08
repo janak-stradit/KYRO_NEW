@@ -66,6 +66,14 @@ def db_session():
     # next test's cache hit.
     _invalidate_rule_config_cache()
 
+    # Start every test from empty reference tables. A migrated database carries
+    # seeded watchlist sources and rule configs (and may hold ingested watchlist
+    # entities); tests assert against what they create themselves. This runs
+    # inside the test's transaction, so it is rolled back with everything else.
+    session.execute(text("DELETE FROM app.watchlist_sources"))
+    session.execute(text("DELETE FROM app.rule_configs"))
+    session.commit()
+
     yield session
 
     session.close()
@@ -74,9 +82,37 @@ def db_session():
     _invalidate_rule_config_cache()
 
 
+class _TestSession:
+    """Stands in for SessionLocal(): the test's own session, which the caller must not close."""
+
+    def __init__(self, session):
+        self._session = session
+
+    def __getattr__(self, name):
+        return getattr(self._session, name)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def close(self):
+        pass
+
+
 @pytest.fixture
-def client(db_session):
+def client(db_session, monkeypatch):
     fastapi_app.dependency_overrides[get_db] = lambda: db_session
+    # Some endpoints open their own session instead of using get_db. Point them
+    # at the test session too, so they see the test's data and cannot write to
+    # (or run real ingestion against) the shared database.
+    import app.database
+    import app.ml.training.pipeline
+    import app.routers.alerts
+
+    for module in (app.database, app.ml.training.pipeline, app.routers.alerts):
+        monkeypatch.setattr(module, "SessionLocal", lambda: _TestSession(db_session))
     with TestClient(fastapi_app) as test_client:
         yield test_client
     fastapi_app.dependency_overrides.clear()

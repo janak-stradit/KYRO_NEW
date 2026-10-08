@@ -22,6 +22,11 @@ def days_ago(n: float) -> datetime:
     return NOW - timedelta(days=n)
 
 
+def midday(n: int) -> datetime:
+    """Noon n days ago, so a burst of same-day transactions cannot straddle midnight."""
+    return (NOW - timedelta(days=n)).replace(hour=12, minute=0, second=0, microsecond=0)
+
+
 class Book:
     """Builds one customer's transactions for a test."""
 
@@ -73,9 +78,9 @@ def test_unusual_amount_is_judged_per_currency_against_previous_largest(db_sessi
 
 def test_velocity_spike_needs_a_busy_day_well_above_usual(db_session):
     book = Book(db_session, "Velocity Vic").steady_baseline()
-    for hour in range(5):
-        book.txn(days_ago(2) + timedelta(minutes=hour * 7))
-    book.txn(days_ago(6)).txn(days_ago(6) + timedelta(minutes=5))  # two in a day is not a spike
+    for i in range(5):
+        book.txn(midday(2) + timedelta(minutes=i * 7))
+    book.txn(midday(6)).txn(midday(6) + timedelta(minutes=5))  # two in a day is not a spike
     found = findings(db_session, book)
     assert set(found) == {"VELOCITY_SPIKE"}
     assert found["VELOCITY_SPIKE"]["hits"] == 1 and "5 transactions on" in found["VELOCITY_SPIKE"]["evidence"]
@@ -85,9 +90,9 @@ def test_customer_who_is_always_busy_is_not_a_velocity_spike(db_session):
     book = Book(db_session, "Busy Bea")
     for day in (40, 50, 60, 70):
         for i in range(5):
-            book.txn(days_ago(day) + timedelta(minutes=i))
+            book.txn(midday(day) + timedelta(minutes=i))
     for i in range(5):
-        book.txn(days_ago(3) + timedelta(minutes=i))
+        book.txn(midday(3) + timedelta(minutes=i))
     assert "VELOCITY_SPIKE" not in findings(db_session, book)
 
 
