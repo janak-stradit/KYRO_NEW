@@ -875,6 +875,15 @@ header.kyro-navbar {
 }
 .rc-actions__icon:hover { background: var(--kt-tint) !important; color: var(--kt-accent-strong) !important; }
 
+/* False-positive baseline card (js/cases.js loadBaseline) */
+.fp-summary { display: flex; gap: 28px; flex-wrap: wrap; }
+.fp-summary div { display: flex; flex-direction: column; }
+.fp-summary span { font-size: 12px; color: var(--kt-muted); }
+.fp-summary strong { font-size: 18px; color: var(--kt-ink); font-variant-numeric: tabular-nums; }
+.fp-empty { margin: 0; padding: 12px 20px; font-size: 13px; color: var(--kt-muted); background: var(--kt-page); border-bottom: 1px solid var(--kt-border-soft); }
+#mainContent .fp-table th { font-size: 12px; font-weight: 600; color: var(--kt-muted); white-space: nowrap; }
+#mainContent .fp-table td { font-size: 13px; vertical-align: middle; font-variant-numeric: tabular-nums; }
+
 #mainContent td.rc-empty {
     text-align: center; padding: 56px 16px !important; color: var(--kt-muted);
 }

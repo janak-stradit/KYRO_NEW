@@ -172,6 +172,9 @@ const Cases = {
                     </div>
                 </div>
                 
+                <!-- False-positive baseline per rule (compliance officers and admins) -->
+                <div id="fpBaselineCard"></div>
+
                 <!-- Review Cases Table Section -->
                 <div class="card border-0 rc-table-card">
                     <div class="card-body p-0">
@@ -292,6 +295,77 @@ const Cases = {
         await this.fetchCasesData();
         this.initCharts();
         this.setupEventListeners();
+        this.loadBaseline();
+    },
+
+    // False-positive rate and time-to-disposition per rule, from recorded outcomes
+    async loadBaseline() {
+        const role = String(Auth.getUserRole() || '').toUpperCase();
+        if (!['ADMIN', 'COMPLIANCE_OFFICER'].includes(role)) return;
+
+        let data;
+        try {
+            data = await API.get('/alerts/disposition-baseline', { days: 90 });
+        } catch (error) {
+            return; // the baseline is supplementary; the case list still works without it
+        }
+        const pct = (v) => (v == null ? '—' : `${(v * 100).toFixed(0)}%`);
+        const hours = (v) => (v == null ? '—' : v < 48 ? `${v.toFixed(1)} h` : `${(v / 24).toFixed(1)} d`);
+        const fpClass = (v) => (v == null ? '' : v >= 0.7 ? 'high' : v >= 0.4 ? 'medium' : 'low');
+        const topReason = (reasons) => {
+            const first = Object.entries(reasons || {})[0];
+            return first ? `${first[0].replace(/_/g, ' ').toLowerCase()} (${first[1]})` : '—';
+        };
+        const o = data.overall;
+
+        const rows = data.by_rule.map(r => {
+            const rule = this.RULES[r.rule];
+            return `
+                <tr>
+                    <td class="px-3 py-2"><strong>${escapeHtml(r.rule)}</strong> <span class="text-muted">${escapeHtml(rule ? rule[0] : '')}</span></td>
+                    <td class="px-3 py-2 text-end">${r.alerts}</td>
+                    <td class="px-3 py-2 text-end">${r.resolved}</td>
+                    <td class="px-3 py-2 text-end">${r.false_positive_rate == null ? '—' : `<span class="cd-chip cd-chip--${fpClass(r.false_positive_rate)}">${pct(r.false_positive_rate)}</span>`}</td>
+                    <td class="px-3 py-2 text-end">${r.sar_filed}</td>
+                    <td class="px-3 py-2 text-end">${hours(r.median_hours_to_disposition)}</td>
+                    <td class="px-3 py-2 text-muted">${escapeHtml(topReason(r.reasons))}</td>
+                </tr>`;
+        }).join('');
+
+        $("#fpBaselineCard").html(`
+            <div class="card border-0 rc-table-card mb-4">
+                <div class="rc-toolbar">
+                    <div class="rc-toolbar__title">
+                        <h2>False-positive baseline</h2>
+                        <small class="text-muted">Alerts created in the last ${data.window_days} days, by triggered rule</small>
+                    </div>
+                    <div class="fp-summary">
+                        <div><span>Alerts</span><strong>${o.alerts}</strong></div>
+                        <div><span>Resolved</span><strong>${o.resolved}</strong></div>
+                        <div><span>False-positive rate</span><strong>${pct(o.false_positive_rate)}</strong></div>
+                        <div><span>Median time to resolve</span><strong>${hours(o.median_hours_to_disposition)}</strong></div>
+                    </div>
+                </div>
+                ${o.resolved === 0 ? `
+                    <p class="fp-empty">No cases have been resolved yet. Rates appear here once outcomes are recorded with the Resolve action.</p>` : ''}
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0 fp-table">
+                        <thead>
+                            <tr>
+                                <th class="px-3 py-2">Rule</th>
+                                <th class="px-3 py-2 text-end">Alerts</th>
+                                <th class="px-3 py-2 text-end">Resolved</th>
+                                <th class="px-3 py-2 text-end">False-positive rate</th>
+                                <th class="px-3 py-2 text-end">SAR filed</th>
+                                <th class="px-3 py-2 text-end">Median time to resolve</th>
+                                <th class="px-3 py-2">Most common reason</th>
+                            </tr>
+                        </thead>
+                        <tbody>${rows || '<tr><td colspan="7" class="rc-empty">No alerts in this period.</td></tr>'}</tbody>
+                    </table>
+                </div>
+            </div>
+        `);
     },
     
     async fetchCasesData() {
@@ -576,6 +650,10 @@ const Cases = {
                             <button type="button" class="btn btn-sm rc-actions__icon assign-btn" data-customer="${c.customerId}" data-case="${c.caseId}" title="Assign case" aria-label="Assign case for ${escapeHtml(displayName)}">
                                 <i class="fas fa-user-plus"></i>
                             </button>
+                            ${c.status !== 'RESOLVED' && c.fullData ? `
+                            <button type="button" class="btn btn-sm rc-actions__icon resolve-btn" data-case="${c.caseId}" title="Resolve case" aria-label="Resolve case for ${escapeHtml(displayName)}">
+                                <i class="fas fa-check-double"></i>
+                            </button>` : ''}
                             <button type="button" class="btn btn-sm rc-actions__icon export-btn" data-customer="${c.customerId}" data-case="${c.caseId}" title="Export case report" aria-label="Export case report for ${escapeHtml(displayName)}">
                                 <i class="fas fa-file-arrow-down"></i>
                             </button>
@@ -911,6 +989,7 @@ const Cases = {
                 showToast('success', outcome === 'ESCALATED' ? 'Case escalated.' : 'Case resolved.');
                 this.updateDashboard();
                 this.renderTable();
+                this.loadBaseline();
             } catch (xhr) {
                 const detail = xhr && xhr.responseJSON && xhr.responseJSON.detail;
                 showError(xhr && xhr.status === 403
@@ -1090,6 +1169,14 @@ const Cases = {
             Cases.showAssignModal(caseId, customerId);
         });
         
+        // Resolve button clicks
+        $("body").off("click", ".resolve-btn").on("click", ".resolve-btn", function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            const caseData = self.casesData.find(c => c.caseId === $(this).data("case"));
+            if (caseData) self.showResolveModal(caseData);
+        });
+
         // Export File button clicks
         $("body").off("click", ".export-btn").on("click", ".export-btn", function(e) {
             e.preventDefault();
