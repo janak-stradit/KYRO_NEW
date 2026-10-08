@@ -42,14 +42,7 @@ const Documents = {
         `);
         $("#docUploadForm").on("submit", (e) => { e.preventDefault(); this.upload(); });
         $(selector).off("click.docs").on("click.docs", ".doc-open", (e) => {
-            const id = $(e.currentTarget).data("id");
-            const caseModal = document.getElementById('caseDetailsModal');
-            if (caseModal && caseModal.classList.contains('show')) {
-                $(caseModal).one("hidden.bs.modal", () => this.showReview(id));
-                closeModalSafely(caseModal);
-            } else {
-                this.showReview(id);
-            }
+            this.showReview($(e.currentTarget).data("id"));
         });
         await this.loadList();
     },

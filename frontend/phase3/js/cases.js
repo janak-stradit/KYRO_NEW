@@ -29,11 +29,20 @@ const Cases = {
         this.filters = { q: '', status: 'UNRESOLVED', risk: '', rule: '', assignment: '', customerId: null, sort: 'priority' };
         this.currentFilters = { customer: params.customer || null, pattern: params.pattern || null };
         this.pagination.currentPage = 1;
+        this.afterChange = null;
         this.loadDashboard();
     },
 
     human(value) {
         return value ? String(value).replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, c => c.toUpperCase()) : '—';
+    },
+
+    /** Called after an alert is assigned or resolved. The case page sets `afterChange` to refresh itself. */
+    refreshAfterChange() {
+        if (typeof this.afterChange === 'function') { this.afterChange(); return; }
+        this.loadSummary();
+        this.fetchCasesData();
+        this.loadBaseline();
     },
 
     /** "3 h", "2 d": how long an alert has been waiting. */
@@ -465,141 +474,6 @@ const Cases = {
         $("#nextPage").prop("disabled", this.pagination.currentPage >= pages);
     },
 
-    showCaseDetailsModal(caseData) {
-        const alert = caseData.fullData || {};
-        const score = Number(alert.risk_score);
-        const hasScore = Number.isFinite(score);
-        const scoreClass = !hasScore ? 'low' : score >= 80 ? 'high' : score >= 60 ? 'medium' : 'low';
-        const human = (v) => (v ? String(v).replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, c => c.toUpperCase()) : '—');
-        const created = alert.created_at
-            ? new Date(alert.created_at).toLocaleString(undefined, { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
-            : caseData.createdAt;
-
-        const ruleCodes = (alert.triggered_rules && (alert.triggered_rules.rules || alert.triggered_rules)) || [];
-        const rules = (Array.isArray(ruleCodes) ? ruleCodes : []).map(code => {
-            const r = this.RULES[code] || [code, 'Rule triggered', '—'];
-            return { code, name: r[0], detail: r[1], severity: r[2] };
-        });
-
-        // Explanation assembled from the alert's own data
-        const parts = [`${caseData.riskLevel} risk`];
-        parts.push(hasScore ? `score ${score}/100` : 'no score recorded');
-        if (alert.confidence != null) parts.push(`confidence ${Number(alert.confidence).toFixed(0)}%`);
-        let explanation = `${parts.join(', ')}. `;
-        explanation += rules.length
-            ? `Triggered by ${rules.map(r => r.name.toLowerCase()).join(' and ')}. `
-            : 'No individual rule triggers were recorded for this alert. ';
-        if (alert.recommended_action) explanation += `Recommended action: ${human(alert.recommended_action).toLowerCase()}.`;
-
-        const severityClass = (sev) => (sev === 'CRITICAL' || sev === 'HIGH' ? 'high' : sev === 'MEDIUM' ? 'medium' : 'low');
-        const statusColors = {
-            OPEN: ['#e0f2fe', '#0369a1'], ASSIGNED: ['#ede9fe', '#6d28d9'], IN_REVIEW: ['#fef3c7', '#b45309'],
-            ESCALATED: ['#fee2e2', '#b91c1c'], RESOLVED: ['#dcfce7', '#15803d']
-        };
-        const [statusBg, statusFg] = statusColors[caseData.status] || statusColors.OPEN;
-        const displayName = caseData.customerName || caseData.customerId;
-
-        const modalHtml = `
-            <div class="modal fade" id="caseDetailsModal" tabindex="-1" aria-labelledby="caseDetailsTitle" aria-hidden="true">
-                <div class="modal-dialog modal-dialog-centered modal-lg">
-                    <div class="modal-content kx-modal">
-                        <div class="modal-header">
-                            <div>
-                                <h5 class="modal-title" id="caseDetailsTitle">${escapeHtml(displayName)}</h5>
-                                <small class="text-muted">${escapeHtml(caseData.customerId)} &middot; Case ${escapeHtml(caseData.caseId)}</small>
-                            </div>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                        </div>
-                        <div class="modal-body">
-                            <div class="cd-score cd-score--${scoreClass}">
-                                <div class="cd-score__value">
-                                    <span>Risk score</span>
-                                    <strong>${hasScore ? score : '—'}<small>/100</small></strong>
-                                </div>
-                                <div class="cd-score__meter" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${hasScore ? score : 0}" aria-label="Risk score">
-                                    <span style="width: ${hasScore ? Math.max(0, Math.min(100, score)) : 0}%"></span>
-                                </div>
-                                <div class="cd-score__meta">
-                                    <span class="cd-chip cd-chip--${scoreClass}">${escapeHtml(caseData.riskLevel)} risk</span>
-                                    ${alert.confidence != null ? `<span>Confidence ${Number(alert.confidence).toFixed(0)}%</span>` : ''}
-                                </div>
-                            </div>
-
-                            <div class="cd-grid">
-                                <div><label>Status</label><span class="badge" style="background:${statusBg};color:${statusFg};">${escapeHtml(human(caseData.status))}</span></div>
-                                <div><label>Priority</label><strong>${escapeHtml(human(caseData.priority))}</strong></div>
-                                <div><label>Trigger type</label><strong>${escapeHtml(human(caseData.triggerType))}</strong></div>
-                                <div><label>Alert type</label><strong>${escapeHtml(human(alert.alert_type))}</strong></div>
-                                <div><label>Created</label><strong>${escapeHtml(created)}</strong></div>
-                                <div><label>Assigned to</label><strong>${escapeHtml(caseData.assignedTo)}</strong></div>
-                            </div>
-
-                            <h6 class="cd-heading">Why this case was flagged</h6>
-                            <p class="cd-explanation">${escapeHtml(explanation)}</p>
-
-                            <h6 class="cd-heading">Triggered rules</h6>
-                            ${rules.length ? `
-                                <ul class="cd-rules">
-                                    ${rules.map(r => `
-                                        <li>
-                                            <span class="cd-rules__code">${escapeHtml(r.code)}</span>
-                                            <span class="cd-rules__text"><strong>${escapeHtml(r.name)}</strong>${escapeHtml(r.detail)}</span>
-                                            <span class="cd-chip cd-chip--${severityClass(r.severity)}">${escapeHtml(r.severity)}</span>
-                                        </li>`).join('')}
-                                </ul>` : `<p class="cd-explanation text-muted">No rule triggers recorded.</p>`}
-
-                            ${alert.id ? `
-                                <h6 class="cd-heading">Documents</h6>
-                                <div id="caseDocuments"></div>` : ''}
-
-                            ${alert.resolution_outcome ? `
-                                <h6 class="cd-heading">Disposition</h6>
-                                <p class="cd-explanation">
-                                    <strong>${escapeHtml(human(alert.resolution_outcome))}</strong>${(alert.resolution_reasons || []).length ? ` &middot; ${escapeHtml(alert.resolution_reasons.map(human).join(', '))}` : ''}${alert.sar_reference ? ` &middot; Ref ${escapeHtml(alert.sar_reference)}` : ''}
-                                    ${alert.resolution_notes ? `<br>${escapeHtml(alert.resolution_notes)}` : ''}
-                                </p>` : ''}
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-outline-primary" data-bs-dismiss="modal">Close</button>
-                            ${caseData.status !== 'RESOLVED' && alert.id ? `
-                                <button type="button" class="btn btn-outline-primary" id="caseDetailsResolveBtn">
-                                    <i class="fas fa-check-double me-2"></i>Resolve
-                                </button>` : ''}
-                            <button type="button" class="btn btn-primary" id="caseDetailsExportBtn">
-                                <i class="fas fa-file-arrow-down me-2"></i>Export report
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-
-        $("#caseDetailsModal").remove();
-        $("body").append(modalHtml);
-        const modalEl = document.getElementById('caseDetailsModal');
-        const modal = new bootstrap.Modal(modalEl);
-        modal.show();
-
-        if (alert.id) {
-            Documents.renderSection('#caseDocuments', { customerId: caseData.rawCustomerId, alertId: alert.id, customerName: displayName });
-        }
-
-        // Hand over to the export dialog once this modal has closed
-        $("#caseDetailsExportBtn").on("click", () => {
-            $(modalEl).one("hidden.bs.modal", () => this.showExportModal(caseData.caseId, caseData.customerId));
-            modal.hide();
-        });
-
-        $("#caseDetailsResolveBtn").on("click", () => {
-            $(modalEl).one("hidden.bs.modal", () => this.showResolveModal(caseData));
-            modal.hide();
-        });
-
-        $(modalEl).on("hidden.bs.modal", function() {
-            setTimeout(() => $(this).remove(), 0);
-        });
-    },
-
     // Records the disposition (outcome + reason codes + notes) for a case.
     // "Escalated" goes to /escalate; the other outcomes close the alert.
     async showResolveModal(caseData) {
@@ -695,9 +569,7 @@ const Cases = {
                 caseData.fullData = updated;
                 closeModalSafely(modalEl);
                 showToast('success', outcome === 'ESCALATED' ? 'Case escalated.' : 'Case resolved.');
-                this.loadSummary();
-                this.fetchCasesData();
-                this.loadBaseline();
+                this.refreshAfterChange();
             } catch (xhr) {
                 const detail = xhr && xhr.responseJSON && xhr.responseJSON.detail;
                 showError(xhr && xhr.status === 403
@@ -783,7 +655,7 @@ const Cases = {
                 $("#customerFilterChip").empty();
                 self.applyFilters();
             })
-            .on("click.cases", ".view-case-btn", function() { const c = find(this); if (c) self.showCaseDetailsModal(c); })
+            .on("click.cases", ".view-case-btn", function() { App.navigateTo('case', { id: $(this).data("case") }); })
             .on("click.cases", ".assign-btn", function() { const c = find(this); if (c) self.showAssignModal(c); })
             .on("click.cases", ".resolve-btn", function() { const c = find(this); if (c) self.showResolveModal(c); })
             .on("click.cases", ".export-btn", function() { self.showExportModal($(this).data("case"), $(this).data("customer")); });
@@ -840,8 +712,7 @@ const Cases = {
                 await API.put(`/alerts/${caseData.caseId}/assign`, { assigned_to: userId });
                 closeModalSafely(modalEl);
                 showToast('success', 'Alert assigned.');
-                this.loadSummary();
-                this.fetchCasesData();
+                this.refreshAfterChange();
             } catch (xhr) {
                 const detail = xhr && xhr.responseJSON && xhr.responseJSON.detail;
                 $("#assignError").text(typeof detail === 'string' ? detail : 'Could not assign the alert.').removeClass("d-none");

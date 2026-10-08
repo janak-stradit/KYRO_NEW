@@ -148,6 +148,7 @@ const App = {
             dashboard: Dashboard,
             'periodic-reviews': PeriodicReviews,
             cases: Cases,
+            case: CaseDetail,
             patterns: Patterns,
             regulations: Regulations,
             kyrochat: KyroChat
@@ -331,6 +332,8 @@ const App = {
             pageName = "dashboard";
         }
         
+        // Keep navigateTo's "already on this page" check right after back/forward
+        this.currentPage = pageName;
         this.loadPage(pageName, params);
     },
     
