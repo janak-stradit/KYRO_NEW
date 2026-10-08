@@ -1,0 +1,31 @@
+"""
+tasks/regulatory_tasks.py — Celery entry point for the daily regulatory
+refresh: pull every enabled source and store any changed sections as new
+versions (Phase 11.3).
+"""
+from __future__ import annotations
+
+from app.database import SessionLocal
+from app.services.regulatory_ingestion_service import ingest_all_enabled
+from app.tasks.celery_app import celery_app
+
+
+@celery_app.task(name="app.tasks.regulatory_tasks.ingest_regulatory_sources_task")
+def ingest_regulatory_sources_task() -> dict:
+    with SessionLocal() as db:
+        runs = ingest_all_enabled(db)
+        return {
+            "sources": len(runs),
+            "results": [
+                {
+                    "source_id": str(r.source_id),
+                    "status": r.status,
+                    "as_of": r.as_of,
+                    "sections_added": r.sections_added,
+                    "sections_changed": r.sections_changed,
+                    "sections_removed": r.sections_removed,
+                    "error_message": r.error_message,
+                }
+                for r in runs
+            ],
+        }

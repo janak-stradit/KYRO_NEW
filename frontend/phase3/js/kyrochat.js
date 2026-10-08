@@ -104,6 +104,7 @@ const KyroChat = {
                             <button type="button" class="kc-suggestion" data-prompt="Summarize today's alerts">Summarize today's alerts</button>
                             <button type="button" class="kc-suggestion" data-prompt="Which periodic reviews are overdue?">Which reviews are overdue?</button>
                             <button type="button" class="kc-suggestion" data-prompt="Explain the velocity spike pattern">Explain velocity spikes</button>
+                            <button type="button" class="kc-suggestion" data-prompt="What are the suspicious activity reporting requirements for broker-dealers?">SAR requirements for broker-dealers</button>
                         </div>
 
                         <!-- Input row -->
@@ -405,6 +406,8 @@ const KyroChat = {
             $(`#${loadId}`).remove();
 
             let response = "";
+            let speech = null;
+            let regulatory = null;
             let messageOptions = {};
             const q = input.toLowerCase();
             
@@ -419,6 +422,12 @@ const KyroChat = {
                     showViewDetails: true,
                     caseDetails: this.formatCaseDetailsHTML(this.currentCaseContext)
                 };
+            }
+            // Regulatory questions are answered from the loaded sources, with citations
+            else if (this.REGULATORY_QUESTION.test(input) && (regulatory = await this.askRegulatory(input))) {
+                response = regulatory.html;
+                speech = regulatory.speech;
+                messageOptions = { showViewDetails: true, caseDetails: regulatory.details };
             }
             // Use kyroScripts for other responses
             else if (q.includes("case") || q.includes("alert") || q.includes("backlog")) {
@@ -444,11 +453,62 @@ const KyroChat = {
             }
 
             this.addMessage("assistant", response, messageOptions);
-            this.speak(response);
+            this.speak(speech || response);
         } catch (err) {
             $(`#${loadId}`).remove();
             this.addMessage("assistant", kyroScripts.errors.unknown);
         }
+    },
+
+    // Words that mark a question about regulations rather than about cases or data
+    REGULATORY_QUESTION: /\b(regulat\w*|cfr|finra|fincen|bsa|sar|ctr|cip|requirements?|required|obligations?|must|beneficial owner\w*|recordkeeping|retain\w*|retention|threshold|suspicious|customer identification|due diligence|currency transaction\w*)\b|§/i,
+
+    /**
+     * Asks the regulatory knowledge base. Returns null when nothing relevant is
+     * loaded, so the caller can fall back to the other chat answers.
+     */
+    async askRegulatory(question) {
+        let result;
+        try {
+            result = await API.post('/regulatory/ask', { question });
+        } catch (error) {
+            return null;
+        }
+        if (!result || result.mode === 'NOT_FOUND' || !result.sources.length) return null;
+
+        // One entry per cited section, in ranked order
+        const sections = [];
+        result.sources.forEach(s => { if (!sections.some(x => x.source_ref === s.source_ref)) sections.push(s); });
+        const cited = result.citations.length ? sections.filter(s => result.citations.includes(s.source_ref)) : sections;
+        const shown = (cited.length ? cited : sections).slice(0, 3);
+        const refs = shown.map(s => s.source_ref).join(', ');
+
+        let html, speech;
+        if (result.mode === 'GENERATED') {
+            html = `${escapeHtml(result.answer)}<div class="kc-reg-cites">${result.verified
+                ? `Sources: ${escapeHtml(refs)}`
+                : 'Unverified: this answer could not be tied to a loaded source. Check the passages below.'}</div>`;
+            speech = result.answer;
+        } else {
+            html = `I found this in the regulatory sources: <strong>${escapeHtml(refs)}</strong>. `
+                + `AI summarisation is off, so open the details to read the source text.`;
+            speech = `I found this in ${refs}. Open the details to read the source text.`;
+        }
+
+        const details = shown.map(s => `
+            <div class="kc-reg-source">
+                <div class="kc-reg-source__head">
+                    <strong>${escapeHtml(s.source_ref)}</strong>
+                    <span>${escapeHtml(s.title || '')}</span>
+                </div>
+                <div class="kc-reg-source__meta">
+                    As amended ${escapeHtml(s.version)}${/^https:\/\//.test(s.url || '')
+                        ? ` &middot; <a href="${escapeHtml(s.url)}" target="_blank" rel="noopener noreferrer">Open on eCFR</a>` : ''}
+                </div>
+                <p>${escapeHtml(s.excerpt.length > 700 ? s.excerpt.slice(0, 700) + '…' : s.excerpt)}</p>
+            </div>`).join('');
+
+        return { html, speech, details };
     },
 
     speechQueue: [],

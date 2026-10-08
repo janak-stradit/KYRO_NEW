@@ -1073,3 +1073,11 @@ body {
     color: #166534;
 }
 
+
+/* Regulatory answers (js/kyrochat.js askRegulatory) */
+.kc-reg-cites { margin-top: 8px; font-size: 12px; opacity: 0.75; }
+.kc-reg-source { padding: 10px 0; border-bottom: 1px solid rgba(128, 128, 128, 0.25); }
+.kc-reg-source:last-child { border-bottom: 0; }
+.kc-reg-source__head { display: flex; flex-wrap: wrap; gap: 6px; font-size: 13px; }
+.kc-reg-source__meta { font-size: 12px; opacity: 0.75; margin: 2px 0 6px; }
+.kc-reg-source p { margin: 0; font-size: 13px; line-height: 1.5; white-space: pre-line; }

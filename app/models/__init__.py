@@ -11,6 +11,7 @@ from app.models.rule_config import RuleConfig
 from app.models.beneficial_ownership import BeneficialOwner
 from app.models.ai_interaction import AIInteraction
 from app.models.knowledge_chunk import KnowledgeChunk
+from app.models.regulatory import RegulatoryIngestionRun, RegulatorySection, RegulatorySource
 
 __all__ = [
     "Base",
@@ -36,4 +37,7 @@ __all__ = [
     "BeneficialOwner",
     "AIInteraction",
     "KnowledgeChunk",
+    "RegulatorySource",
+    "RegulatoryIngestionRun",
+    "RegulatorySection",
 ]

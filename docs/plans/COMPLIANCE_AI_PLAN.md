@@ -245,6 +245,10 @@ of recorded outcomes before it can be trained.
 | 11.2 step 0 Resolve flow with outcome + reason codes (§9.6) | Done (`/alerts/{id}/resolve`, `/alerts/resolution-options`, Resolve in Case Details, migration `0007`); second reviewer for `FALSE_POSITIVE` + `OTHER` waits for maker-checker (11.5) |
 | 11.2 steps 1–2 FP baseline per rule | API done (`GET /alerts/disposition-baseline`: FP rate, volumes, time-to-disposition, reasons per rule and rule combination); no dashboard view yet, and numbers are empty until alerts are resolved |
 
+| 11.2 UI | Review Cases shows the false-positive baseline per rule and a per-row Resolve action |
+| 11.3 steps 1–3 Regulatory knowledge base | Done for eCFR: `regulatory_sources` / `regulatory_ingestion_runs` / `regulatory_sections` (migration `0009`), daily Celery refresh, `/regulatory/*` endpoints, cited Q&A (`/regulatory/ask`) used by Kyro Chat. Loaded: 31 CFR Parts 1010 and 1023, 17 CFR 240.17a-8. Versions are kept per section (no separate `regulatory_documents` table). Not yet: Federal Register, FINRA references, internal policies, obligations register (step 4) |
+| Known limits | Search is keyword-only, so the best passage is not always ranked first (hybrid search, §9.2). AI answers need a real provider; until then Kyro Chat shows the source passages |
+
 ## 8. Testing & governance
 
 - Unit/API tests per workstream in `tests/api`; AI components tested with the provider mocked.

@@ -14,7 +14,7 @@ celery_app = Celery(
     "kyro_api",
     broker=settings.redis_url,
     backend=settings.redis_url,
-    include=["app.tasks.etl_tasks", "app.tasks.ml_tasks", "app.tasks.watchlist_tasks"],
+    include=["app.tasks.etl_tasks", "app.tasks.ml_tasks", "app.tasks.watchlist_tasks", "app.tasks.regulatory_tasks"],
 )
 
 celery_app.conf.update(
@@ -34,6 +34,10 @@ celery_app.conf.beat_schedule = {
     "run-daily-etl-pipeline": {
         "task": "app.tasks.etl_tasks.run_daily_etl_pipeline",
         "schedule": crontab(hour=2, minute=0),
+    },
+    "refresh-regulatory-sources-daily": {
+        "task": "app.tasks.regulatory_tasks.ingest_regulatory_sources_task",
+        "schedule": crontab(hour=4, minute=0),
     },
     "check-ml-retraining-weekly": {
         "task": "app.tasks.ml_tasks.check_retraining_task",

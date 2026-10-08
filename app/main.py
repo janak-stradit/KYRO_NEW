@@ -29,6 +29,7 @@ from app.routers import (
     dashboard,
     kyc,
     kyrochat,
+    regulatory,
     rule_configs,
     transactions,
     tts,
@@ -114,6 +115,7 @@ app.include_router(alerts.router)
 app.include_router(kyc.router)
 app.include_router(watchlists.router)
 app.include_router(rule_configs.router)
+app.include_router(regulatory.router)
 try:
     app.include_router(importlib.import_module("app.routers.ml").router)
 except ImportError as exc:
