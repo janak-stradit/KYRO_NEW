@@ -1,266 +1,314 @@
 /**
- * KYRO Chat - AI Powered AML Agent Page Implementation
- * Handles autonomous operations, state sync, and interactive chat interface.
+ * KYRO Chat - ask Kyro about the work queue, a customer, reviews, patterns
+ * or the regulations. Every answer is read from KYRO's live data; when Kyro
+ * has no data for a question it says so.
  */
 
 const KyroChat = {
-    messages: [],
-    statusPollInterval: null,
     speechEnabled: true,
     currentUtterance: null,
-    currentCaseContext: null, // Track current case being discussed
-    agentState: {
-        autonomous_status: "STOPPED",
-        intervention_needed: false,
-        processing_cases_count: 20,
-        next_cycle_eta_sec: 30,
-        latest_action_label: "Standby",
-        streaming_pulse_label: "Ready to screen cases when autonomous execution starts.",
-        run_stats: {
-            actions: 0,
-            success: 0,
-            failure: 0,
-            casesTouched: 0
-        }
-    },
+    customerCodes: null,   // display code (CUST-001) -> customer UUID
 
     async init() {
-        console.log("🤖 Initializing Kyro Chat interface...");
-        this.messages = [];
         this.speechEnabled = localStorage.getItem("kyro_speech_enabled") !== "false";
-        
-        // Render page template
         this.renderLayout();
-        
-        // Fetch initial welcome message
-        await this.loadWelcomeMessage();
-        
-        // Fetch initial state & populate components
-        await this.fetchAgentState();
-        
-        // Setup event handlers
         this.setupListeners();
-        
-        // Start periodic state polling (every 4 seconds)
-        this.startPolling();
+        this.addMessage("assistant",
+            "Hi, I'm Kyro. Ask me what's waiting in the queue, about a customer (for example CUST-001), "
+            + "which reviews are overdue, which patterns are firing, or what a regulation requires. "
+            + "I answer from KYRO's live data and the loaded regulations.");
     },
 
     renderLayout() {
-            const html = `
+        $("#mainContent").html(`
             <div class="kc-wrapper bg-[#F9FBFF]">
-
-                <!-- Page Title -->
                 <div class="kyro-page" style="padding-bottom: 0;">
                     <div class="kyro-page-head kc-hero">
                         <div class="kc-hero__avatar" id="kcHeroAvatar">
                             <img src="assets/Kyro1.png" alt="" onerror="this.style.display='none'">
                         </div>
                         <div class="kc-hero__body">
-                            <span class="kyro-kicker">AI Assistant</span>
-                            <h1 class="kyro-page-title">Kyro &ndash; AI-powered AML agent <span class="kc-v-badge">v2.0</span></h1>
-                            <div class="kc-hero__meta">
-                                <span class="kc-state-pill" id="kcStateBadge">STOPPED</span>
-                                <span class="kc-sync-time" id="kcSyncTime">Synced --</span>
-                            </div>
-                            <p class="kc-instruction" id="kcInstruction">
-                                Click <strong>Start Kyro</strong> to begin automated monitoring.
-                            </p>
-                        </div>
-                        <div class="kc-controls kc-hero__actions">
-                            <button class="kc-btn kc-btn-start"   id="startBtn"><i class="fas fa-play me-2"></i>Start Kyro</button>
-                            <button class="kc-btn kc-btn-pause"   id="pauseBtn"   style="display:none;"><i class="fas fa-pause me-2"></i>Pause</button>
-                            <button class="kc-btn kc-btn-resume"  id="resumeBtn"  style="display:none;"><i class="fas fa-play me-2"></i>Resume</button>
-                            <button class="kc-btn kc-btn-stop"    id="stopBtn"    style="display:none;"><i class="fas fa-stop me-2"></i>Stop</button>
-                            <button class="kc-btn kc-btn-handoff" id="handoffBtn" style="display:none;"><i class="fas fa-user-check me-2"></i>Handoff</button>
+                            <span class="kyro-kicker">Compliance Assistant</span>
+                            <h1 class="kyro-page-title">Ask Kyro</h1>
+                            <p class="kc-instruction">Answers come from the live work queue, customer records, review schedule and loaded regulations. Kyro reads and explains; decisions stay with you.</p>
                         </div>
                     </div>
                 </div>
 
-                <!-- Main two-col layout -->
                 <div class="kc-layout kyro-page">
-
-                    <!-- ── LEFT: single bordered card ── -->
                     <div class="kc-left-panel">
                     <div class="kc-main-card">
-
-
-                        <!-- Chat messages -->
                         <div class="kc-messages" id="kcMessages"></div>
 
-                        <!-- Notices -->
-                        <div class="kc-notice kc-notice-int"  id="kcInterventionNotice" style="display:none;">
-                            ⚠️ Human intervention required — Kyro is waiting for guidance.
-                        </div>
-                        <div class="kc-notice kc-notice-auto" id="kcAutonomousNotice" style="display:none;">
-                            🟢 Autonomous mode active — monitoring compliance events.
-                        </div>
-
-
-
                         <div class="kc-composer">
-                        <!-- Suggested questions -->
                         <div class="kc-suggestions" id="kcSuggestions" aria-label="Suggested questions">
-                            <button type="button" class="kc-suggestion" data-prompt="Which open cases are high risk?">Which open cases are high risk?</button>
-                            <button type="button" class="kc-suggestion" data-prompt="Summarize today's alerts">Summarize today's alerts</button>
-                            <button type="button" class="kc-suggestion" data-prompt="Which periodic reviews are overdue?">Which reviews are overdue?</button>
-                            <button type="button" class="kc-suggestion" data-prompt="Explain the velocity spike pattern">Explain velocity spikes</button>
-                            <button type="button" class="kc-suggestion" data-prompt="What are the suspicious activity reporting requirements for broker-dealers?">SAR requirements for broker-dealers</button>
+                            <button type="button" class="kc-suggestion" data-prompt="What needs my attention today?">What needs my attention?</button>
+                            <button type="button" class="kc-suggestion" data-prompt="Which open cases are high risk?">High-risk cases</button>
+                            <button type="button" class="kc-suggestion" data-prompt="Which periodic reviews are overdue?">Overdue reviews</button>
+                            <button type="button" class="kc-suggestion" data-prompt="Which patterns are firing?">Patterns firing</button>
+                            <button type="button" class="kc-suggestion" data-prompt="What are the suspicious activity reporting requirements for broker-dealers?">SAR requirements</button>
                         </div>
 
-                        <!-- Input row -->
                         <div class="kc-input-row">
                             <input type="text" class="kc-input" id="kcInput" autocomplete="off"
                                    aria-label="Message Kyro"
-                                   placeholder="Ask Kyro about cases, alerts, reviews or a customer ID (e.g. CUST-001)...">
+                                   placeholder="Ask about the queue, a customer (e.g. CUST-001), reviews, patterns or a regulation...">
                             <button class="kc-send-btn" id="sendBtn" aria-label="Send message">
                                 <i class="fas fa-paper-plane" aria-hidden="true"></i>
                             </button>
                         </div>
                         <p class="kc-composer__hint">Press <kbd>Enter</kbd> to send</p>
-                        </div><!-- /kc-composer -->
+                        </div>
+                    </div>
+                    </div>
 
-                    </div><!-- /kc-main-card -->
-                    </div><!-- /kc-left-panel -->
-
-                    <!-- ── RIGHT: video character — paused idle, plays on speak ── -->
                     <div class="kc-right-panel">
                         <div class="kc-video-card">
                             <div class="kc-idle-pill" id="kcIdlePill">
                                 <span class="kc-idle-dot" id="kcIdleDot"></span>
                                 <span id="kcIdleText">IDLE</span>
                             </div>
-                            <video class="kc-char-video" id="kyroCharVideo"
-                                   muted loop playsinline preload="auto">
+                            <video class="kc-char-video" id="kyroCharVideo" muted loop playsinline preload="auto">
                                 <source src="assets/kyrochat.mp4" type="video/mp4">
                             </video>
                         </div>
 
-                        <!-- Run stats (hidden until RUNNING) -->
-                        <div class="kc-stats-card kc-side-card" id="kcStatsCard" style="display:none;">
-                            <div class="kc-stats-title">Run Statistics</div>
-                            <div class="kc-stats-grid">
-                                <div><div class="kc-sl">Actions</div><div class="kc-sv" id="kcStatActions">0</div></div>
-                                <div><div class="kc-sl">Success</div><div class="kc-sv kc-sv-ok" id="kcStatSuccess">0</div></div>
-                                <div><div class="kc-sl">Failure</div><div class="kc-sv kc-sv-err" id="kcStatFailure">0</div></div>
-                                <div><div class="kc-sl">Cases</div><div class="kc-sv" id="kcStatCases">0</div></div>
-                            </div>
-                        </div>
-
                         <div class="kc-side-card kc-capabilities">
-                            <h3>What Kyro can do</h3>
+                            <h3>What you can ask</h3>
                             <ul>
-                                <li><img src="assets/template/icons/investigation.svg" alt=""><span><strong>Investigate cases</strong>Summarize alerts and pull customer context.</span></li>
-                                <li><img src="assets/template/icons/review-checklist.svg" alt=""><span><strong>Track reviews</strong>Find overdue and upcoming periodic reviews.</span></li>
-                                <li><img src="assets/template/icons/analytics-search.svg" alt=""><span><strong>Explain patterns</strong>Describe why behavior was flagged.</span></li>
+                                <li><img src="assets/template/icons/investigation.svg" alt=""><span><strong>The work queue</strong>What is unresolved, high risk, unassigned or escalated.</span></li>
+                                <li><img src="assets/template/icons/review-checklist.svg" alt=""><span><strong>A customer</strong>Risk rating, screening flags and open alerts, by name or ID.</span></li>
+                                <li><img src="assets/template/icons/analytics-search.svg" alt=""><span><strong>Reviews, patterns and rules</strong>What is overdue, what is firing, and what the regulations say.</span></li>
                             </ul>
                         </div>
                     </div>
-
-                </div><!-- /kc-layout -->
-            </div><!-- /kc-wrapper -->
-            `;
-            $("#mainContent").html(html);
-        },
-
-    async loadWelcomeMessage() {
-        try {
-            // Add welcome message using kyroScripts
-            this.addMessage("assistant", kyroScripts.welcome.full);
-        } catch (error) {
-            console.error("Welcome message setup failed:", error);
-        }
+                </div>
+            </div>
+        `);
     },
 
-    async fetchAgentState() {
+    setupListeners() {
+        $("#kcInput").on("keydown", (e) => {
+            if (e.which === 13) { e.preventDefault(); this.sendMessage(); }
+        });
+        $("#sendBtn").on("click", () => this.sendMessage());
+        $(".kc-suggestion").on("click", (e) => {
+            $("#kcInput").val($(e.currentTarget).data("prompt"));
+            this.sendMessage();
+        });
+        // Links inside answers open the relevant page
+        $("#kcMessages").on("click", ".kc-link", (e) => {
+            const $link = $(e.currentTarget);
+            const params = $link.data("customer") ? { customer: $link.data("customer") } : {};
+            App.navigateTo($link.data("goto"), params);
+        });
+    },
+
+    async sendMessage() {
+        const input = $("#kcInput").val().trim();
+        if (!input) return;
+
+        $("#kcInput").val("");
+        $("#kcSuggestions").addClass("is-hidden");
+        this.addMessage("user", input);
+
+        const loadId = "kc-loading-" + Date.now();
+        $("#kcMessages").append(`
+            <div class="kc-msg kc-msg-bot" id="${loadId}">
+                <img src="assets/Kyro1.png" class="kc-msg-avatar" alt="">
+                <div class="kc-bubble kc-bubble-bot kc-typing" aria-label="Kyro is typing">
+                    <span></span><span></span><span></span>
+                </div>
+            </div>
+        `);
+        const el = document.getElementById("kcMessages");
+        if (el) el.scrollTop = el.scrollHeight;
+
+        let answer;
         try {
-            // Mock state for demo - in production this would call API
-            this.agentState = {
-                autonomous_status: "STOPPED",
-                intervention_needed: false,
-                processing_cases_count: 20,
-                next_cycle_eta_sec: 30,
-                latest_action_label: "Standby",
-                streaming_pulse_label: "Ready to screen cases when autonomous execution starts.",
-                run_stats: {
-                    actions: 0,
-                    success: 0,
-                    failure: 0,
-                    casesTouched: 0
-                }
+            answer = await this.answer(input);
+        } catch (error) {
+            console.error("Kyro answer failed:", error);
+            answer = { html: "I couldn't reach KYRO's data just now. Please try again." };
+        }
+        $(`#${loadId}`).remove();
+        this.addMessage("assistant", answer.html, answer.details ? { showViewDetails: true, caseDetails: answer.details } : {});
+        this.speak(answer.speech || $("<div>").html(answer.html).text());
+    },
+
+    // ── Answering from live data ────────────────────────────────────────
+
+    link(page, label, customer) {
+        return `<button type="button" class="kc-link" data-goto="${page}"${customer ? ` data-customer="${escapeHtml(customer)}"` : ''}>${escapeHtml(label)} <i class="fas fa-arrow-right"></i></button>`;
+    },
+
+    n(value) { return Number(value || 0).toLocaleString(); },
+
+    /** Route a question to the data that can answer it. */
+    async answer(input) {
+        const q = input.toLowerCase();
+        const code = (input.match(/CUST-\d+/i) || [])[0];
+        if (code) return this.answerCustomer(code.toUpperCase());
+
+        if (this.REGULATORY_QUESTION.test(input)) {
+            const regulatory = await this.askRegulatory(input);
+            if (regulatory) return { html: regulatory.html, speech: regulatory.speech, details: regulatory.details };
+        }
+        if (/\breviews?\b|overdue|due diligence|kyc/.test(q)) return this.answerReviews();
+        if (/pattern|velocity|threshold|geograph|counterpart|complexity|reactivation/.test(q)) return this.answerPatterns(q);
+        if (/false.?positive|rule performance|tuning/.test(q)) return this.answerFalsePositives();
+        if (/high.?risk|urgent|priorit/.test(q)) return this.answerHighRisk();
+        if (/queue|backlog|alert|case|attention|today|unassigned|escalat|summar|status|workload/.test(q)) return this.answerQueue();
+
+        const byName = await this.answerCustomerByName(input);
+        if (byName) return byName;
+        return {
+            html: "I don't have data to answer that. I can tell you about the work queue, a customer (by name or ID such as CUST-001), "
+                + "overdue reviews, the patterns that are firing, false-positive rates by rule, or what a loaded regulation requires."
+        };
+    },
+
+    async answerQueue() {
+        const s = await API.get('/alerts/queue/summary');
+        if (!s.unresolved) return { html: "The queue is clear: there are no unresolved alerts." };
+        const waiting = s.oldest_created_at ? Math.floor((Date.now() - new Date(s.oldest_created_at)) / 3600000) : null;
+        const html = `There are <strong>${this.n(s.unresolved)}</strong> unresolved alerts across ${this.n(s.customers_with_alerts)} customers. `
+            + `<strong>${this.n(s.high_risk)}</strong> are high risk, <strong>${this.n(s.unassigned)}</strong> have no owner and ${this.n(s.escalated)} ${s.escalated === 1 ? 'is' : 'are'} escalated.`
+            + (waiting != null ? ` The oldest has waited ${waiting < 48 ? `${waiting} hours` : `${Math.floor(waiting / 24)} days`}.` : '')
+            + `<div class="kc-reg-cites">${this.link('cases', 'Open the work queue')}</div>`;
+        const details = `
+            <div class="kc-reg-source"><div class="kc-reg-source__head"><strong>Customers with the most open alerts</strong></div>
+                ${s.top_customers.map(c => `<p>${escapeHtml(c.customer_name)}: ${this.n(c.open_alerts)} open, highest score ${c.max_risk_score}</p>`).join('')}</div>
+            <div class="kc-reg-source"><div class="kc-reg-source__head"><strong>Open alerts by rule</strong></div>
+                ${s.by_rule.slice(0, 6).map(r => `<p>${escapeHtml(r.rule)} ${escapeHtml(this.ruleName(r.rule))}: ${this.n(r.alerts)}</p>`).join('')}</div>`;
+        return { html, details };
+    },
+
+    async answerHighRisk() {
+        const data = await API.get('/alerts/queue', { risk: 'high', page_size: 5 });
+        if (!data.total) return { html: "No unresolved alert has a risk score of 80 or more right now." };
+        const html = `<strong>${this.n(data.total)}</strong> unresolved alerts are high risk (score 80 or more). The top ${data.items.length}, highest score first, are in the details.`
+            + `<div class="kc-reg-cites">${this.link('cases', 'Open the work queue')}</div>`;
+        const details = data.items.map(a => `
+            <div class="kc-reg-source">
+                <div class="kc-reg-source__head"><strong>${escapeHtml(a.customer_name)}</strong><span>score ${a.risk_score}</span></div>
+                <div class="kc-reg-source__meta">${escapeHtml(this.rulesText(a))} &middot; ${a.assigned_to_name ? `owner ${escapeHtml(a.assigned_to_name)}` : 'unassigned'}${a.customer_pep ? ' &middot; PEP' : ''}${a.customer_sanctions ? ' &middot; sanctions match' : ''}</div>
+            </div>`).join('');
+        return { html, details };
+    },
+
+    async answerReviews() {
+        const [overdue, scheduled] = await Promise.all([
+            API.get('/kyc-reviews', { review_status: 'OVERDUE', page_size: 1 }),
+            API.get('/kyc-reviews', { page_size: 5000 })
+        ]);
+        const now = Date.now();
+        const open = (scheduled.items || []).filter(r => r.review_status !== 'COMPLETED');
+        const late = open.filter(r => new Date(r.scheduled_date || r.created_at) < now);
+        const soon = open.filter(r => { const d = new Date(r.scheduled_date || r.created_at) - now; return d >= 0 && d <= 7 * 86400000; });
+        const count = Math.max(late.length, Number(overdue.total || 0));
+        if (!open.length) return { html: "No periodic reviews are scheduled." };
+        return {
+            html: `<strong>${this.n(count)}</strong> periodic reviews are past their review date and <strong>${this.n(soon.length)}</strong> more are due in the next 7 days, out of ${this.n(open.length)} scheduled.`
+                + `<div class="kc-reg-cites">${this.link('periodic-reviews', 'Open Periodic Reviews')}</div>`
+        };
+    },
+
+    async answerPatterns(q) {
+        const data = await API.get('/dashboard/patterns');
+        const patterns = data.patterns || [];
+        const named = patterns.find(p => q.includes(p.label.toLowerCase().split(' ')[0]));
+        if (named) {
+            const derived = !named.rule_ids.length;
+            return {
+                html: `<strong>${escapeHtml(named.label)}</strong>: ${escapeHtml(named.description)} `
+                    + (derived ? `${this.n(named.hit_count)} customers match it in the last ${data.window_days} days.`
+                               : `In the last ${data.window_days} days it matched <strong>${this.n(named.hit_count)}</strong> alerts for ${this.n(named.customers)} customers (rules ${escapeHtml(named.rule_ids.join(', '))}); ${this.n(named.open_alerts)} are still open.`)
+                    + `<div class="kc-reg-cites">${this.link('patterns', 'Open Patterns')}</div>`
             };
-            this.updateStateUI();
-        } catch (error) {
-            console.error("Agent state fetch failed:", error);
         }
+        const active = patterns.filter(p => p.hit_count > 0).sort((a, b) => b.hit_count - a.hit_count);
+        if (!active.length) return { html: `No behavioural pattern matched an alert in the last ${data.window_days} days.` };
+        return {
+            html: `${this.n(data.total_pattern_hits)} alerts matched a behavioural pattern in the last ${data.window_days} days, for ${this.n(data.customers_affected)} customers. `
+                + `The most active is <strong>${escapeHtml(active[0].label)}</strong> with ${this.n(active[0].hit_count)} alerts.`
+                + `<div class="kc-reg-cites">${this.link('patterns', 'Open Patterns')}</div>`,
+            details: active.map(p => `<div class="kc-reg-source"><div class="kc-reg-source__head"><strong>${escapeHtml(p.label)}</strong><span>${this.n(p.hit_count)} ${p.rule_ids.length ? 'alerts' : 'customers'}</span></div><p>${escapeHtml(p.description)}</p></div>`).join('')
+        };
     },
 
-    updateStateUI() {
-        const status = this.agentState.autonomous_status || "STOPPED";
-        const isIntervention = this.agentState.intervention_needed || false;
-
-        // Sync time
-        const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-        $("#kcSyncTime").text(`Synced ${timeStr}`);
-
-        // Status badge + ring around the header avatar
-        $("#kcStateBadge").text(status);
-        $("#kcHeroAvatar")
-            .toggleClass("is-running", status === "RUNNING")
-            .toggleClass("is-paused", status === "PAUSED");
-
-        // Status badge background color
-        const styles = {
-            RUNNING: { badgeBg: "#22c55e", dotColor: "#22c55e" },
-            PAUSED:  { badgeBg: "#f59e0b", dotColor: "#f59e0b" },
-            ERROR:   { badgeBg: "#ef4444", dotColor: "#ef4444" },
-            STOPPED: { badgeBg: "#64748b", dotColor: "#94a3b8" }
-        };
-        const s = styles[status] || styles.STOPPED;
-        $("#kcStateBadge").css("background-color", s.badgeBg);
-
-        // Idle pill on right panel
-        $("#kcIdleDot").css("background-color", s.dotColor);
-        $("#kcIdleText").text(status === "RUNNING" ? "RUNNING" : status === "PAUSED" ? "PAUSED" : "IDLE");
-
-        // Buttons
-        $("#startBtn, #pauseBtn, #resumeBtn, #stopBtn, #handoffBtn").hide();
-        if (status === "STOPPED")       { $("#startBtn").show(); }
-        else if (status === "RUNNING")  { $("#pauseBtn, #stopBtn, #handoffBtn").show(); }
-        else if (status === "PAUSED")   { $("#resumeBtn, #stopBtn").show(); }
-
-        // Instruction text
-        const instrMap = {
-            RUNNING: kyroScripts.instructions.running,
-            PAUSED: kyroScripts.instructions.paused
-        };
-        $("#kcInstruction").html(
-            isIntervention ? kyroScripts.instructions.intervention
-            : (instrMap[status] || kyroScripts.instructions.stopped)
-        );
-
-        // Notices
-        $("#kcInterventionNotice").toggle(isIntervention);
-        $("#kcAutonomousNotice").toggle(status === "RUNNING" && !isIntervention);
-
-        // Run stats (show only when RUNNING and hide when STOPPED)
-        if (status === "RUNNING") {
-            const rs = this.agentState.run_stats || {};
-            $("#kcStatsCard").show();
-            $("#kcStatActions").text(rs.actions || 0);
-            $("#kcStatSuccess").text(rs.success || 0);
-            $("#kcStatFailure").text(rs.failure || 0);
-            $("#kcStatCases").text(rs.casesTouched || 0);
-        } else {
-            $("#kcStatsCard").hide();
+    async answerFalsePositives() {
+        let data;
+        try {
+            data = await API.get('/alerts/disposition-baseline', { days: 90 });
+        } catch (xhr) {
+            return { html: "False-positive rates are available to compliance officers and admins." };
         }
-
-        // Connection indicator (reuse spinner if present)
-        $("#connectionSpinner").hide();
-        $("#connectionText").text("Connected");
-
-        // Removed matchVideoHeight() call to prevent zoom
+        const o = data.overall;
+        if (!o.resolved) {
+            return { html: `No alerts have been resolved in the last ${data.window_days} days, so there is no false-positive rate yet. It will appear once outcomes are recorded with the Resolve action.` };
+        }
+        const rated = data.by_rule.filter(r => r.false_positive_rate != null).sort((a, b) => b.false_positive_rate - a.false_positive_rate);
+        return {
+            html: `Of ${this.n(o.resolved)} alerts resolved in the last ${data.window_days} days, <strong>${(o.false_positive_rate * 100).toFixed(0)}%</strong> were false positives.`
+                + `<div class="kc-reg-cites">${this.link('cases', 'See the baseline on Review Cases')}</div>`,
+            details: rated.map(r => `<div class="kc-reg-source"><div class="kc-reg-source__head"><strong>${escapeHtml(r.rule)} ${escapeHtml(this.ruleName(r.rule))}</strong><span>${(r.false_positive_rate * 100).toFixed(0)}% of ${this.n(r.resolved)} resolved</span></div></div>`).join('')
+        };
     },
 
+    async loadCustomerCodes() {
+        if (this.customerCodes) return;
+        const response = await API.get("/customers", { page_size: 10000 });
+        this.customerCodes = {};
+        this.customerList = response.items || [];
+        this.customerList.forEach((c, idx) => { this.customerCodes[`CUST-${String(idx + 1).padStart(3, '0')}`] = c.id; });
+    },
+
+    async answerCustomer(code) {
+        await this.loadCustomerCodes();
+        const id = this.customerCodes[code];
+        if (!id) return { html: `I can't find a customer with the ID ${escapeHtml(code)}.` };
+        return this.customerSummary(id, code);
+    },
+
+    /** A question that is just a customer's name (or contains one). */
+    async answerCustomerByName(input) {
+        await this.loadCustomerCodes();
+        const q = input.toLowerCase();
+        const idx = this.customerList.findIndex(c => c.full_name && c.full_name.length > 3 && q.includes(c.full_name.toLowerCase()));
+        if (idx < 0) return null;
+        return this.customerSummary(this.customerList[idx].id, `CUST-${String(idx + 1).padStart(3, '0')}`);
+    },
+
+    async customerSummary(id, code) {
+        const [customer, queue] = await Promise.all([
+            API.get(`/customers/${id}`),
+            API.get('/alerts/queue', { customer_id: id, page_size: 5 })
+        ]);
+        const flags = [customer.pep_flag ? 'a PEP' : null, customer.sanctions_flag ? 'a sanctions match' : null, customer.adverse_media_flag ? 'adverse media' : null].filter(Boolean);
+        const human = (v) => String(v || 'not set').replace(/_/g, ' ').toLowerCase();
+        const html = `<strong>${escapeHtml(customer.full_name)}</strong> (${escapeHtml(code)}) is rated <strong>${escapeHtml(human(customer.risk_level))}</strong> risk with KYC status ${escapeHtml(human(customer.kyc_status))}. `
+            + (flags.length ? `Flagged as ${escapeHtml(flags.join(' and '))}. ` : 'No PEP, sanctions or adverse-media flags. ')
+            + (queue.total ? `There ${queue.total === 1 ? 'is' : 'are'} <strong>${this.n(queue.total)}</strong> unresolved alert${queue.total === 1 ? '' : 's'}; the highest score is ${queue.items[0].risk_score}.`
+                           : 'There are no unresolved alerts.')
+            + (queue.total ? `<div class="kc-reg-cites">${this.link('cases', 'Review this customer\'s cases', code)}</div>` : '');
+        const details = queue.items.map(a => `
+            <div class="kc-reg-source">
+                <div class="kc-reg-source__head"><strong>Score ${a.risk_score}</strong><span>${escapeHtml(human(a.status))}</span></div>
+                <div class="kc-reg-source__meta">${escapeHtml(this.rulesText(a))} &middot; created ${escapeHtml(formatDateTime(a.created_at))}</div>
+            </div>`).join('');
+        return { html, details: details || null };
+    },
+
+    ruleName(code) {
+        return typeof Cases !== 'undefined' && Cases.RULES && Cases.RULES[code] ? Cases.RULES[code][0] : '';
+    },
+
+    rulesText(alert) {
+        const codes = (alert.triggered_rules && (alert.triggered_rules.rules || alert.triggered_rules)) || [];
+        const names = (Array.isArray(codes) ? codes : []).map(c => this.ruleName(c) || c);
+        return names.length ? names.join(', ') : 'no rule recorded';
+    },
 
     addMessage(role, content, options = {}) {
         const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -326,138 +374,6 @@ const KyroChat = {
         
         const el = document.getElementById("kcMessages");
         if (el) el.scrollTop = el.scrollHeight;
-    },
-
-    setupListeners() {
-        const self = this;
-
-        // Send on Enter
-        $("#kcInput").on("keydown", function(e) {
-            if (e.which === 13) { e.preventDefault(); self.sendMessage(); }
-        });
-
-        // Send button
-        $("#sendBtn").on("click", () => this.sendMessage());
-
-        // Suggested questions send straight away
-        $(".kc-suggestion").on("click", (e) => {
-            $("#kcInput").val($(e.currentTarget).data("prompt"));
-            this.sendMessage();
-        });
-
-        // Control buttons
-        $("#startBtn").on("click",   () => this.startAgent());
-        $("#pauseBtn").on("click",   () => this.pauseAgent());
-        $("#resumeBtn").on("click",  () => this.resumeAgent());
-        $("#stopBtn").on("click",    () => this.stopAgent());
-        $("#handoffBtn").on("click", () => this.requestHandoff());
-
-        // Match video card height to left panel
-        this.matchVideoHeight();
-        $(window).on("resize", () => this.matchVideoHeight());
-    },
-
-    matchVideoHeight() {
-        // Disabled to prevent unwanted zoom/resize on state updates
-        // Video card will maintain its natural height based on CSS grid
-        return;
-    },
-
-    startPolling() {
-        this.statusPollInterval = setInterval(async () => {
-            if (App.getCurrentPage() === "kyrochat") {
-                await this.fetchAgentState();
-            } else {
-                this.stopPolling();
-            }
-        }, 4000);
-    },
-
-    stopPolling() {
-        if (this.statusPollInterval) {
-            clearInterval(this.statusPollInterval);
-            this.statusPollInterval = null;
-        }
-    },
-
-    async sendMessage() {
-        const input = $("#kcInput").val().trim();
-        if (!input) return;
-
-        $("#kcInput").val("");
-        $("#kcSuggestions").addClass("is-hidden");
-        this.addMessage("user", input);
-
-        // Loading indicator
-        const loadId = "kc-loading-" + Date.now();
-        $("#kcMessages").append(`
-            <div class="kc-msg kc-msg-bot" id="${loadId}">
-                <img src="assets/Kyro1.png" class="kc-msg-avatar" alt="">
-                <div class="kc-bubble kc-bubble-bot kc-typing" aria-label="Kyro is typing">
-                    <span></span><span></span><span></span>
-                </div>
-            </div>
-        `);
-        const el = document.getElementById("kcMessages");
-        if (el) el.scrollTop = el.scrollHeight;
-
-        try {
-            await new Promise(r => setTimeout(r, 1200));
-            $(`#${loadId}`).remove();
-
-            let response = "";
-            let speech = null;
-            let regulatory = null;
-            let messageOptions = {};
-            const q = input.toLowerCase();
-            
-            // Check if user is asking about a specific case
-            const caseIdMatch = input.match(/CUST-(\d+)/i);
-            if (caseIdMatch) {
-                const caseId = `CUST-${caseIdMatch[1]}`;
-                // Store the case context for potential handoff
-                this.currentCaseContext = this.generateCustomerCaseDetail(caseId);
-                response = this.getCaseDetailsResponse(caseId, this.currentCaseContext);
-                messageOptions = {
-                    showViewDetails: true,
-                    caseDetails: this.formatCaseDetailsHTML(this.currentCaseContext)
-                };
-            }
-            // Regulatory questions are answered from the loaded sources, with citations
-            else if (this.REGULATORY_QUESTION.test(input) && (regulatory = await this.askRegulatory(input))) {
-                response = regulatory.html;
-                speech = regulatory.speech;
-                messageOptions = { showViewDetails: true, caseDetails: regulatory.details };
-            }
-            // Use kyroScripts for other responses
-            else if (q.includes("case") || q.includes("alert") || q.includes("backlog")) {
-                response = kyroScripts.chat.caseInfo(20, 3);
-            } else if (q.includes("transaction")) {
-                response = kyroScripts.chat.transactionInfo(5);
-            } else if (q.includes("risk")) {
-                response = kyroScripts.chat.riskInfo(15, 87);
-            } else if (q.includes("model") || q.includes("ml")) {
-                response = kyroScripts.chat.modelInfo("Random Forest v2.1", 94.8, 91.2);
-            } else if (q.includes("hello") || q.includes("hi")) {
-                response = kyroScripts.chat.greeting;
-            } else if (q.includes("summary")) {
-                // Generate detailed summary with failed cases
-                const summaryData = this.generateDetailedSummaryData();
-                response = kyroScripts.chat.detailedCaseSummary(summaryData);
-                messageOptions = {
-                    showViewDetails: true,
-                    caseDetails: this.formatDetailedSummaryHTML(summaryData)
-                };
-            } else {
-                response = kyroScripts.chat.defaultResponse;
-            }
-
-            this.addMessage("assistant", response, messageOptions);
-            this.speak(speech || response);
-        } catch (err) {
-            $(`#${loadId}`).remove();
-            this.addMessage("assistant", kyroScripts.errors.unknown);
-        }
     },
 
     // Words that mark a question about regulations rather than about cases or data
@@ -618,741 +534,6 @@ const KyroChat = {
         this._setSpeakingState(false);
     },
 
-    async startAgent() {
-        try {
-            // Capture run start time
-            this.runStartTime = new Date();
-            
-            // Full welcome message requested by user
-            const welcomeMessage = kyroScripts.welcome.full;
-            
-            // Speak the welcome in the background so the UI responds at once
-            Promise.resolve(this.speak(welcomeMessage)).catch(err => console.warn("Welcome speech failed:", err));
-            
-            // Update state - Initialize stats properly
-            this.agentState.autonomous_status = "RUNNING";
-            this.agentState.streaming_pulse_label = "Actively screening transactions and monitoring compliance events";
-            this.agentState.run_stats = { 
-                actions: 0, 
-                success: 0, 
-                failure: 0, 
-                casesTouched: 0 
-            };
-            
-            // Force UI update
-            this.updateStateUI();
-            
-            // Show stats card immediately
-            $("#kcStatsCard").show();
-            
-            showToast("success", "Kyro is now running autonomously");
-            
-            // Small delay to ensure UI is ready
-            await new Promise(resolve => setTimeout(resolve, 500));
-            
-            // Simulate progressive stats update & actions
-            this.startStatsSimulation();
-            
-        } catch (error) {
-            console.error(error);
-            showToast("error", "Failed to start agent");
-            this.addMessage("assistant", kyroScripts.autonomous.start.failure("system error"));
-        }
-    },
-
-    startStatsSimulation() {
-        // Clear any existing simulation
-        if (this.statsSimulationInterval) {
-            clearInterval(this.statsSimulationInterval);
-        }
-        
-        // Predefined actions that Kyro will perform
-        const actions = [
-            { type: "reduce_backlog", msg: kyroScripts.actions.reduce_backlog.start },
-            { type: "assign_priority", msg: kyroScripts.actions.assign_priority_cases.start },
-            { type: "process_low_risk", msg: kyroScripts.actions.process_low_risk_cases.start },
-            { type: "escalation_review", msg: kyroScripts.actions.resolve_escalated_cases.start },
-            { type: "anomaly_detection", msg: kyroScripts.actions.trigger_behavior_reviews.start },
-            { type: "false_positive_analysis", msg: kyroScripts.actions.analyze_false_positives.start }
-        ];
-        
-        let actionIndex = 0;
-        
-        // Async function to perform action
-        const performAction = async () => {
-            if (this.agentState.autonomous_status !== "RUNNING") {
-                clearInterval(this.statsSimulationInterval);
-                return;
-            }
-            
-            // Select action
-            const action = actions[actionIndex % actions.length];
-            actionIndex++;
-            
-            // Add action start message to chat and speak it completely
-            this.addMessage("assistant", action.msg);
-            await this.speak(action.msg);
-            
-            // Update stats
-            this.agentState.run_stats.actions += 1;
-            const isSuccess = Math.random() > 0.15; // 85% success rate
-            
-            // Wait for action to "complete"
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            
-            if (isSuccess) {
-                this.agentState.run_stats.success += 1;
-                const casesProcessed = Math.floor(Math.random() * 5) + 3; // 3-7 cases
-                this.agentState.run_stats.casesTouched += casesProcessed;
-                
-                let resultMsg = "";
-                let messageOptions = {};
-                
-                if (action.type === "reduce_backlog") {
-                    const resolved = Math.floor(casesProcessed * 0.6);
-                    const escalated = Math.floor(casesProcessed * 0.3);
-                    resultMsg = kyroScripts.actions.reduce_backlog.success(casesProcessed, resolved, escalated);
-                    
-                    // Generate case details for backlog analysis
-                    messageOptions = {
-                        showViewDetails: true,
-                        caseDetails: this.generateCaseDetails(casesProcessed, resolved, escalated)
-                    };
-                } else if (action.type === "assign_priority") {
-                    resultMsg = kyroScripts.actions.assign_priority_cases.success(casesProcessed);
-                } else if (action.type === "process_low_risk") {
-                    resultMsg = kyroScripts.actions.process_low_risk_cases.success(casesProcessed);
-                } else if (action.type === "escalation_review") {
-                    const downgraded = Math.floor(casesProcessed * 0.4);
-                    resultMsg = kyroScripts.actions.resolve_escalated_cases.success(casesProcessed, downgraded);
-                } else if (action.type === "anomaly_detection") {
-                    resultMsg = kyroScripts.actions.trigger_behavior_reviews.success(casesProcessed);
-                } else if (action.type === "false_positive_analysis") {
-                    const falsePos = Math.floor(casesProcessed * 0.3);
-                    resultMsg = kyroScripts.actions.analyze_false_positives.success(casesProcessed, falsePos);
-                }
-                
-                // Add result message with optional details and speak it completely
-                this.addMessage("assistant", resultMsg, messageOptions);
-                await this.speak(resultMsg);
-            } else {
-                this.agentState.run_stats.failure += 1;
-                const failMsg = kyroScripts.actions[action.type.replace(/_/g, '_')]?.failure || 
-                               "Action failed. I'll retry in the next cycle.";
-                this.addMessage("assistant", failMsg);
-                await this.speak(failMsg);
-            }
-            
-            // Force UI update to refresh stats display
-            this.updateStateUI();
-            
-            // Also manually update stats if updateStateUI doesn't catch it
-            const rs = this.agentState.run_stats || {};
-            $("#kcStatActions").text(rs.actions || 0);
-            $("#kcStatSuccess").text(rs.success || 0);
-            $("#kcStatFailure").text(rs.failure || 0);
-            $("#kcStatCases").text(rs.casesTouched || 0);
-        };
-        
-        // Start first action immediately
-        performAction();
-        
-        // Then repeat every 12-20 seconds
-        this.statsSimulationInterval = setInterval(() => {
-            performAction();
-        }, Math.random() * 8000 + 12000); // Between 12-20 seconds
-    },
-
-    stopStatsSimulation() {
-        if (this.statsSimulationInterval) {
-            clearInterval(this.statsSimulationInterval);
-            this.statsSimulationInterval = null;
-        }
-    },
-
-    generateCaseDetails(totalCases, resolved, escalated) {
-        const remaining = totalCases - resolved - escalated;
-        
-        // Generate sample cases with realistic data
-        const riskTypes = ['MANUAL', 'BEHAVIOR_BASED', 'TIME_BASED'];
-        const riskLevels = ['MEDIUM', 'HIGH', 'LOW'];
-        const caseList = [];
-        
-        for (let i = 0; i < totalCases && i < 15; i++) {
-            const caseId = `CUST-${String(Math.floor(Math.random() * 999) + 1).padStart(3, '0')}`;
-            const customerId = `ef${Math.random().toString(36).substr(2, 6)}f`;
-            const riskType = riskTypes[Math.floor(Math.random() * riskTypes.length)];
-            const riskLevel = riskLevels[Math.floor(Math.random() * riskLevels.length)];
-            const score = (Math.random() * 60 + 20).toFixed(1);
-            
-            caseList.push(`- ${caseId} • ${customerId} • ${riskType} • ${riskLevel}`);
-        }
-        
-        const assessedCases = [];
-        for (let i = 0; i < Math.min(3, totalCases); i++) {
-            const caseId = `CUST-${String(Math.floor(Math.random() * 999) + 1).padStart(3, '0')}`;
-            const customerId = `ef${Math.random().toString(36).substr(2, 6)}f`;
-            const riskType = riskTypes[Math.floor(Math.random() * riskTypes.length)];
-            const riskLevel = riskLevels[Math.floor(Math.random() * riskLevels.length)];
-            const score = (Math.random() * 60 + 20).toFixed(1);
-            
-            assessedCases.push(`- ${caseId} • ${customerId}f [${riskType} | ${riskLevel} | ${score}]`);
-        }
-        
-        const moreCount = totalCases - caseList.length;
-        
-        let html = `
-            <div class="kc-case-list">
-                <div class="kc-case-section">
-                    <div class="kc-case-label">Cases:</div>
-                    ${caseList.join('<br>')}
-                    ${moreCount > 0 ? `<br>- +${moreCount} more` : ''}
-                </div>
-                
-                <div class="kc-case-section">
-                    <div class="kc-case-label">Assessed:</div>
-                    ${assessedCases.join('<br>')}
-                </div>
-                
-                <div class="kc-audit-note">
-                    Out-of-cycle urgent review: behavioral anomalies crossed policy sensitivity and require immediate review. 
-                    Audit confirmation: I logged trigger rationale, scores, tier decision, and action outcome to the compliance audit trail.
-                </div>
-            </div>
-        `;
-        
-        return html;
-    },
-
-    generateCustomerCaseDetail(caseId) {
-        const riskTypes = ['MANUAL', 'BEHAVIOR_BASED', 'TIME_BASED'];
-        const riskLevels = ['MEDIUM', 'HIGH', 'LOW'];
-        const statuses = ['OPEN', 'UNDER_REVIEW', 'ESCALATED'];
-        
-        return {
-            caseId: caseId,
-            customerId: `ef${Math.random().toString(36).substr(2, 6)}f${Math.floor(Math.random() * 10)}`,
-            customerName: `${['James', 'Maria', 'Robert', 'Jennifer', 'Michael', 'Linda', 'William', 'Patricia', 'David', 'Elizabeth'][Math.floor(Math.random() * 10)]} ${['Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia', 'Miller', 'Davis', 'Rodriguez', 'Martinez'][Math.floor(Math.random() * 10)]}`,
-            riskType: riskTypes[Math.floor(Math.random() * riskTypes.length)],
-            riskLevel: riskLevels[Math.floor(Math.random() * riskLevels.length)],
-            riskScore: (Math.random() * 60 + 20).toFixed(1),
-            status: statuses[Math.floor(Math.random() * statuses.length)],
-            createdDate: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-            lastActivity: new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-            transactionCount: Math.floor(Math.random() * 50) + 5,
-            totalAmount: `$${(Math.random() * 500000 + 50000).toFixed(2)}`,
-            flags: [
-                'Unusual transaction velocity',
-                'Cross-border transfers to high-risk jurisdiction',
-                'Pattern deviation detected'
-            ].slice(0, Math.floor(Math.random() * 2) + 1),
-            assignee: Math.random() > 0.5 ? 'Unassigned' : 'Analyst Team',
-            priority: riskLevels[Math.floor(Math.random() * riskLevels.length)]
-        };
-    },
-
-    getCaseDetailsResponse(caseId, caseDetails) {
-        return `I found case ${caseId} for customer ${caseDetails.customerId}. This is a ${caseDetails.riskLevel} risk ${caseDetails.riskType} case with a risk score of ${caseDetails.riskScore}. Status: ${caseDetails.status}. The case involves ${caseDetails.transactionCount} transactions totaling ${caseDetails.totalAmount}. Would you like me to provide more details or initiate a handoff for human review?`;
-    },
-
-    formatCaseDetailsHTML(caseDetails) {
-        return `
-            <div class="kc-case-list">
-                <div class="kc-case-section">
-                    <div class="kc-case-label">Case Information:</div>
-                    - Case ID: ${caseDetails.caseId}<br>
-                    - Customer ID: ${caseDetails.customerId}<br>
-                    - Customer Name: ${caseDetails.customerName}<br>
-                    - Risk Type: ${caseDetails.riskType}<br>
-                    - Risk Level: ${caseDetails.riskLevel}<br>
-                    - Risk Score: ${caseDetails.riskScore}<br>
-                    - Status: ${caseDetails.status}
-                </div>
-                
-                <div class="kc-case-section">
-                    <div class="kc-case-label">Transaction Details:</div>
-                    - Transaction Count: ${caseDetails.transactionCount}<br>
-                    - Total Amount: ${caseDetails.totalAmount}<br>
-                    - Created Date: ${caseDetails.createdDate}<br>
-                    - Last Activity: ${caseDetails.lastActivity}
-                </div>
-                
-                <div class="kc-case-section">
-                    <div class="kc-case-label">Risk Flags:</div>
-                    ${caseDetails.flags.map(flag => `- ${flag}`).join('<br>')}
-                </div>
-                
-                <div class="kc-case-section">
-                    <div class="kc-case-label">Assignment:</div>
-                    - Assignee: ${caseDetails.assignee}<br>
-                    - Priority: ${caseDetails.priority}
-                </div>
-            </div>
-        `;
-    },
-
-    generateDetailedSummaryData() {
-        const analysts = ['Sarah Chen', 'Mike Rodriguez', 'Priya Patel', 'James Wilson', 'Unassigned'];
-        const failureReasons = [
-            'Insufficient transaction data for risk assessment',
-            'External data source timeout',
-            'Customer profile incomplete - missing KYC documentation',
-            'Duplicate case detected - merged with existing case',
-            'Model prediction confidence below threshold',
-            'API rate limit exceeded during scoring'
-        ];
-        
-        // Generate failed cases with details
-        const failedCases = [];
-        const failedCount = Math.floor(Math.random() * 5) + 3; // 3-7 failed cases
-        
-        for (let i = 0; i < failedCount; i++) {
-            failedCases.push({
-                caseId: `CUST-${String(Math.floor(Math.random() * 999) + 1).padStart(3, '0')}`,
-                customerId: `ef${Math.random().toString(36).substr(2, 6)}f${Math.floor(Math.random() * 10)}`,
-                failureReason: failureReasons[Math.floor(Math.random() * failureReasons.length)],
-                attemptedAt: new Date(Date.now() - Math.random() * 2 * 60 * 60 * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                assignedTo: 'Requires Manual Review'
-            });
-        }
-        
-        // Generate assigned cases
-        const assignedCases = [];
-        const assignedCount = Math.floor(Math.random() * 8) + 5; // 5-12 assigned cases
-        
-        for (let i = 0; i < assignedCount; i++) {
-            assignedCases.push({
-                caseId: `CUST-${String(Math.floor(Math.random() * 999) + 1).padStart(3, '0')}`,
-                customerId: `ef${Math.random().toString(36).substr(2, 6)}f${Math.floor(Math.random() * 10)}`,
-                assignedTo: analysts[Math.floor(Math.random() * analysts.length)],
-                priority: ['HIGH', 'MEDIUM', 'LOW'][Math.floor(Math.random() * 3)],
-                status: ['OPEN', 'IN_PROGRESS', 'PENDING_REVIEW'][Math.floor(Math.random() * 3)]
-            });
-        }
-        
-        return {
-            total: 120,
-            resolved: 85,
-            pending: 20,
-            escalated: 12,
-            failedCases: failedCases,
-            assignedCases: assignedCases
-        };
-    },
-
-    formatDetailedSummaryHTML(data) {
-        const { total, resolved, pending, escalated, failedCases, assignedCases } = data;
-        
-        let html = `
-            <div class="kc-case-list">
-                <div class="kc-case-section">
-                    <div class="kc-case-label">📊 Overall Statistics</div>
-                    <strong>Total Cases Processed:</strong> ${total}<br>
-                    <strong>✓ Successfully Resolved:</strong> <span style="color: #10b981; font-weight: 600;">${resolved}</span><br>
-                    <strong>⏳ Pending Review:</strong> <span style="color: #f59e0b; font-weight: 600;">${pending}</span><br>
-                    <strong>⚠️ Escalated to Analysts:</strong> <span style="color: #ef4444; font-weight: 600;">${escalated}</span><br>
-                    <strong>❌ Failed Processing:</strong> <span style="color: #ef4444; font-weight: 600;">${failedCases.length}</span>
-                </div>`;
-        
-        // Failed cases section
-        if (failedCases.length > 0) {
-            html += `
-                <div class="kc-case-section">
-                    <div class="kc-case-label">❌ Failed Cases - Requires Attention</div>`;
-            
-            failedCases.forEach((fc, idx) => {
-                html += `
-                    <div style="margin-bottom: 12px; padding: 8px; background: #fef2f2; border-left: 3px solid #ef4444; border-radius: 4px;">
-                        <strong>${idx + 1}. ${fc.caseId}</strong><br>
-                        <span style="font-size: 0.9em; color: #64748b;">Customer ID: ${fc.customerId}</span><br>
-                        <span style="font-size: 0.9em; color: #64748b;">Attempted: ${fc.attemptedAt}</span><br>
-                        <span style="font-size: 0.9em; color: #dc2626;"><strong>Reason:</strong> ${fc.failureReason}</span><br>
-                        <span style="font-size: 0.9em; color: #64748b;">Assignment: ${fc.assignedTo}</span>
-                    </div>`;
-            });
-            
-            html += `</div>`;
-        }
-        
-        // Assigned cases section
-        if (assignedCases.length > 0) {
-            html += `
-                <div class="kc-case-section">
-                    <div class="kc-case-label">👤 Currently Assigned Cases</div>`;
-            
-            // Group by analyst
-            const byAnalyst = {};
-            assignedCases.forEach(ac => {
-                if (!byAnalyst[ac.assignedTo]) {
-                    byAnalyst[ac.assignedTo] = [];
-                }
-                byAnalyst[ac.assignedTo].push(ac);
-            });
-            
-            Object.keys(byAnalyst).forEach(analyst => {
-                const cases = byAnalyst[analyst];
-                html += `
-                    <div style="margin-bottom: 10px;">
-                        <strong>👤 ${analyst}</strong> (${cases.length} case${cases.length !== 1 ? 's' : ''})<br>`;
-                
-                cases.slice(0, 3).forEach(ac => {
-                    const priorityColor = ac.priority === 'HIGH' ? '#ef4444' : ac.priority === 'MEDIUM' ? '#f59e0b' : '#10b981';
-                    html += `
-                        <span style="font-size: 0.85em; color: #64748b; margin-left: 10px;">
-                            • ${ac.caseId} (${ac.customerId}) - 
-                            <span style="color: ${priorityColor}; font-weight: 600;">${ac.priority}</span> - 
-                            ${ac.status}
-                        </span><br>`;
-                });
-                
-                if (cases.length > 3) {
-                    html += `<span style="font-size: 0.85em; color: #94a3b8; margin-left: 10px;">... +${cases.length - 3} more</span><br>`;
-                }
-                
-                html += `</div>`;
-            });
-            
-            html += `</div>`;
-        }
-        
-        html += `
-                <div class="kc-audit-note">
-                    <strong>🔍 Next Steps:</strong> Failed cases require manual intervention to resolve data quality or system integration issues. I've flagged these for immediate analyst review. Assigned cases are actively being processed by compliance team members.
-                </div>
-            </div>
-        `;
-        
-        return html;
-    },
-
-    async stopAgent() {
-        try {
-            showGlobalLoading("Stopping agent...");
-            
-            // Capture run stats before resetting
-            const runSummary = {
-                totalActions: this.agentState.run_stats.actions || 0,
-                successfulActions: this.agentState.run_stats.success || 0,
-                failedActions: this.agentState.run_stats.failure || 0,
-                casesTouched: this.agentState.run_stats.casesTouched || 0,
-                startTime: this.runStartTime || new Date(),
-                endTime: new Date()
-            };
-            
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            
-            this.stopStatsSimulation();
-            this.agentState.autonomous_status = "STOPPED";
-            this.agentState.streaming_pulse_label = "Ready to screen cases when autonomous execution starts.";
-            this.agentState.run_stats = { actions: 0, success: 0, failure: 0, casesTouched: 0 };
-            this.updateStateUI();
-            
-            showToast("info", "Kyro agent stopped");
-            
-            // Generate and display run summary
-            const summaryMessage = this.generateRunSummary(runSummary);
-            this.addMessage("assistant", summaryMessage, {
-                showViewDetails: true,
-                caseDetails: this.formatRunSummaryDetails(runSummary)
-            });
-            this.speak("Autonomous monitoring stopped. Run summary generated.");
-            
-        } catch (error) {
-            console.error(error);
-            showToast("error", "Failed to stop agent");
-            this.addMessage("assistant", kyroScripts.autonomous.stop.failure("system error"));
-        } finally {
-            hideLoading();
-        }
-    },
-
-    async pauseAgent() {
-        try {
-            this.stopStatsSimulation();
-            this.agentState.autonomous_status = "PAUSED";
-            this.agentState.streaming_pulse_label = "Monitoring paused - awaiting resume command";
-            this.updateStateUI();
-            
-            showToast("warning", "Agent paused");
-            this.addMessage("assistant", kyroScripts.autonomous.pause.success);
-            this.speak("Operations paused.");
-            
-        } catch (error) {
-            console.error(error);
-            this.addMessage("assistant", kyroScripts.autonomous.pause.failure("system error"));
-        }
-    },
-
-    async resumeAgent() {
-        try {
-            this.agentState.autonomous_status = "RUNNING";
-            this.agentState.streaming_pulse_label = "Resuming active monitoring of compliance events";
-            this.updateStateUI();
-            
-            showToast("success", "Agent resumed");
-            this.addMessage("assistant", kyroScripts.autonomous.resume.success);
-            this.speak("Resuming active screening cycles.");
-            
-            // Restart stats simulation
-            this.startStatsSimulation();
-            
-        } catch (error) {
-            console.error(error);
-            this.addMessage("assistant", kyroScripts.autonomous.resume.failure("system error"));
-        }
-    },
-
-    async requestHandoff() {
-        try {
-            const reason = prompt("Enter reason for handoff:", "Manual intervention required");
-            if (!reason) return;
-            
-            this.agentState.autonomous_status = "PAUSED";
-            this.agentState.intervention_needed = true;
-            this.agentState.streaming_pulse_label = "Human intervention requested - awaiting guidance";
-            this.updateStateUI();
-            
-            showToast("info", "Handoff requested - agent paused");
-            
-            // If we have case context, include detailed information in handoff
-            if (this.currentCaseContext) {
-                const handoffMsg = `Handoff requested: ${reason}\n\nI've packaged the case context for ${this.currentCaseContext.caseId}. A human analyst should review the flagged transactions and risk indicators.`;
-                this.addMessage("assistant", handoffMsg, {
-                    showViewDetails: true,
-                    caseDetails: this.formatHandoffCaseDetails(this.currentCaseContext)
-                });
-                this.speak(`Handoff completed for case ${this.currentCaseContext.caseId}. Awaiting manual intervention.`);
-            } else {
-                this.addMessage("assistant", kyroScripts.handoff.requested(reason));
-                this.speak("Handoff completed. Awaiting manual intervention.");
-            }
-            
-        } catch (error) {
-            console.error(error);
-        }
-    },
-
-    formatHandoffCaseDetails(caseDetails) {
-        return `
-            <div class="kc-case-list">
-                <div class="kc-case-section">
-                    <div class="kc-case-label">📋 Case Summary</div>
-                    <strong>Case ID:</strong> ${caseDetails.caseId}<br>
-                    <strong>Customer ID:</strong> ${caseDetails.customerId}<br>
-                    <strong>Customer Name:</strong> ${caseDetails.customerName}<br>
-                    <strong>Status:</strong> <span style="color: #f59e0b; font-weight: 600;">${caseDetails.status}</span>
-                </div>
-                
-                <div class="kc-case-section">
-                    <div class="kc-case-label">⚠️ Risk Assessment</div>
-                    <strong>Risk Type:</strong> ${caseDetails.riskType}<br>
-                    <strong>Risk Level:</strong> <span style="color: ${caseDetails.riskLevel === 'HIGH' ? '#ef4444' : caseDetails.riskLevel === 'MEDIUM' ? '#f59e0b' : '#10b981'}; font-weight: 600;">${caseDetails.riskLevel}</span><br>
-                    <strong>Risk Score:</strong> ${caseDetails.riskScore}/100<br>
-                    <strong>Priority:</strong> ${caseDetails.priority}
-                </div>
-                
-                <div class="kc-case-section">
-                    <div class="kc-case-label">💰 Transaction Activity</div>
-                    <strong>Transaction Count:</strong> ${caseDetails.transactionCount}<br>
-                    <strong>Total Amount:</strong> ${caseDetails.totalAmount}<br>
-                    <strong>Created Date:</strong> ${caseDetails.createdDate}<br>
-                    <strong>Last Activity:</strong> ${caseDetails.lastActivity}
-                </div>
-                
-                <div class="kc-case-section">
-                    <div class="kc-case-label">🚩 Risk Flags</div>
-                    ${caseDetails.flags.map(flag => `• ${flag}`).join('<br>')}
-                </div>
-                
-                <div class="kc-case-section">
-                    <div class="kc-case-label">👤 Assignment</div>
-                    <strong>Current Assignee:</strong> ${caseDetails.assignee}<br>
-                    <strong>Recommended Action:</strong> Human review required
-                </div>
-                
-                <div class="kc-audit-note">
-                    <strong>🔍 AI Analysis:</strong> I've performed automated risk scoring and pattern analysis. The case exhibits behavioral anomalies that exceed my autonomous decision threshold. Human expertise is needed to assess context-specific factors and make the final disposition decision.
-                </div>
-            </div>
-        `;
-    },
-
-    generateRunSummary(runSummary) {
-        const duration = Math.round((runSummary.endTime - runSummary.startTime) / 1000); // in seconds
-        const minutes = Math.floor(duration / 60);
-        const seconds = duration % 60;
-        const durationStr = minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
-        
-        const successRate = runSummary.totalActions > 0 
-            ? ((runSummary.successfulActions / runSummary.totalActions) * 100).toFixed(1)
-            : 0;
-        
-        return `Autonomous monitoring session completed. I executed ${runSummary.totalActions} action${runSummary.totalActions !== 1 ? 's' : ''} with ${successRate}% success rate, processing ${runSummary.casesTouched} case${runSummary.casesTouched !== 1 ? 's' : ''} over ${durationStr}. All actions have been logged to the audit trail.`;
-    },
-
-    formatRunSummaryDetails(runSummary) {
-        const duration = Math.round((runSummary.endTime - runSummary.startTime) / 1000);
-        const minutes = Math.floor(duration / 60);
-        const seconds = duration % 60;
-        const durationStr = minutes > 0 ? `${minutes} minute${minutes !== 1 ? 's' : ''} ${seconds} second${seconds !== 1 ? 's' : ''}` : `${seconds} second${seconds !== 1 ? 's' : ''}`;
-        
-        const successRate = runSummary.totalActions > 0 
-            ? ((runSummary.successfulActions / runSummary.totalActions) * 100).toFixed(1)
-            : 0;
-        
-        const startTimeStr = runSummary.startTime.toLocaleString();
-        const endTimeStr = runSummary.endTime.toLocaleString();
-        
-        // Generate failed cases if there were any failures
-        // Map failure reasons to trigger types and behavioral patterns
-        const failureReasonsByTriggerType = {
-            'VELOCITY_SPIKE': [
-                'Many transactions in short time - fraud review needed',
-                'High transaction frequency detected - manual verification required'
-            ],
-            'THRESHOLD_BREACH': [
-                'Large transaction amount - compliance approval needed',
-                'Transaction exceeds threshold - additional documentation required'
-            ],
-            'GEOGRAPHIC_SHIFT': [
-                'Transaction from new high-risk country - customer verification needed',
-                'Geographic location change requires additional review'
-            ],
-            'COUNTERPARTY_CHANGES': [
-                'New recipients added - identity verification required',
-                'Multiple new counterparties need compliance approval'
-            ],
-            'COMPLEXITY_SHIFT': [
-                'Complex transaction chain detected - senior analyst review needed',
-                'Unusual transaction structure requires investigation'
-            ],
-            'INACTIVE_REACTIVATION': [
-                'Dormant account now active - customer interview required',
-                'Reactivated account needs source of funds verification'
-            ],
-            'BEHAVIORAL_ANOMALY': [
-                'Activity pattern changed - manual review needed',
-                'Transaction behavior differs from normal - analyst confirmation required'
-            ],
-            'HIGH_RISK_CUSTOMER': [
-                'Customer risk factors identified - compliance review required',
-                'Enhanced due diligence needed for customer profile'
-            ],
-            'DUPLICATE': [
-                'Similar case already under investigation - consolidation needed',
-                'Duplicate alert detected - merged with existing case'
-            ]
-        };
-        
-        const customerFirstNames = ['James', 'Maria', 'Robert', 'Jennifer', 'Michael', 'Linda', 'William', 'Patricia', 'David', 'Elizabeth', 'Richard', 'Susan', 'Joseph', 'Jessica', 'Thomas', 'Sarah', 'Charles', 'Karen', 'Christopher', 'Nancy'];
-        const customerLastNames = ['Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia', 'Miller', 'Davis', 'Rodriguez', 'Martinez', 'Hernandez', 'Lopez', 'Gonzalez', 'Wilson', 'Anderson', 'Thomas', 'Taylor', 'Moore', 'Jackson', 'Martin'];
-        
-        const failedCases = [];
-        if (runSummary.failedActions > 0) {
-            // Generate case IDs from actual customer range (1 to total customers in system)
-            const maxCustomerId = Math.min(1454, runSummary.casesTouched || 100); // Use actual customer count from database
-            
-            for (let i = 0; i < runSummary.failedActions; i++) {
-                const firstName = customerFirstNames[Math.floor(Math.random() * customerFirstNames.length)];
-                const lastName = customerLastNames[Math.floor(Math.random() * customerLastNames.length)];
-                const randomCustNum = Math.floor(Math.random() * maxCustomerId) + 1;
-                
-                // Use format that matches database customer IDs (UUID format)
-                const customerId = `${Math.random().toString(36).substr(2, 8)}-${Math.random().toString(36).substr(2, 4)}-${Math.random().toString(36).substr(2, 4)}-${Math.random().toString(36).substr(2, 4)}-${Math.random().toString(36).substr(2, 12)}`;
-                
-                // Pick a realistic trigger type weighted by actual occurrence
-                const triggerTypes = ['BEHAVIORAL_ANOMALY', 'VELOCITY_SPIKE', 'THRESHOLD_BREACH', 'GEOGRAPHIC_SHIFT', 'HIGH_RISK_CUSTOMER', 'DUPLICATE'];
-                const weights = [0.35, 0.25, 0.15, 0.10, 0.10, 0.05]; // Based on typical AML patterns
-                
-                let rand = Math.random();
-                let triggerType = triggerTypes[0];
-                let cumulative = 0;
-                for (let j = 0; j < weights.length; j++) {
-                    cumulative += weights[j];
-                    if (rand < cumulative) {
-                        triggerType = triggerTypes[j];
-                        break;
-                    }
-                }
-                
-                // Get appropriate failure reason for this trigger type
-                const reasonsForType = failureReasonsByTriggerType[triggerType] || failureReasonsByTriggerType['BEHAVIORAL_ANOMALY'];
-                const failureReason = reasonsForType[Math.floor(Math.random() * reasonsForType.length)];
-                
-                failedCases.push({
-                    caseId: `CUST-${String(randomCustNum).padStart(3, '0')}`,
-                    customerName: `${firstName} ${lastName}`,
-                    customerId: customerId.substring(0, 36), // UUID length
-                    triggerType: triggerType,
-                    failureReason: failureReason,
-                    attemptedAt: new Date(runSummary.startTime.getTime() + Math.random() * duration * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                });
-            }
-        }
-        
-        let html = `
-            <div class="kc-case-list">
-                <div class="kc-case-section">
-                    <div class="kc-case-label">⏱️ Session Duration</div>
-                    <strong>Start Time:</strong> ${startTimeStr}<br>
-                    <strong>End Time:</strong> ${endTimeStr}<br>
-                    <strong>Total Duration:</strong> ${durationStr}
-                </div>
-                
-                <div class="kc-case-section">
-                    <div class="kc-case-label">📊 Performance Metrics</div>
-                    <strong>Total Actions:</strong> ${runSummary.totalActions}<br>
-                    <strong>Successful Actions:</strong> <span style="color: #10b981; font-weight: 600;">${runSummary.successfulActions}</span><br>
-                    <strong>Failed Actions:</strong> <span style="color: ${runSummary.failedActions > 0 ? '#ef4444' : '#94a3b8'}; font-weight: 600;">${runSummary.failedActions}</span><br>
-                    <strong>Success Rate:</strong> <span style="color: ${successRate >= 90 ? '#10b981' : successRate >= 70 ? '#f59e0b' : '#ef4444'}; font-weight: 600;">${successRate}%</span>
-                </div>
-                
-                <div class="kc-case-section">
-                    <div class="kc-case-label">📁 Cases Processed</div>
-                    <strong>Total Cases Touched:</strong> ${runSummary.casesTouched}<br>
-                    <strong>Average Actions per Case:</strong> ${runSummary.casesTouched > 0 ? (runSummary.totalActions / runSummary.casesTouched).toFixed(2) : 0}
-                </div>`;
-        
-        // Add failed cases section if there are any failures
-        if (failedCases.length > 0) {
-            html += `
-                <div class="kc-case-section">
-                    <div class="kc-case-label">❌ Failed Cases - Details</div>`;
-            
-            failedCases.forEach((fc, idx) => {
-                html += `
-                    <div style="margin-bottom: 12px; padding: 8px; background: #fef2f2; border-left: 3px solid #ef4444; border-radius: 4px;">
-                        <strong>${idx + 1}. ${fc.caseId}</strong> - ${fc.customerName}<br>
-                        <span style="font-size: 0.9em; color: #64748b;">Customer ID: ${fc.customerId}</span><br>
-                        <span style="font-size: 0.9em; color: #7c3aed;"><strong>Trigger:</strong> ${fc.triggerType.replace(/_/g, ' ')}</span><br>
-                        <span style="font-size: 0.9em; color: #64748b;">Attempted: ${fc.attemptedAt}</span><br>
-                        <span style="font-size: 0.9em; color: #dc2626;"><strong>Reason:</strong> ${fc.failureReason}</span>
-                    </div>`;
-            });
-            
-            html += `</div>`;
-        }
-        
-        html += `
-                <div class="kc-case-section">
-                    <div class="kc-case-label">🎯 Actions Performed</div>
-                    • Backlog analysis and risk scoring<br>
-                    • Priority case assignment<br>
-                    • Low-risk case processing<br>
-                    • Escalated case review<br>
-                    • False-positive pattern analysis<br>
-                    • Behavioral anomaly detection
-                </div>
-                
-                <div class="kc-audit-note">
-                    <strong>✅ Audit Trail:</strong> All actions, decisions, and case dispositions have been logged to the compliance audit database. The session data is available for regulatory review and includes timestamps, risk scores, reasoning chains, and outcome classifications.
-                </div>
-            </div>
-        `;
-        
-        return html;
-    },
-
     _setSpeakingState(speaking) {
         const video    = document.getElementById("kyroCharVideo");
         const pillDot  = document.getElementById("kcIdleDot");
@@ -1372,10 +553,8 @@ const KyroChat = {
                 video.pause(); 
                 video.currentTime = 0; 
             }
-            const status = this.agentState.autonomous_status;
-            const dotColors = { RUNNING: "#22c55e", PAUSED: "#f59e0b", ERROR: "#ef4444" };
-            if (pillDot)  pillDot.style.backgroundColor = dotColors[status] || "#94a3b8";
-            if (pillText) pillText.textContent = status === "RUNNING" ? "RUNNING" : status === "PAUSED" ? "PAUSED" : "IDLE";
+            if (pillDot)  pillDot.style.backgroundColor = "#94a3b8";
+            if (pillText) pillText.textContent = "IDLE";
         }
     },
 
