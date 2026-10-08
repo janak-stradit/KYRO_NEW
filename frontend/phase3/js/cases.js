@@ -887,6 +887,7 @@ const Cases = {
                                     <label class="form-check"><input class="form-check-input" type="checkbox" id="includeSummary" checked><span class="form-check-label">Case &amp; customer summary</span></label>
                                     <label class="form-check"><input class="form-check-input" type="checkbox" id="includeRisk" checked><span class="form-check-label">Risk assessment &amp; screening</span></label>
                                     <label class="form-check"><input class="form-check-input" type="checkbox" id="includeTransactions" checked><span class="form-check-label">Transaction analysis</span></label>
+                                    <label class="form-check"><input class="form-check-input" type="checkbox" id="includeDocuments" checked><span class="form-check-label">Documents reviewed</span></label>
                                     <label class="form-check"><input class="form-check-input" type="checkbox" id="includeTimeline" checked><span class="form-check-label">Activity timeline</span></label>
                                 </div>
                             </div>
@@ -914,6 +915,7 @@ const Cases = {
             if ($('#includeSummary').is(':checked')) sections.push('summary');
             if ($('#includeRisk').is(':checked')) sections.push('risk');
             if ($('#includeTransactions').is(':checked')) sections.push('transactions');
+            if ($('#includeDocuments').is(':checked')) sections.push('documents');
             if ($('#includeTimeline').is(':checked')) sections.push('timeline');
             if (!sections.length) {
                 showToast('warning', 'Select at least one section to export');
@@ -954,6 +956,17 @@ const Cases = {
         const value = (i) => (settled[i].status === 'fulfilled' ? settled[i].value : null);
         const user = (window.Auth && Auth.getUser && Auth.getUser()) || {};
 
+        let documents = [];
+        if (rawCustomerId) {
+            try {
+                const list = await API.get('/documents', { customer_id: rawCustomerId });
+                documents = (await Promise.all(list.slice(0, 20).map(d => API.get(`/documents/${d.id}`).catch(() => null)))).filter(Boolean)
+                    .map(({ pages, ...rest }) => rest);  // the report cites pages; it does not reproduce the document text
+            } catch (err) {
+                console.warn("Could not load documents for the report:", err);
+            }
+        }
+
         return {
             caseId,
             customerId: customerCode,
@@ -965,7 +978,8 @@ const Cases = {
             customer: value(1),
             transactions: (value(2) && (value(2).items || value(2))) || [],
             screening: value(3) || [],
-            kycReviews: value(4) || []
+            kycReviews: value(4) || [],
+            documents
         };
     },
 
@@ -1338,6 +1352,39 @@ const Cases = {
         }
 
         // ── Timeline ─────────────────────────────────────────────────
+        if (has('documents')) {
+            const docTypes = (typeof Documents !== 'undefined' && Documents.TYPES) || {};
+            const checkLabel = { MATCH: 'Matches record', MISMATCH: 'Differs from record', NOT_ON_RECORD: 'Not on record', EXPIRED: 'Expired', NOT_CHECKED: 'Not checked' };
+            section('Documents Reviewed', `${(data.documents || []).length} on file`);
+            if (!(data.documents || []).length) {
+                text('No documents have been uploaded for this customer.', M, y + 2, { size: 9, color: C.muted });
+                y += 8;
+            }
+            (data.documents || []).forEach(d => {
+                ensure(20);
+                text(`${d.filename}  ·  ${docTypes[d.doc_type] || human(d.doc_type)}  ·  uploaded ${fmtDate(d.uploaded_at)}${d.alert_id === data.caseId ? '  ·  for this case' : ''}`, M, y, { size: 9, bold: true, color: C.ink });
+                y += 5;
+                if (d.text_status !== 'EXTRACTED') {
+                    text(d.text_status === 'NEEDS_OCR' ? 'Scanned document: could not be read automatically.' : 'The text of this document could not be read.', M, y, { size: 8.5, color: C.muted });
+                    y += 7;
+                    return;
+                }
+                table(
+                    ['Field', 'Value', 'Check', 'On record', 'Page', 'Decision'],
+                    d.extractions.map(e => [
+                        human(e.field), e.value + (e.quote_verified ? '' : '  (not found in document)'),
+                        checkLabel[e.check_status] || human(e.check_status), e.record_value || '—', e.page_number || '—',
+                        human(e.status === 'PROPOSED' ? 'not reviewed' : e.status) + (e.applied_to_record ? ', record updated' : '')
+                    ]),
+                    { empty: d.extracted_at ? 'None of the expected fields were found.' : 'Fields have not been read from this document.' }
+                );
+                if (d.extracted_by === 'mock' && d.extractions.length) {
+                    text('Fields were read by the mock reader, not an AI model.', M, y - 2, { size: 7.5, color: C.muted });
+                    y += 4;
+                }
+            });
+        }
+
         if (has('timeline')) {
             const events = [];
             if (alert.created_at) events.push([alert.created_at, 'Alert raised', `${human(alert.alert_type)} · risk score ${alert.risk_score ?? '—'}`]);
@@ -1445,6 +1492,10 @@ const Cases = {
             ['Transactions on record', s.count],
             ['Flagged transactions', s.flagged],
             ...Object.entries(s.byCurrency).map(([cur, v]) => [`Total ${cur} (${v.count} txns)`, v.total.toFixed(2)]),
+            ...(data.documents || []).flatMap(d => d.extractions.map(e => [
+                `Document ${d.filename}: ${e.field}`,
+                `${e.value} [${e.check_status}${e.record_value ? `, on record ${e.record_value}` : ''}; ${e.status}; page ${e.page_number || '-'}]`
+            ])),
             ['Exported', data.exportDate],
             ['Exported by', data.preparedBy]
         ];
