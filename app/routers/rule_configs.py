@@ -12,6 +12,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.database import get_db
 from app.deps import get_current_user, require_role
 from app.models.rule_config import RuleConfig
@@ -74,6 +75,10 @@ def upsert(
     user: User = Depends(require_role("ADMIN", "COMPLIANCE_OFFICER")),
 ) -> RuleConfig:
     _validate_value(key, data.value)
+    if get_settings().rule_changes_require_approval:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, "Rule thresholds change through an approved change request (/api/v1/changes/rules)"
+        )
     return rule_config_service.upsert_config(
         db,
         key=key,

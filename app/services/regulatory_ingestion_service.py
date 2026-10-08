@@ -16,7 +16,7 @@ from app.ai.retrieval import index_text
 from app.models.knowledge_chunk import KnowledgeChunk
 from app.models.obligation import Obligation
 from app.models.regulatory import RegulatoryIngestionRun, RegulatorySection, RegulatorySource
-from app.services import ecfr_adapter
+from app.services import change_service, ecfr_adapter
 from app.services.ecfr_adapter import SectionRecord
 
 # source_kind -> fetch(config) returning (as_of_date, sections)
@@ -70,6 +70,7 @@ def ingest_source(db: Session, source: RegulatorySource) -> RegulatoryIngestionR
             )
         }
 
+        first_load = not current  # nothing to compare against yet, so nothing counts as a change
         for record in records:
             existing = current.get(record.section_ref)
             if existing is not None and existing.content_hash == hashes[record.section_ref]:
@@ -77,12 +78,11 @@ def ingest_source(db: Session, source: RegulatorySource) -> RegulatoryIngestionR
             if existing is not None:
                 existing.is_current = False
                 existing.superseded_at = now
-                _supersede_obligations(db, existing)
                 run.sections_changed += 1
             else:
                 run.sections_added += 1
 
-            db.add(
+            section = (
                 RegulatorySection(
                     source_id=source.id,
                     run_id=run.id,
@@ -95,6 +95,15 @@ def ingest_source(db: Session, source: RegulatorySource) -> RegulatoryIngestionR
                     source_note=record.source_note,
                 )
             )
+            db.add(section)
+            db.flush()
+            if not first_load:
+                change_service.record_change(
+                    db, source, run, change_type="AMENDED" if existing is not None else "ADDED",
+                    old_section=existing, new_section=section,
+                )
+            if existing is not None:
+                _supersede_obligations(db, existing)
             index_text(
                 db,
                 source_type="REGULATION",
@@ -109,6 +118,7 @@ def ingest_source(db: Session, source: RegulatorySource) -> RegulatoryIngestionR
         for ref in set(current) - set(hashes):
             current[ref].is_current = False
             current[ref].superseded_at = now
+            change_service.record_change(db, source, run, change_type="REMOVED", old_section=current[ref])
             _supersede_obligations(db, current[ref])
             db.query(KnowledgeChunk).filter(
                 KnowledgeChunk.source_type == "REGULATION", KnowledgeChunk.source_ref == ref

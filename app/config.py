@@ -66,6 +66,10 @@ class Settings(BaseSettings):
     kyro_llm_model: str = "claude-haiku-4-5-20251001"
     kyro_llm_timeout_seconds: int = 30
 
+    # When true, PUT /rule-configs is refused and rule thresholds can only
+    # change through an approved change request (/changes/rules).
+    rule_changes_require_approval: bool = False
+
     # ── Watchlist screening (Phase 4.1) ─────────────────────────────
     watchlist_confirmed_match_score: float = 92.0
     watchlist_potential_match_score: float = 75.0

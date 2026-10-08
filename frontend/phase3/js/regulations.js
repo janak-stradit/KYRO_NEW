@@ -28,7 +28,7 @@ const Regulations = {
         this.filters = { status: 'PROPOSED', category: '', q: '' };
         this.renderLayout();
         this.setupListeners();
-        await Promise.all([this.loadSources(), this.loadSummary(), this.loadObligations(), this.loadTraceability()]);
+        await Promise.all([this.loadSources(), this.loadSummary(), this.loadObligations(), this.loadTraceability(), this.loadChanges(), this.loadRuleChanges()]);
     },
 
     renderLayout() {
@@ -67,6 +67,61 @@ const Regulations = {
                                 </tr>
                             </thead>
                             <tbody id="regSourcesBody"><tr><td colspan="4" class="rc-empty">Loading sources...</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="card border-0 rc-table-card mb-4">
+                    <div class="rc-toolbar">
+                        <div class="rc-toolbar__title">
+                            <h2>Regulatory changes</h2>
+                            <small class="text-muted">Sections added, amended or removed since they were first loaded, with what each one affects</small>
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0 fp-table reg-table">
+                            <thead>
+                                <tr>
+                                    <th class="px-3 py-2">Detected</th>
+                                    <th class="px-3 py-2">Section</th>
+                                    <th class="px-3 py-2">Change</th>
+                                    <th class="px-3 py-2">Affects</th>
+                                    <th class="px-3 py-2">Status</th>
+                                    <th class="px-3 py-2"><span class="visually-hidden">Actions</span></th>
+                                </tr>
+                            </thead>
+                            <tbody id="regChangesBody"><tr><td colspan="6" class="rc-empty">Loading...</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="card border-0 rc-table-card mb-4">
+                    <div class="rc-toolbar">
+                        <div class="rc-toolbar__title">
+                            <h2>Rule changes</h2>
+                            <small class="text-muted">A threshold change takes effect only after a second person approves it, on its effective date</small>
+                        </div>
+                        ${reviewer ? `
+                        <div class="rc-toolbar__controls">
+                            <button type="button" class="btn btn-sm rc-actions__view" id="regProposeRuleChange">
+                                <i class="fas fa-plus me-1"></i>Propose a change
+                            </button>
+                        </div>` : ''}
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0 fp-table reg-table">
+                            <thead>
+                                <tr>
+                                    <th class="px-3 py-2">Setting</th>
+                                    <th class="px-3 py-2">Change</th>
+                                    <th class="px-3 py-2">Effective</th>
+                                    <th class="px-3 py-2">Impact over 90 days</th>
+                                    <th class="px-3 py-2">Proposed by</th>
+                                    <th class="px-3 py-2">Status</th>
+                                    <th class="px-3 py-2"><span class="visually-hidden">Actions</span></th>
+                                </tr>
+                            </thead>
+                            <tbody id="regRuleChangesBody"><tr><td colspan="7" class="rc-empty">Loading...</td></tr></tbody>
                         </table>
                     </div>
                 </div>
@@ -183,7 +238,7 @@ const Regulations = {
                 showToast(failed ? 'warning' : 'success', failed
                     ? `${failed} source(s) could not be reached; existing text was kept.`
                     : changed ? `${changed} section(s) added or changed.` : 'All sources are up to date.');
-                await Promise.all([this.loadSources(), this.loadSummary(), this.loadObligations()]);
+                await Promise.all([this.loadSources(), this.loadSummary(), this.loadObligations(), this.loadChanges(), this.loadTraceability()]);
             } catch (xhr) { /* API layer already reported it */ }
             $btn.prop("disabled", false);
         });
@@ -210,7 +265,11 @@ const Regulations = {
             }
         });
 
+        $("#regProposeRuleChange").on("click", () => this.showProposeModal());
+
         $("#mainContent").off("click.reg")
+            .on("click.reg", ".reg-change-btn", (e) => this.showChangeModal($(e.currentTarget).data("id")))
+            .on("click.reg", ".reg-rule-decide", (e) => this.decideRuleChange($(e.currentTarget)))
             .on("click.reg", ".reg-map-decide", async (e) => {
                 const $btn = $(e.currentTarget).prop("disabled", true);
                 try {
@@ -314,6 +373,262 @@ const Regulations = {
         $("#regPageInfo").text(this.total ? `${from}–${to} of ${this.total}` : '');
         $("#regPrev").prop("disabled", this.page <= 1);
         $("#regNext").prop("disabled", to >= this.total);
+    },
+
+    // ── Regulatory changes and rule changes (Phase 11.5) ─────────────────
+
+    NUMERIC_SETTINGS: {
+        AMOUNT_THRESHOLD: 'Amount threshold (R001)',
+        VELOCITY_DAILY_LIMIT: 'Transactions per day (R002)',
+        VELOCITY_HOURLY_LIMIT: 'Transactions per hour (R003)',
+        RAPID_SUCCESSION_WINDOW_SECONDS: 'Rapid succession window, seconds (R010)',
+        ALERT_THRESHOLD: 'Score that opens an alert',
+        EDD_THRESHOLD: 'Score that recommends enhanced due diligence'
+    },
+
+    async loadChanges() {
+        let changes;
+        try {
+            changes = await API.get('/changes/regulatory');
+        } catch (error) {
+            $("#regChangesBody").html('<tr><td colspan="6" class="rc-empty">Could not load regulatory changes.</td></tr>');
+            return;
+        }
+        this.regulatoryChanges = changes;
+        const typeChip = { ADDED: 'low', AMENDED: 'medium', REMOVED: 'high' };
+        const statusChip = { OPEN: 'medium', ACTION_REQUIRED: 'high', NO_ACTION: 'muted', CLOSED: 'low' };
+        $("#regChangesBody").html(changes.map(c => {
+            const a = c.affected || {};
+            const affects = [
+                (a.obligations || []).length ? `${a.obligations.length} obligation${a.obligations.length === 1 ? '' : 's'}` : null,
+                (a.controls || []).length ? `controls ${a.controls.map(x => x.code).join(', ')}` : null
+            ].filter(Boolean).join('; ') || 'Nothing mapped yet';
+            return `
+            <tr>
+                <td class="px-3 py-2 text-nowrap">${escapeHtml(formatDate(c.detected_at))}</td>
+                <td class="px-3 py-2"><strong>${escapeHtml(c.section_ref)}</strong><br><small class="text-muted">${escapeHtml(c.heading || '')}</small></td>
+                <td class="px-3 py-2"><span class="cd-chip cd-chip--${typeChip[c.change_type]}">${escapeHtml(this.human(c.change_type))}</span></td>
+                <td class="px-3 py-2 reg-cell">${escapeHtml(affects)}</td>
+                <td class="px-3 py-2"><span class="cd-chip cd-chip--${statusChip[c.status] || 'muted'}">${escapeHtml(this.human(c.status))}</span></td>
+                <td class="px-3 py-2 text-end"><button type="button" class="btn btn-sm rc-actions__view reg-change-btn" data-id="${escapeHtml(c.id)}">Review</button></td>
+            </tr>`;
+        }).join('') || '<tr><td colspan="6" class="rc-empty">No changes detected. A change appears here when "Check for updates" finds different text for a loaded section.</td></tr>');
+    },
+
+    async showChangeModal(id) {
+        let c;
+        try {
+            c = await API.get(`/changes/regulatory/${id}`);
+        } catch (error) { return; }
+        const a = c.affected || {};
+        const reviewer = this.canReview();
+        const keys = (a.config_keys || []).filter(k => this.NUMERIC_SETTINGS[k]);
+        $("#regChangeModal").remove();
+        $("body").append(`
+            <div class="modal fade" id="regChangeModal" tabindex="-1" aria-labelledby="regChangeTitle" aria-hidden="true">
+                <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+                    <div class="modal-content kx-modal">
+                        <div class="modal-header">
+                            <div>
+                                <h5 class="modal-title" id="regChangeTitle">${escapeHtml(c.section_ref)} ${escapeHtml(this.human(c.change_type).toLowerCase())}</h5>
+                                <small class="text-muted">${escapeHtml(c.heading || '')} &middot; ${c.old_version ? `version ${escapeHtml(c.old_version)}` : 'new'}${c.new_version ? ` &rarr; ${escapeHtml(c.new_version)}` : ''}</small>
+                            </div>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="kx-label">What changed in the text</div>
+                            <div class="reg-diff">
+                                ${c.diff.map(d => `<p class="reg-diff__${d.op}"><span>${d.op === 'added' ? 'Added' : 'Removed'}</span>${escapeHtml(d.text)}</p>`).join('') || '<p class="text-muted mb-0">No text differences.</p>'}
+                            </div>
+
+                            <div class="kx-label mt-3">What it affects</div>
+                            ${(a.obligations || []).length ? `<ul class="reg-affects">${a.obligations.map(o => `<li><strong>${escapeHtml(o.obligated_party)}</strong> must ${escapeHtml(o.action)} <span class="text-muted">(${escapeHtml(this.human(o.status).toLowerCase())}; now superseded, needs re-extraction)</span></li>`).join('')}</ul>` : '<p class="kx-note mt-0">No obligations had been recorded for this section.</p>'}
+                            ${(a.controls || []).length ? `<p class="mb-1">Controls: ${a.controls.map(x => `<strong>${escapeHtml(x.code)}</strong> ${escapeHtml(x.name)}`).join(', ')}</p>` : ''}
+                            ${(a.config_keys || []).length ? `<p class="mb-0">Rule settings: ${escapeHtml(a.config_keys.join(', '))}</p>` : ''}
+
+                            ${reviewer ? `
+                            <label class="kx-label mt-3" for="regChangeNotes">Assessment notes</label>
+                            <textarea class="form-control" id="regChangeNotes" rows="2">${escapeHtml(c.assessment_notes || '')}</textarea>` : (c.assessment_notes ? `<p class="mt-3 mb-0">${escapeHtml(c.assessment_notes)}</p>` : '')}
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-outline-primary" data-bs-dismiss="modal">Close</button>
+                            ${reviewer ? `
+                            ${keys.length ? `<button type="button" class="btn btn-outline-primary" id="regChangePropose">Propose rule change</button>` : ''}
+                            <button type="button" class="btn btn-outline-primary reg-assess" data-status="NO_ACTION">No action needed</button>
+                            <button type="button" class="btn btn-primary reg-assess" data-status="ACTION_REQUIRED">Action required</button>` : ''}
+                        </div>
+                    </div>
+                </div>
+            </div>`);
+        const modalEl = document.getElementById('regChangeModal');
+        new bootstrap.Modal(modalEl).show();
+
+        $(".reg-assess").on("click", async (e) => {
+            $(".reg-assess").prop("disabled", true);
+            try {
+                await API.put(`/changes/regulatory/${c.id}/assess`, { status: $(e.currentTarget).data("status"), notes: $("#regChangeNotes").val().trim() || null });
+                closeModalSafely(modalEl);
+                showToast('success', 'Assessment recorded.');
+                this.loadChanges();
+            } catch (xhr) { $(".reg-assess").prop("disabled", false); }
+        });
+        $("#regChangePropose").on("click", () => {
+            $(modalEl).one("hidden.bs.modal", () => this.showProposeModal({ key: keys[0], changeId: c.id, sectionRef: c.section_ref }));
+            closeModalSafely(modalEl);
+        });
+        $(modalEl).on("hidden.bs.modal", function() { setTimeout(() => $(this).remove(), 0); });
+    },
+
+    backtestText(b) {
+        if (!b) return '—';
+        if (!b.available) return 'Not backtested';
+        const diff = b.difference;
+        return `${b.transactions_flagged_now.toLocaleString()} → ${b.transactions_flagged_after.toLocaleString()} transactions flagged (${diff > 0 ? '+' : ''}${diff.toLocaleString()})`;
+    },
+
+    async loadRuleChanges() {
+        let changes;
+        try {
+            changes = await API.get('/changes/rules');
+        } catch (error) {
+            $("#regRuleChangesBody").html('<tr><td colspan="7" class="rc-empty">Could not load rule changes.</td></tr>');
+            return;
+        }
+        const me = (Auth.getUser() || {}).id;
+        const reviewer = this.canReview();
+        const chip = { PENDING_APPROVAL: 'medium', APPROVED: 'medium', ACTIVE: 'low', REJECTED: 'high', CANCELLED: 'muted' };
+        const label = { PENDING_APPROVAL: 'Awaiting approval', APPROVED: 'Approved, scheduled', ACTIVE: 'In effect', REJECTED: 'Rejected', CANCELLED: 'Withdrawn' };
+        $("#regRuleChangesBody").html(changes.map(c => {
+            const b = c.backtest;
+            const mine = c.proposed_by === me;
+            let actions = '';
+            if (reviewer && c.status === 'PENDING_APPROVAL') {
+                actions = mine
+                    ? `<button type="button" class="btn btn-sm rc-actions__view reg-rule-decide" data-id="${escapeHtml(c.id)}" data-decision="CANCELLED">Withdraw</button>`
+                    : `<button type="button" class="btn btn-sm rc-actions__view reg-rule-decide" data-id="${escapeHtml(c.id)}" data-decision="APPROVED">Approve</button>
+                       <button type="button" class="btn btn-sm rc-actions__icon reg-rule-decide" data-id="${escapeHtml(c.id)}" data-decision="REJECTED" title="Reject" aria-label="Reject change"><i class="fas fa-xmark"></i></button>`;
+            }
+            return `
+            <tr>
+                <td class="px-3 py-2"><strong>${escapeHtml(this.NUMERIC_SETTINGS[c.key] || c.key)}</strong><br><small class="text-muted">${escapeHtml(c.jurisdiction === 'GLOBAL' ? 'All jurisdictions' : c.jurisdiction)}</small></td>
+                <td class="px-3 py-2 text-nowrap">${escapeHtml(String(c.previous_value.value))} &rarr; <strong>${escapeHtml(String(c.proposed_value.value))}</strong></td>
+                <td class="px-3 py-2 text-nowrap">${escapeHtml(formatDate(c.effective_from))}</td>
+                <td class="px-3 py-2 reg-cell">${escapeHtml(this.backtestText(b))}${b && b.available && !b.passes_recall_floor ? `
+                    <br><span class="cd-chip cd-chip--high">Would miss ${b.confirmed_true_positive_customers_missed} confirmed true-positive customer${b.confirmed_true_positive_customers_missed === 1 ? '' : 's'}</span>` : ''}</td>
+                <td class="px-3 py-2 reg-cell">${escapeHtml(c.proposed_by_name || '')}${mine ? ' (you)' : ''}<br><small class="text-muted" title="${escapeHtml(c.reason)}">${escapeHtml(c.reason.length > 60 ? c.reason.slice(0, 60) + '…' : c.reason)}</small></td>
+                <td class="px-3 py-2"><span class="cd-chip cd-chip--${chip[c.status]}">${label[c.status]}</span>${c.reviewed_by_name ? `<br><small class="text-muted">by ${escapeHtml(c.reviewed_by_name)}</small>` : (c.status === 'PENDING_APPROVAL' && mine ? '<br><small class="text-muted">needs someone else</small>' : '')}</td>
+                <td class="px-3 py-2 text-end text-nowrap">${actions}</td>
+            </tr>`;
+        }).join('') || '<tr><td colspan="7" class="rc-empty">No rule changes have been proposed.</td></tr>');
+    },
+
+    async decideRuleChange($btn) {
+        const decision = $btn.data("decision");
+        let notes = null;
+        if (decision === 'REJECTED') {
+            notes = window.prompt('Why is this change rejected? The reason is kept with the change.');
+            if (!notes || !notes.trim()) return;
+        }
+        $btn.prop("disabled", true);
+        try {
+            await API.put(`/changes/rules/${$btn.data("id")}/review`, { decision, notes });
+            showToast('success', { APPROVED: 'Change approved.', REJECTED: 'Change rejected.', CANCELLED: 'Change withdrawn.' }[decision]);
+            await Promise.all([this.loadRuleChanges(), this.loadTraceability()]);
+        } catch (xhr) { $btn.prop("disabled", false); }
+    },
+
+    async showProposeModal(preset = {}) {
+        let effective;
+        try {
+            effective = await API.get('/rule-configs/effective');
+        } catch (error) { return; }
+        const today = new Date().toISOString().slice(0, 10);
+        $("#regProposeModal").remove();
+        $("body").append(`
+            <div class="modal fade" id="regProposeModal" tabindex="-1" aria-labelledby="regProposeTitle" aria-hidden="true">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content kx-modal">
+                        <div class="modal-header">
+                            <div>
+                                <h5 class="modal-title" id="regProposeTitle">Propose a rule change</h5>
+                                <small class="text-muted">${preset.sectionRef ? `For the change to ${escapeHtml(preset.sectionRef)}. ` : ''}Someone else must approve it before it takes effect.</small>
+                            </div>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <label class="kx-label" for="rcKey">Setting</label>
+                            <select class="form-select mb-1" id="rcKey">
+                                ${Object.entries(this.NUMERIC_SETTINGS).map(([k, l]) => `<option value="${k}" ${k === preset.key ? 'selected' : ''}>${escapeHtml(l)}</option>`).join('')}
+                            </select>
+                            <p class="kx-note mt-0 mb-3" id="rcCurrent"></p>
+                            <div class="row g-3 mb-3">
+                                <div class="col-6">
+                                    <label class="kx-label" for="rcValue">New value</label>
+                                    <input type="number" class="form-control" id="rcValue" min="0" step="any">
+                                </div>
+                                <div class="col-6">
+                                    <label class="kx-label" for="rcEffective">Effective from</label>
+                                    <input type="date" class="form-control" id="rcEffective" min="${today}" value="${today}">
+                                </div>
+                            </div>
+                            <label class="kx-label" for="rcReason">Reason</label>
+                            <textarea class="form-control" id="rcReason" rows="3" placeholder="Why the change is needed and what it is based on"></textarea>
+                            <div class="reg-backtest d-none" id="rcBacktest"></div>
+                            <div class="text-danger small mt-2 d-none" id="rcError" role="alert"></div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-outline-primary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="button" class="btn btn-outline-primary" id="rcPreview">Preview impact</button>
+                            <button type="button" class="btn btn-primary" id="rcSubmit">Send for approval</button>
+                        </div>
+                    </div>
+                </div>
+            </div>`);
+        const modalEl = document.getElementById('regProposeModal');
+        new bootstrap.Modal(modalEl).show();
+
+        const showCurrent = () => $("#rcCurrent").text(`Current value: ${effective[$("#rcKey").val()]}`);
+        showCurrent();
+        $("#rcKey").on("change", () => { showCurrent(); $("#rcBacktest").addClass("d-none"); });
+        const fail = (message) => $("#rcError").text(message).removeClass("d-none");
+        const value = () => { const v = parseFloat($("#rcValue").val()); return isFinite(v) ? v : null; };
+        const detail = (xhr, fallback) => { const d = xhr && xhr.responseJSON && xhr.responseJSON.detail; return typeof d === 'string' ? d : fallback; };
+
+        $("#rcPreview").on("click", async () => {
+            if (value() == null) return fail('Enter the new value first.');
+            $("#rcError").addClass("d-none");
+            try {
+                const r = await API.post('/changes/rules/backtest', { key: $("#rcKey").val(), value: value() });
+                const b = r.backtest;
+                $("#rcBacktest").removeClass("d-none").html(b.available ? `
+                    <strong>Over the last ${b.window_days} days</strong>
+                    <p>${escapeHtml(this.backtestText(b))}, across ${b.customers_affected.toLocaleString()} customers.</p>
+                    <p class="${b.passes_recall_floor ? '' : 'text-danger'}">${b.passes_recall_floor
+                        ? 'No customer with a confirmed true positive on this rule would stop being flagged.'
+                        : `${b.confirmed_true_positive_customers_missed} customer(s) with a confirmed true positive would stop being flagged.`}</p>`
+                    : `<p class="mb-0">${escapeHtml(b.reason)}</p>`);
+            } catch (xhr) { fail(detail(xhr, 'Could not run the backtest.')); }
+        });
+
+        $("#rcSubmit").on("click", async () => {
+            const reason = $("#rcReason").val().trim();
+            if (value() == null) return fail('Enter the new value.');
+            if (reason.length < 10) return fail('Give a reason of at least a sentence.');
+            const $btn = $("#rcSubmit").prop("disabled", true);
+            try {
+                await API.post('/changes/rules', {
+                    key: $("#rcKey").val(), value: value(), reason, effective_from: $("#rcEffective").val() || today,
+                    regulatory_change_id: preset.changeId || null
+                });
+                closeModalSafely(modalEl);
+                showToast('success', 'Change sent for approval.');
+                this.loadRuleChanges();
+            } catch (xhr) {
+                fail(detail(xhr, 'Could not propose the change.'));
+                $btn.prop("disabled", false);
+            }
+        });
+        $(modalEl).on("hidden.bs.modal", function() { setTimeout(() => $(this).remove(), 0); });
     },
 
     async loadTraceability() {

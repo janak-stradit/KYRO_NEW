@@ -29,3 +29,12 @@ def ingest_regulatory_sources_task() -> dict:
                 for r in runs
             ],
         }
+
+
+@celery_app.task(name="app.tasks.regulatory_tasks.activate_due_rule_changes_task")
+def activate_due_rule_changes_task() -> dict:
+    """Apply approved rule changes whose effective date has arrived."""
+    from app.services import change_service
+
+    with SessionLocal() as db:
+        return {"activated": change_service.activate_due(db)}

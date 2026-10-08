@@ -39,6 +39,10 @@ celery_app.conf.beat_schedule = {
         "task": "app.tasks.regulatory_tasks.ingest_regulatory_sources_task",
         "schedule": crontab(hour=4, minute=0),
     },
+    "activate-due-rule-changes-daily": {
+        "task": "app.tasks.regulatory_tasks.activate_due_rule_changes_task",
+        "schedule": crontab(hour=0, minute=5),
+    },
     "check-ml-retraining-weekly": {
         "task": "app.tasks.ml_tasks.check_retraining_task",
         "schedule": crontab(day_of_week=0, hour=3, minute=0),

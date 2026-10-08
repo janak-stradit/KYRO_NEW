@@ -25,6 +25,7 @@ from app.routers import (
     alerts,
     auth,
     beneficial_owners,
+    change_management,
     customers,
     dashboard,
     kyc,
@@ -116,6 +117,7 @@ app.include_router(kyc.router)
 app.include_router(watchlists.router)
 app.include_router(rule_configs.router)
 app.include_router(regulatory.router)
+app.include_router(change_management.router)
 try:
     app.include_router(importlib.import_module("app.routers.ml").router)
 except ImportError as exc:
