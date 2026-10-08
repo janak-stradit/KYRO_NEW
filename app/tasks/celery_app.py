@@ -39,6 +39,10 @@ celery_app.conf.beat_schedule = {
         "task": "app.tasks.regulatory_tasks.ingest_regulatory_sources_task",
         "schedule": crontab(hour=4, minute=0),
     },
+    "sync-federal-register-daily": {
+        "task": "app.tasks.regulatory_tasks.sync_federal_register_task",
+        "schedule": crontab(hour=4, minute=30),
+    },
     "activate-due-rule-changes-daily": {
         "task": "app.tasks.regulatory_tasks.activate_due_rule_changes_task",
         "schedule": crontab(hour=0, minute=5),

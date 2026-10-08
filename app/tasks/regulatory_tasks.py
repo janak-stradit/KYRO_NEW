@@ -38,3 +38,12 @@ def activate_due_rule_changes_task() -> dict:
 
     with SessionLocal() as db:
         return {"activated": change_service.activate_due(db)}
+
+
+@celery_app.task(name="app.tasks.regulatory_tasks.sync_federal_register_task")
+def sync_federal_register_task() -> dict:
+    """Fetch new rules and proposed rules for the loaded CFR parts."""
+    from app.services import federal_register_service
+
+    with SessionLocal() as db:
+        return federal_register_service.sync(db)

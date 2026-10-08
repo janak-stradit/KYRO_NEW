@@ -7,6 +7,7 @@ from app.models.audit import AuditLog
 from app.models.user import User
 from app.models.ml_score import MLScore
 from app.models.watchlist import WatchlistSource, WatchlistEntity, WatchlistIngestionRun
+from app.models.regulatory_notice import RegulatoryNotice
 from app.models.rule_config import RuleConfig
 from app.models.beneficial_ownership import BeneficialOwner
 from app.models.ai_interaction import AIInteraction
@@ -48,6 +49,7 @@ __all__ = [
     "ObligationMapping",
     "RegulatoryChange",
     "RuleConfigChange",
+    "RegulatoryNotice",
     "Document",
     "DocumentPage",
     "DocumentExtraction",

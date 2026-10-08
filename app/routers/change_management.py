@@ -15,9 +15,10 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.deps import get_current_user, require_role
 from app.models.change_management import RegulatoryChange, RuleConfigChange
+from app.models.regulatory_notice import RegulatoryNotice
 from app.models.user import User
 from app.routers.rule_configs import _validate_value
-from app.services import change_service
+from app.services import change_service, federal_register_service
 from app.services.change_service import ChangeError
 
 router = APIRouter(prefix="/api/v1/changes", tags=["change-management"], dependencies=[Depends(get_current_user)])
@@ -202,3 +203,59 @@ def review_rule_change(
     except ChangeError as exc:
         raise _fail(exc) from None
     return _with_names(db, [change])[0]
+
+
+# ── Federal Register notices ─────────────────────────────────────────────
+
+class NoticeOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    document_number: str
+    title: str
+    notice_type: str
+    action: str | None = None
+    abstract: str | None = None
+    agencies: list[str]
+    publication_date: date
+    effective_on: date | None = None
+    comments_close_on: date | None = None
+    url: str
+    matched_parts: list[str]
+    status: str
+    assessment_notes: str | None = None
+    assessed_at: datetime | None = None
+
+
+class NoticeAssess(BaseModel):
+    status: Literal["ACTION_REQUIRED", "NO_ACTION", "CLOSED"]
+    notes: str | None = Field(default=None, max_length=4000)
+
+
+@router.get("/notices", response_model=list[NoticeOut])
+def list_notices(status_filter: str | None = None, db: Session = Depends(get_db)) -> list[RegulatoryNotice]:
+    query = db.query(RegulatoryNotice)
+    if status_filter:
+        query = query.filter(RegulatoryNotice.status == status_filter)
+    return query.order_by(RegulatoryNotice.publication_date.desc(), RegulatoryNotice.document_number.desc()).limit(200).all()
+
+
+@router.post("/notices/sync")
+def sync_notices(
+    db: Session = Depends(get_db), user: User = Depends(require_role("ADMIN", "COMPLIANCE_OFFICER"))
+) -> dict[str, Any]:
+    """Fetch rules and proposed rules from the Federal Register for every loaded CFR part."""
+    return federal_register_service.sync(db)
+
+
+@router.put("/notices/{notice_id}/assess", response_model=NoticeOut)
+def assess_notice(
+    notice_id: uuid.UUID,
+    data: NoticeAssess,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_role("ADMIN", "COMPLIANCE_OFFICER")),
+) -> RegulatoryNotice:
+    notice = db.get(RegulatoryNotice, notice_id)
+    if notice is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Notice not found")
+    return federal_register_service.assess(db, notice, status=data.status, notes=data.notes, user_id=user.id)

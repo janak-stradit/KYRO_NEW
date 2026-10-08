@@ -28,7 +28,7 @@ const Regulations = {
         this.filters = { status: 'PROPOSED', category: '', q: '' };
         this.renderLayout();
         this.setupListeners();
-        await Promise.all([this.loadSources(), this.loadSummary(), this.loadObligations(), this.loadTraceability(), this.loadChanges(), this.loadRuleChanges()]);
+        await Promise.all([this.loadSources(), this.loadSummary(), this.loadObligations(), this.loadTraceability(), this.loadChanges(), this.loadRuleChanges(), this.loadNotices()]);
     },
 
     renderLayout() {
@@ -67,6 +67,38 @@ const Regulations = {
                                 </tr>
                             </thead>
                             <tbody id="regSourcesBody"><tr><td colspan="4" class="rc-empty">Loading sources...</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="card border-0 rc-table-card mb-4">
+                    <div class="rc-toolbar">
+                        <div class="rc-toolbar__title">
+                            <h2>Rulemaking to watch</h2>
+                            <small class="text-muted">Rules and proposed rules in the Federal Register that amend a loaded part, newest first</small>
+                        </div>
+                        <div class="rc-toolbar__controls">
+                            <select class="form-select" id="regNoticeStatus" aria-label="Filter notices by status">
+                                <option value="NEW">Not yet assessed</option>
+                                <option value="ACTION_REQUIRED">Action required</option>
+                                <option value="NO_ACTION">No action needed</option>
+                                <option value="">All</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0 fp-table reg-table">
+                            <thead>
+                                <tr>
+                                    <th class="px-3 py-2">Published</th>
+                                    <th class="px-3 py-2">Notice</th>
+                                    <th class="px-3 py-2">Type</th>
+                                    <th class="px-3 py-2">Key dates</th>
+                                    <th class="px-3 py-2">Amends</th>
+                                    <th class="px-3 py-2"><span class="visually-hidden">Actions</span></th>
+                                </tr>
+                            </thead>
+                            <tbody id="regNoticesBody"><tr><td colspan="6" class="rc-empty">Loading...</td></tr></tbody>
                         </table>
                     </div>
                 </div>
@@ -232,12 +264,17 @@ const Regulations = {
         $("#regRefreshBtn").on("click", async (e) => {
             const $btn = $(e.currentTarget).prop("disabled", true);
             try {
-                const runs = await API.post('/regulatory/ingest');
+                const [runs, notices] = await Promise.all([
+                    API.post('/regulatory/ingest'),
+                    API.post('/changes/notices/sync').catch(() => null)
+                ]);
                 const changed = runs.reduce((n, r) => n + r.sections_added + r.sections_changed + r.sections_removed, 0);
                 const failed = runs.filter(r => r.status === 'FAILED').length;
                 showToast(failed ? 'warning' : 'success', failed
                     ? `${failed} source(s) could not be reached; existing text was kept.`
                     : changed ? `${changed} section(s) added or changed.` : 'All sources are up to date.');
+                if (notices && notices.notices_added) showToast('info', `${notices.notices_added} new Federal Register notice(s).`);
+                this.loadNotices();
                 await Promise.all([this.loadSources(), this.loadSummary(), this.loadObligations(), this.loadChanges(), this.loadTraceability()]);
             } catch (xhr) { /* API layer already reported it */ }
             $btn.prop("disabled", false);
@@ -266,8 +303,16 @@ const Regulations = {
         });
 
         $("#regProposeRuleChange").on("click", () => this.showProposeModal());
+        $("#regNoticeStatus").on("change", () => this.loadNotices());
 
         $("#mainContent").off("click.reg")
+            .on("click.reg", ".reg-notice-assess", async (e) => {
+                const $btn = $(e.currentTarget).prop("disabled", true);
+                try {
+                    await API.put(`/changes/notices/${$btn.data("id")}/assess`, { status: $btn.data("status") });
+                    this.loadNotices();
+                } catch (xhr) { $btn.prop("disabled", false); }
+            })
             .on("click.reg", ".reg-change-btn", (e) => this.showChangeModal($(e.currentTarget).data("id")))
             .on("click.reg", ".reg-rule-decide", (e) => this.decideRuleChange($(e.currentTarget)))
             .on("click.reg", ".reg-map-decide", async (e) => {
@@ -384,6 +429,41 @@ const Regulations = {
         RAPID_SUCCESSION_WINDOW_SECONDS: 'Rapid succession window, seconds (R010)',
         ALERT_THRESHOLD: 'Score that opens an alert',
         EDD_THRESHOLD: 'Score that recommends enhanced due diligence'
+    },
+
+    async loadNotices() {
+        const status = $("#regNoticeStatus").val();
+        let notices;
+        try {
+            notices = await API.get('/changes/notices', status ? { status_filter: status } : {});
+        } catch (error) {
+            $("#regNoticesBody").html('<tr><td colspan="6" class="rc-empty">Could not load notices.</td></tr>');
+            return;
+        }
+        const reviewer = this.canReview();
+        const today = new Date().toISOString().slice(0, 10);
+        const statusChip = { ACTION_REQUIRED: ['high', 'Action required'], NO_ACTION: ['muted', 'No action needed'], CLOSED: ['low', 'Closed'] };
+        $("#regNoticesBody").html(notices.map(n => {
+            const dates = [
+                n.effective_on ? `Effective ${formatDate(n.effective_on)}${n.effective_on > today ? ' (upcoming)' : ''}` : null,
+                n.comments_close_on ? `Comments close ${formatDate(n.comments_close_on)}` : null
+            ].filter(Boolean).join('<br>') || '—';
+            const assessed = statusChip[n.status];
+            return `
+            <tr>
+                <td class="px-3 py-2 text-nowrap">${escapeHtml(formatDate(n.publication_date))}</td>
+                <td class="px-3 py-2 reg-cell reg-cell--wide">
+                    <a href="${/^https:\/\//.test(n.url) ? escapeHtml(n.url) : '#'}" target="_blank" rel="noopener noreferrer"><strong>${escapeHtml(n.title)}</strong></a>
+                    <br><small class="text-muted">${escapeHtml(n.action || '')} ${escapeHtml(n.agencies.slice(-1)[0] || '')}</small>
+                </td>
+                <td class="px-3 py-2"><span class="cd-chip cd-chip--${n.notice_type === 'Rule' ? 'high' : 'medium'}">${n.notice_type === 'Rule' ? 'Final rule' : escapeHtml(n.notice_type)}</span></td>
+                <td class="px-3 py-2 text-nowrap">${dates}</td>
+                <td class="px-3 py-2 text-nowrap">${escapeHtml(n.matched_parts.join(', '))}</td>
+                <td class="px-3 py-2 text-end text-nowrap">${assessed ? `<span class="cd-chip cd-chip--${assessed[0]}">${assessed[1]}</span>` : (reviewer ? `
+                    <button type="button" class="btn btn-sm rc-actions__view reg-notice-assess" data-id="${escapeHtml(n.id)}" data-status="ACTION_REQUIRED">Action required</button>
+                    <button type="button" class="btn btn-sm rc-actions__icon reg-notice-assess" data-id="${escapeHtml(n.id)}" data-status="NO_ACTION" title="No action needed" aria-label="No action needed"><i class="fas fa-check"></i></button>` : '')}</td>
+            </tr>`;
+        }).join('') || `<tr><td colspan="6" class="rc-empty">${status === 'NEW' ? 'Nothing waiting to be assessed. Select "Check for updates" to fetch the latest notices.' : 'No notices with this status.'}</td></tr>`);
     },
 
     async loadChanges() {
