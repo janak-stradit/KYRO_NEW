@@ -121,62 +121,49 @@ const Dashboard = {
                     </a>
                 </div>
 
-                <!-- Row: case volume + customer risk -->
-                <div class="kd-grid kd-grid--wide">
-                    <section class="aml-card kd-panel">
-                        <header class="kd-panel__head">
-                            <div>
-                                <h2>Review Case Volume</h2>
-                                <p class="aml-subtitle">Reviewed vs. flagged, last 7 days</p>
-                            </div>
-                            <div class="aml-legend aml-chart-legend kd-legend">
-                                <span><span class="aml-dot dark"></span> Reviewed</span>
-                                <span><span class="aml-dot orange"></span> Flagged</span>
-                                <span class="kd-chip" id="caseVolumePeriodText">&ndash;</span>
-                            </div>
-                        </header>
-                        <div class="aml-chart">
-                            <div class="aml-gridline"><span>100</span></div>
-                            <div class="aml-gridline"><span>75</span></div>
-                            <div class="aml-gridline"><span>50</span></div>
-                            <div class="aml-gridline"><span>25</span></div>
-                            <div class="aml-gridline"><span>0</span></div>
-                            <div class="aml-bars" id="volumeBars"></div>
-                        </div>
-                    </section>
-
-                    <section class="aml-card aml-donut-card kd-panel">
-                        <header class="kd-panel__head">
-                            <div>
-                                <h2>Customer Risk Profile</h2>
-                                <p class="aml-subtitle">Share of customers by risk rating</p>
-                            </div>
-                        </header>
-                        <div class="aml-donut-wrap">
-                            <div class="aml-donut" id="riskDonut" role="img" aria-label="Customer risk distribution"></div>
-                        </div>
-                        <div class="aml-donut-legend">
-                            <span class="aml-legend"><span class="aml-dot orange"></span> <span id="highRiskLegend">High Risk</span></span>
-                            <span class="aml-legend"><span class="aml-dot dark"></span> <span id="lowMidLegend">Low/Mid</span></span>
-                        </div>
-                    </section>
-                </div>
-
-                <!-- Row: behavior trends + recent alerts -->
+                <!-- Row: alerts by rule + risk profile -->
                 <div class="kd-grid kd-grid--wide">
                     <section class="card kd-panel">
                         <header class="kd-panel__head">
                             <div>
-                                <h2>Behavior Pattern Trends</h2>
-                                <p class="aml-subtitle">Detected vs. flagged patterns by month</p>
+                                <h2>Alerts by Rule</h2>
+                                <p class="aml-subtitle" id="alertsByRuleSubtitle">Alerts created in the last 30 days, by the rule that fired</p>
+                            </div>
+                            <a class="kd-link" href="/cases" data-page="cases">Review cases <i class="fas fa-arrow-right"></i></a>
+                        </header>
+                        <div class="kd-chart-box kd-chart-box--fill" id="alertsByRuleBox">
+                            <canvas id="alertsByRuleChart" aria-label="Alerts by rule" role="img"></canvas>
+                        </div>
+                    </section>
+
+                    <section class="card kd-panel">
+                        <header class="kd-panel__head">
+                            <div>
+                                <h2>Risk Profile</h2>
+                                <p class="aml-subtitle">How unresolved alerts and customers split by risk</p>
+                            </div>
+                        </header>
+                        <div class="kd-split" id="openAlertBands"></div>
+                        <div class="kd-split" id="customerRiskBands"></div>
+                    </section>
+                </div>
+
+                <!-- Row: daily alert volume + recent alerts -->
+                <div class="kd-grid kd-grid--wide">
+                    <section class="card kd-panel">
+                        <header class="kd-panel__head">
+                            <div>
+                                <h2>Alert Volume</h2>
+                                <p class="aml-subtitle">Alerts created per day, last 14 days</p>
                             </div>
                             <div class="kd-legend">
-                                <span><span class="kd-line kd-line--dark"></span> Detected</span>
-                                <span><span class="kd-line kd-line--orange"></span> Flagged</span>
+                                <span><span class="kd-swatch" style="background:#7c2d12"></span> High</span>
+                                <span><span class="kd-swatch" style="background:#ea580c"></span> Medium</span>
+                                <span><span class="kd-swatch" style="background:#fb923c"></span> Low</span>
                             </div>
                         </header>
                         <div class="kd-chart-box kd-chart-box--fill">
-                            <canvas id="behaviorTrendsChart" aria-label="Behavior pattern trends chart" role="img"></canvas>
+                            <canvas id="alertVolumeChart" aria-label="Alerts created per day by risk band" role="img"></canvas>
                         </div>
                     </section>
 
@@ -184,7 +171,7 @@ const Dashboard = {
                         <header class="kd-panel__head">
                             <div>
                                 <h2>Recent Alerts</h2>
-                                <p class="aml-subtitle">Newest alerts across all customers</p>
+                                <p class="aml-subtitle">Newest open alerts across all customers</p>
                             </div>
                             <a class="kd-link" href="/cases" data-page="cases">View all <i class="fas fa-arrow-right"></i></a>
                         </header>
@@ -203,15 +190,7 @@ const Dashboard = {
                                 <p class="aml-subtitle">All alerts by workflow status</p>
                             </div>
                         </header>
-                        <div class="kd-chart-box" style="height: 180px;">
-                            <canvas id="caseStatusChart" aria-label="Case status chart" role="img"></canvas>
-                        </div>
-                        <ul class="kd-list mt-3">
-                            <li><span><span class="kd-dot" style="background:#06B6D4"></span>Open</span><strong id="caseStatusOpen">0</strong></li>
-                            <li><span><span class="kd-dot" style="background:#F59E0B"></span>In Review</span><strong id="caseStatusReview">0</strong></li>
-                            <li><span><span class="kd-dot" style="background:#10B981"></span>Resolved</span><strong id="caseStatusResolved">0</strong></li>
-                            <li><span><span class="kd-dot" style="background:#EF4444"></span>Escalated</span><strong id="caseStatusEscalated">0</strong></li>
-                        </ul>
+                        <div class="kd-split" id="caseStatusSplit"></div>
                     </section>
 
                     <section class="card kd-panel">
@@ -455,6 +434,8 @@ const Dashboard = {
         return {
             textColor: isDark ? "#94a3b8" : "#7b8794",
             gridColor: isDark ? "rgba(255, 255, 255, 0.06)" : "rgba(0, 0, 0, 0.05)",
+            labelColor: isDark ? "#e2e8f0" : "#1c2430",
+            surfaceColor: isDark ? "#1e293b" : "#ffffff",
             accentColor: "#FF8D28",
             fillColor: isDark ? "rgba(255, 141, 40, 0.08)" : "rgba(255, 141, 40, 0.05)"
         };
@@ -477,13 +458,8 @@ const Dashboard = {
             // Hide loading overlays
             this.hideChartLoading();
             
-            // Generate bar chart with real CSS data
-            this.renderCSSBarChart(chartData);
-            
-            // Generate donut chart with real CSS data
-            this.renderCSSDonutChart(chartData);
-            
-            // Keep existing Chart.js charts for other sections
+            this.renderRiskProfile(chartData);
+            this.renderCaseStatus(chartData);
             await this.renderOtherCharts(chartData);
             
         } catch (error) {
@@ -493,236 +469,201 @@ const Dashboard = {
         }
     },
     
-    renderCSSBarChart(chartData) {
-        console.log("📊 Rendering Review Case Volume Chart with data:", chartData);
-        
-        const alertVolume = chartData.alert_volume || { dates: [], counts: [], flags: [], total_period: 0 };
-        const dates = alertVolume.dates || [];
-        const openCounts = alertVolume.counts || [];
-        const flagCounts = alertVolume.flags || [];
+    // Risk bands are an ordered scale, so they share one hue (darker = higher risk).
+    // Case statuses are states, so each has its own colour, always shown with a label.
+    RISK_COLORS: { high: '#7c2d12', medium: '#ea580c', low: '#fb923c' },
+    STATUS_COLORS: { RESOLVED: '#0ca30c', OPEN: '#2a78d6', IN_REVIEW: '#c98500', ESCALATED: '#d03b3b' },
 
-        console.log("📊 Chart values - Dates:", dates.length, "Counts:", openCounts, "Flags:", flagCounts);
-
-        const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-        const labels = dates.map(d => {
-            const date = new Date(d);
-            return isNaN(date.getDay()) ? d : dayNames[date.getDay()];
-        });
-
-        const totalLastPeriod = alertVolume.total_period !== undefined ? alertVolume.total_period : openCounts.reduce((a, b) => a + b, 0);
-        console.log("📊 Total Last Period:", totalLastPeriod);
-        $("#caseVolumePeriodText").text(`${totalLastPeriod.toLocaleString()} this period`);
-
-        // Calculate max value for Y-axis scaling
-        const maxVal = Math.max(...openCounts, ...flagCounts, 10);
-        console.log("📊 Max value for scaling:", maxVal);
-        
-        // Dynamically update Y-axis gridline labels for case volume chart
-        const step = Math.ceil(maxVal / 4);
-        const gridlines = $("#volumeBars").closest(".aml-card").find(".aml-gridline span");
-        console.log("📊 Y-axis step:", step, "Gridlines found:", gridlines.length);
-        
-        if (gridlines.length >= 5) {
-            gridlines.eq(0).text(step * 4);
-            gridlines.eq(1).text(step * 3);
-            gridlines.eq(2).text(step * 2);
-            gridlines.eq(3).text(step * 1);
-            gridlines.eq(4).text(0);
-        }
-
-        // Generate bars with proper scaling
-        const barsHtml = openCounts.map((openCnt, i) => {
-            const darkVal = flagCounts[i] !== undefined ? flagCounts[i] : Math.round(openCnt * 0.7);
-            const orangeVal = openCnt;
-            
-            // Calculate heights as percentage of max value
-            const darkHeight = Math.min(Math.max(Math.round((darkVal / (step * 4)) * 100), 8), 95);
-            const orangeHeight = Math.min(Math.max(Math.round((orangeVal / (step * 4)) * 100), 12), 95);
-            
-            return `
-                <div class="aml-bar-group" title="Date: ${dates[i]} | Reviewed: ${darkVal.toLocaleString()} | Flagged: ${orangeVal.toLocaleString()}">
-                    <div class="aml-bar dark" style="height: ${darkHeight}%;"></div>
-                    <div class="aml-bar orange" style="height: ${orangeHeight}%;"></div>
-                    <span class="aml-x-label">${labels[i]}</span>
-                </div>
-            `;
-        }).join('');
-        
-        $("#volumeBars").html(barsHtml);
-        console.log("✅ Review Case Volume Chart rendered successfully");
+    /**
+     * Part-to-whole as one stacked bar plus a labelled row per part, so the
+     * numbers are readable without relying on colour.
+     */
+    renderSplit(selector, title, parts, emptyText) {
+        const total = parts.reduce((sum, p) => sum + p.value, 0);
+        const share = (v) => (total ? (v / total) * 100 : 0);
+        const pct = (v) => {
+            const s = share(v);
+            return s > 0 && s < 0.1 ? '<0.1%' : `${s.toFixed(1)}%`;
+        };
+        const segments = parts.filter(p => p.value > 0).map(p => `
+            <span class="kd-stack__seg" style="flex: ${p.value} 1 0; background: ${p.color};"
+                  title="${this.escapeHtml(p.label)}: ${p.value.toLocaleString()} (${pct(p.value)})"></span>`).join('');
+        const rows = parts.map(p => `
+            <li>
+                <span><span class="kd-swatch" style="background:${p.color}"></span>${this.escapeHtml(p.label)}</span>
+                <span class="kd-split__value"><strong>${p.value.toLocaleString()}</strong><small>${pct(p.value)}</small></span>
+            </li>`).join('');
+        $(selector).html(`
+            <div class="kd-split__head"><span>${this.escapeHtml(title)}</span><strong>${total.toLocaleString()}</strong></div>
+            ${total ? `<div class="kd-stack" role="img" aria-label="${this.escapeHtml(title)}">${segments}</div>`
+                    : `<p class="kd-split__empty">${this.escapeHtml(emptyText)}</p>`}
+            <ul class="kd-list kd-list--tight">${rows}</ul>`);
     },
-    
-    renderCSSDonutChart(chartData) {
-        console.log("🍩 Rendering Customer Risk Profile Chart with data:", chartData);
-        
-        const riskCounts = chartData.risk_counts || { LOW: 0, MEDIUM: 0, HIGH: 0 };
-        const lowCount = riskCounts.LOW !== undefined ? riskCounts.LOW : (chartData.risk_distribution ? chartData.risk_distribution[0] : 0);
-        const mediumCount = riskCounts.MEDIUM !== undefined ? riskCounts.MEDIUM : (chartData.risk_distribution ? chartData.risk_distribution[1] : 0);
-        const highCount = riskCounts.HIGH !== undefined ? riskCounts.HIGH : (chartData.risk_distribution ? chartData.risk_distribution[2] : 0);
-        
-        console.log("🍩 Risk counts - Low:", lowCount, "Medium:", mediumCount, "High:", highCount);
-        
-        const totalRisk = lowCount + mediumCount + highCount;
-        const highRiskPercentage = totalRisk > 0 ? ((highCount / totalRisk) * 100).toFixed(1) : "0.0";
-        const lowMidPercentage = (100 - parseFloat(highRiskPercentage)).toFixed(1);
-        
-        console.log("🍩 Percentages - High Risk:", highRiskPercentage + "%", "Low/Mid:", lowMidPercentage + "%");
-        
-        // Update legend text dynamically with live counts
-        $("#highRiskLegend").text(`High Risk - ${highCount.toLocaleString()} (${highRiskPercentage}%)`);
-        $("#lowMidLegend").text(`Low/Mid - ${(lowCount + mediumCount).toLocaleString()} (${lowMidPercentage}%)`);
-        
-        const lowMidTurn = parseFloat(lowMidPercentage) / 100;
-        
-        const donutStyle = `
-            background: conic-gradient(
-                var(--aml-dark) 0turn ${lowMidTurn}turn,
-                var(--aml-orange) ${lowMidTurn}turn 1turn
-            );
-        `;
-        
-        $("#riskDonut").attr("style", donutStyle);
-        console.log("✅ Customer Risk Profile Chart rendered successfully");
+
+    renderRiskProfile(chartData) {
+        const bands = chartData.open_alert_bands || {};
+        const customers = chartData.risk_counts || {};
+        const c = this.RISK_COLORS;
+        this.renderSplit('#openAlertBands', 'Unresolved alerts by risk score', [
+            { label: 'High (80+)', value: Number(bands.high || 0), color: c.high },
+            { label: 'Medium (60–79)', value: Number(bands.medium || 0), color: c.medium },
+            { label: 'Low (under 60)', value: Number(bands.low || 0), color: c.low }
+        ], 'No unresolved alerts.');
+        this.renderSplit('#customerRiskBands', 'Customers by risk rating', [
+            { label: 'High', value: Number(customers.HIGH || 0), color: c.high },
+            { label: 'Medium', value: Number(customers.MEDIUM || 0), color: c.medium },
+            { label: 'Low', value: Number(customers.LOW || 0), color: c.low }
+        ], 'No customers yet.');
     },
-    
+
+    renderCaseStatus(chartData) {
+        const s = chartData.status_counts || chartData.status_distribution || {};
+        const c = this.STATUS_COLORS;
+        this.renderSplit('#caseStatusSplit', 'All alerts', [
+            { label: 'Open', value: Number(s.OPEN || 0), color: c.OPEN },
+            { label: 'In review', value: Number(s.IN_REVIEW || 0), color: c.IN_REVIEW },
+            { label: 'Escalated', value: Number(s.ESCALATED || 0), color: c.ESCALATED },
+            { label: 'Resolved', value: Number(s.RESOLVED || 0), color: c.RESOLVED }
+        ], 'No alerts yet.');
+    },
+
     renderFallbackCharts() {
         // Show an explicit "unavailable" state rather than placeholder numbers.
-        $("#volumeBars").html(`<div class="kd-empty kd-empty--error"><i class="fas fa-triangle-exclamation"></i>Chart data unavailable. Try refreshing.</div>`);
-        $("#caseVolumePeriodText").text("No data");
-        $("#riskDonut").attr("style", "background: #f3f4f6;");
-        $("#highRiskLegend").text("High Risk: unavailable");
-        $("#lowMidLegend").text("Low/Mid: unavailable");
+        const message = `<div class="kd-empty kd-empty--error"><i class="fas fa-triangle-exclamation"></i>Chart data unavailable. Try refreshing.</div>`;
+        $("#alertsByRuleBox, #openAlertBands, #caseStatusSplit").html(message);
+        $("#customerRiskBands").empty();
+    },
+
+    tooltipStyle() {
+        return {
+            backgroundColor: '#ffffff', borderColor: '#e5e7eb', borderWidth: 1,
+            titleColor: '#1c2430', bodyColor: '#4b5563', padding: 10, cornerRadius: 8,
+            boxWidth: 10, boxHeight: 10, boxPadding: 4, usePointStyle: false
+        };
     },
 
     async renderOtherCharts(chartData) {
         try {
-            // Chart 1: Behavior Trends
-            const behaviorCanvas = document.getElementById('behaviorTrendsChart');
-            if (behaviorCanvas) {
-                if (this.charts.behaviorTrends) {
-                    this.charts.behaviorTrends.destroy();
-                }
+            const theme = this.getChartThemeColors();
+            const tick = { color: theme.textColor, font: { size: 12, family: 'Roboto' } };
 
-                const behaviorTrends = chartData.behavior_trends || { labels: [], detected: [], flagged: [] };
-                const trendLabels = behaviorTrends.labels && behaviorTrends.labels.length > 0 ? behaviorTrends.labels : ['Feb','Mar','Apr','May','Jun','Jul'];
-                const detectedData = behaviorTrends.detected || [0, 0, 0, 0, 0, 0];
-                const flaggedData = behaviorTrends.flagged || [0, 0, 0, 0, 0, 0];
+            // Chart 1: alerts by rule, largest first. One measure, so one colour.
+            const ruleCanvas = document.getElementById('alertsByRuleChart');
+            const byRule = (chartData.alerts_by_rule && chartData.alerts_by_rule.rules) || [];
+            if (this.charts.alertsByRule) this.charts.alertsByRule.destroy();
+            if (ruleCanvas && !byRule.length) {
+                $("#alertsByRuleBox").html(`<div class="kd-empty"><i class="fas fa-circle-check"></i>No alerts in the last 30 days.</div>`);
+            } else if (ruleCanvas) {
+                const ruleNames = typeof Cases !== 'undefined' && Cases.RULES ? Cases.RULES : {};
+                const rules = byRule.slice(0, 10);
+                const labels = rules.map(r => (ruleNames[r.rule] ? `${r.rule}  ${ruleNames[r.rule][0]}` : (r.rule === 'NO_RULE' ? 'No rule recorded' : r.rule)));
+                $("#alertsByRuleBox").css('height', `${Math.max(220, rules.length * 38 + 30)}px`);
 
-                this.charts.behaviorTrends = new Chart(behaviorCanvas, {
-                    type: 'line',
-                    data: {
-                        labels: trendLabels,
-                        datasets: [
-                            {
-                                label: 'Detected',
-                                data: detectedData,
-                                borderColor: '#1F2937',
-                                borderWidth: 3,
-                                pointBackgroundColor: '#1F2937',
-                                pointRadius: 4,
-                                fill: false,
-                                tension: 0.3
-                            },
-                            {
-                                label: 'Flagged',
-                                data: flaggedData,
-                                borderColor: '#FF8C42',
-                                borderWidth: 3,
-                                pointBackgroundColor: '#FF8C42',
-                                pointRadius: 4,
-                                fill: false,
-                                tension: 0.3
-                            }
-                        ]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: { legend: { display: false } },
-                        scales: {
-                            x: {
-                                grid: { display: false },
-                                border: { display: false },
-                                ticks: { color: '#9CA3AF', font: { size: 12, family: 'Roboto' } }
-                            },
-                            y: {
-                                grid: { color: '#f0f0f0', drawBorder: false },
-                                border: { display: false },
-                                ticks: { color: '#9CA3AF', font: { size: 12, family: 'Roboto' } }
-                            }
-                        }
-                    }
-                });
-            }
-
-            // Chart 2: Case Status
-            const caseStatusCanvas = document.getElementById('caseStatusChart');
-            if (caseStatusCanvas) {
-                const statusDist = chartData.status_distribution || { OPEN: 0, IN_REVIEW: 0, RESOLVED: 0, ESCALATED: 0 };
-                const openVal = statusDist.OPEN || 0;
-                const reviewVal = statusDist.IN_REVIEW || 0;
-                const resolvedVal = statusDist.RESOLVED || 0;
-                const escalatedVal = statusDist.ESCALATED || 0;
-
-                $("#caseStatusOpen").text(openVal);
-                $("#caseStatusReview").text(reviewVal);
-                $("#caseStatusResolved").text(resolvedVal);
-                $("#caseStatusEscalated").text(escalatedVal);
-
-                if (this.charts.caseStatus) {
-                    this.charts.caseStatus.destroy();
-                }
-
-                this.charts.caseStatus = new Chart(caseStatusCanvas, {
+                this.charts.alertsByRule = new Chart(ruleCanvas, {
                     type: 'bar',
                     data: {
-                        labels: ['Open', 'Review', 'Resolved', 'Escalated'],
+                        labels,
                         datasets: [{
-                            data: [openVal, reviewVal, resolvedVal, escalatedVal],
-                            backgroundColor: ['#06B6D4', '#F59E0B', '#10B981', '#EF4444'],
-                            borderRadius: 6,
-                            barThickness: 30,
-                            maxBarThickness: 40
+                            label: 'Alerts',
+                            data: rules.map(r => r.alerts),
+                            backgroundColor: this.RISK_COLORS.medium,
+                            borderRadius: { topRight: 4, bottomRight: 4, topLeft: 0, bottomLeft: 0 },
+                            borderSkipped: false,
+                            barThickness: 16
                         }]
                     },
                     options: {
+                        indexAxis: 'y',
                         responsive: true,
                         maintainAspectRatio: false,
+                        layout: { padding: { right: 56 } },
                         plugins: {
                             legend: { display: false },
                             tooltip: {
-                                backgroundColor: '#ffffff',
-                                borderColor: '#e5e7eb',
-                                borderWidth: 1,
-                                titleColor: '#1F2937',
-                                bodyColor: '#1F2937',
-                                padding: 8,
-                                cornerRadius: 6,
-                                callbacks: { label: (context) => `Count: ${context.parsed.y}` }
+                                ...this.tooltipStyle(),
+                                displayColors: false,
+                                callbacks: {
+                                    label: (ctx) => {
+                                        const r = rules[ctx.dataIndex];
+                                        const fp = r.false_positive_rate == null
+                                            ? 'no outcomes recorded yet'
+                                            : `${(r.false_positive_rate * 100).toFixed(0)}% false positive`;
+                                        return [`${r.alerts.toLocaleString()} alerts`, `${r.resolved.toLocaleString()} resolved, ${fp}`];
+                                    }
+                                }
                             }
                         },
                         scales: {
-                            x: {
-                                grid: { display: false },
-                                border: { display: false },
-                                ticks: { display: true, color: '#9CA3AF', font: { size: 10, family: 'Roboto' } }
-                            },
-                            y: {
-                                grid: { display: true, color: '#f0f0f0', drawBorder: false },
-                                border: { display: false },
-                                ticks: { display: true, color: '#9CA3AF', font: { size: 10, family: 'Roboto' } }
+                            x: { beginAtZero: true, grid: { color: theme.gridColor }, border: { display: false },
+                                 ticks: { ...tick, maxTicksLimit: 6, callback: (v) => Number(v).toLocaleString() } },
+                            y: { grid: { display: false }, border: { display: false }, ticks: { ...tick, color: theme.labelColor } }
+                        }
+                    },
+                    // Value at the tip of each bar
+                    plugins: [{
+                        id: 'barEndLabels',
+                        afterDatasetsDraw: (chart) => {
+                            const { ctx } = chart;
+                            ctx.save();
+                            ctx.font = '600 12px Roboto, sans-serif';
+                            ctx.fillStyle = theme.labelColor;
+                            ctx.textBaseline = 'middle';
+                            chart.getDatasetMeta(0).data.forEach((bar, i) => {
+                                ctx.fillText(rules[i].alerts.toLocaleString(), bar.x + 8, bar.y);
+                            });
+                            ctx.restore();
+                        }
+                    }]
+                });
+            }
+
+            // Chart 2: alerts created per day, stacked by risk band
+            const volumeCanvas = document.getElementById('alertVolumeChart');
+            if (volumeCanvas) {
+                if (this.charts.alertVolume) this.charts.alertVolume.destroy();
+                const daily = chartData.alert_volume_daily || { dates: [], high: [], medium: [], low: [] };
+                const dayLabels = daily.dates.map(d => {
+                    const date = new Date(`${d}T00:00:00`);
+                    return isNaN(date) ? d : date.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+                });
+                const series = (label, key) => ({
+                    label, data: daily[key], backgroundColor: this.RISK_COLORS[key],
+                    borderColor: theme.surfaceColor, borderWidth: { top: 2, right: 0, bottom: 0, left: 0 },
+                    maxBarThickness: 24, borderRadius: 0
+                });
+
+                this.charts.alertVolume = new Chart(volumeCanvas, {
+                    type: 'bar',
+                    data: { labels: dayLabels, datasets: [series('Low', 'low'), series('Medium', 'medium'), series('High', 'high')] },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        interaction: { mode: 'index', intersect: false },
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                ...this.tooltipStyle(),
+                                itemSort: (a, b) => b.datasetIndex - a.datasetIndex,
+                                callbacks: {
+                                    label: (ctx) => ` ${ctx.dataset.label}: ${Number(ctx.parsed.y).toLocaleString()}`,
+                                    footer: (items) => `Total: ${items.reduce((sum, i) => sum + i.parsed.y, 0).toLocaleString()}`
+                                }
                             }
+                        },
+                        scales: {
+                            x: { stacked: true, grid: { display: false }, border: { display: false }, ticks: { ...tick, maxRotation: 0, autoSkipPadding: 12 } },
+                            y: { stacked: true, beginAtZero: true, grid: { color: theme.gridColor }, border: { display: false },
+                                 ticks: { ...tick, maxTicksLimit: 6, precision: 0, callback: (v) => Number(v).toLocaleString() } }
                         }
                     }
                 });
             }
-
         } catch (error) {
             console.error("Chart initialization error:", error);
             showToast("error", "Failed to load charts");
         }
     },
-    
+
     setupEventListeners() {
         // Fill in the greeting once the user profile arrives
         $(document).on("kyro:user", (e, user) => {

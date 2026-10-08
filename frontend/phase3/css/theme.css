@@ -1171,3 +1171,17 @@ td.rc-empty strong { display: block; color: var(--kt-ink); font-size: 15px; marg
 }
 .reg-quote--unverified { border-left-color: #b91c1c; }
 .reg-quote footer { margin-top: 8px; font-size: 12.5px; color: #b91c1c; }
+
+/* Dashboard: part-to-whole splits (js/dashboard.js renderSplit) */
+.kd-swatch { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 8px; flex: none; }
+.kd-legend .kd-swatch { margin-right: 0; }
+.kd-split + .kd-split { margin-top: 22px; padding-top: 20px; border-top: 1px solid var(--kt-border-soft); }
+.kd-split__head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; font-size: 13px; color: var(--kt-muted); }
+.kd-split__head strong { font-size: 24px; line-height: 1; color: var(--kt-ink); font-variant-numeric: tabular-nums; }
+.kd-split__empty { margin: 0 0 6px; font-size: 13px; color: var(--kt-muted); }
+.kd-stack { display: flex; gap: 2px; height: 14px; margin-bottom: 10px; }
+.kd-stack__seg { min-width: 6px; border-radius: 3px; }
+.kd-list--tight li { padding: 7px 0; }
+.kd-list--tight li > span:first-child { display: inline-flex; align-items: center; }
+.kd-split__value { display: inline-flex; align-items: baseline; gap: 10px; font-variant-numeric: tabular-nums; }
+.kd-split__value small { min-width: 48px; text-align: right; color: var(--kt-muted); font-size: 12px; }
