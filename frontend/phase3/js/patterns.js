@@ -29,7 +29,7 @@ const Patterns = {
                     <div>
                         <span class="kyro-kicker">Behavior Analytics</span>
                         <h1 class="kyro-page-title">Behavior Patterns</h1>
-                        <p class="kyro-page-sub">Which behavioural patterns fired in the last 30 days, and which customers triggered them.</p>
+                        <p class="kyro-page-sub">Customers whose last 30 days of transactions depart from their own previous 90 days, and how.</p>
                     </div>
                     <div class="kyro-page-actions">
                         <button class="btn btn-primary px-4" id="refreshPatternsBtn">
@@ -44,11 +44,11 @@ const Patterns = {
                     <header class="kd-panel__head">
                         <div>
                             <h2>Patterns</h2>
-                            <p class="aml-subtitle">Alerts that matched each pattern. Select a pattern to see its customers below.</p>
+                            <p class="aml-subtitle">Each pattern compares a customer with their own history. Select one to see its customers below.</p>
                         </div>
                     </header>
                     <ul class="bp-list" id="bpList"><li class="kd-skeleton"></li><li class="kd-skeleton"></li><li class="kd-skeleton"></li></ul>
-                    <p class="kx-note">An alert can match more than one pattern, so the pattern counts add up to more than the total.</p>
+                    <p class="kx-note" id="bpNote"></p>
                 </section>
 
                 <div class="card border-0 rc-table-card">
@@ -73,14 +73,13 @@ const Patterns = {
                                 <tr>
                                     <th class="px-3 py-3">Customer</th>
                                     <th class="px-3 py-3">Pattern</th>
-                                    <th class="px-3 py-3 text-end">Alerts (30 days)</th>
-                                    <th class="px-3 py-3 text-end">Still open</th>
-                                    <th class="px-3 py-3">Highest risk score</th>
-                                    <th class="px-3 py-3">Last triggered</th>
+                                    <th class="px-3 py-3">What changed</th>
+                                    <th class="px-3 py-3 text-end">Open alerts</th>
+                                    <th class="px-3 py-3">Last seen</th>
                                     <th class="px-3 py-3"><span class="visually-hidden">Actions</span></th>
                                 </tr>
                             </thead>
-                            <tbody id="bpTableBody"><tr><td colspan="7" class="rc-empty">Loading...</td></tr></tbody>
+                            <tbody id="bpTableBody"><tr><td colspan="6" class="rc-empty">Loading...</td></tr></tbody>
                         </table>
                     </div>
                     <div class="d-flex justify-content-between align-items-center p-3" style="border-top: 1px solid #f0f0f0;">
@@ -117,7 +116,7 @@ const Patterns = {
             return;
         }
         this.patterns = data.patterns || [];
-        const busiest = [...this.patterns].sort((a, b) => b.hit_count - a.hit_count)[0];
+        const busiest = [...this.patterns].sort((a, b) => b.customers - a.customers)[0];
 
         const tile = (label, value, note) => `
             <div class="rq-tile rq-tile--static">
@@ -126,35 +125,32 @@ const Patterns = {
                 <span class="rq-tile__note">${note}</span>
             </div>`;
         $("#bpTiles").html(
-            tile('Alerts matching a pattern', Number(data.total_pattern_hits || 0).toLocaleString(), `last ${data.window_days} days`)
-            + tile('Customers affected', Number(data.customers_affected || 0).toLocaleString(), 'triggered at least one pattern')
-            + tile('Most active pattern', busiest && busiest.hit_count ? escapeHtml(busiest.label) : '—',
-                   busiest && busiest.hit_count ? `${busiest.hit_count.toLocaleString()} alerts, ${(busiest.open_alerts || 0).toLocaleString()} still open` : 'no pattern activity')
+            tile('Customers with a behaviour change', Number(data.customers_affected || 0).toLocaleString(), `of ${Number(data.customers_active || 0).toLocaleString()} active in the last ${data.window_days} days`)
+            + tile('Most common change', busiest && busiest.customers ? escapeHtml(busiest.label) : '—',
+                   busiest && busiest.customers ? `${busiest.customers.toLocaleString()} customers` : 'nothing flagged')
+            + tile('Customers with enough history', Number(data.customers_with_baseline || 0).toLocaleString(), 'at least 5 transactions in the previous 90 days')
             + tile('Transactions analysed', Number(data.total_transactions || 0).toLocaleString(), `last ${data.window_days} days`)
         );
+        $("#bpNote").text(`A customer is compared only with their own previous ${data.baseline_days} days, so someone who has always behaved this way is not flagged. Customers without enough history are not judged.`);
 
-        const sorted = [...this.patterns].sort((a, b) => b.hit_count - a.hit_count);
-        const max = Math.max(1, ...sorted.map(p => p.hit_count));
-        $("#bpList").html(sorted.map(p => {
-            const derived = !p.rule_ids.length;
-            return `
+        const sorted = [...this.patterns].sort((a, b) => b.customers - a.customers);
+        const max = Math.max(1, ...sorted.map(p => p.customers));
+        $("#bpList").html(sorted.map(p => `
             <li>
-                <button type="button" class="bp-item" data-pattern="${escapeHtml(p.id)}" ${derived ? 'disabled' : ''} aria-pressed="false">
+                <button type="button" class="bp-item" data-pattern="${escapeHtml(p.id)}" aria-pressed="false">
                     <span class="bp-item__main">
                         <strong>${escapeHtml(p.label)}</strong>
                         <small>${escapeHtml(p.description)}</small>
-                        <small class="bp-item__rules">${derived ? 'From transaction history, not a rule' : `Rules ${escapeHtml(p.rule_ids.join(', '))}`}</small>
                     </span>
-                    <span class="bp-item__bar"><span class="kd-bars__track"><span style="width: ${p.hit_count ? Math.max(2, Math.round((p.hit_count / max) * 100)) : 0}%"></span></span></span>
-                    <span class="bp-item__num"><strong>${p.hit_count.toLocaleString()}</strong><small>${derived ? 'customers' : 'alerts'}</small></span>
-                    <span class="bp-item__num"><strong>${derived ? '—' : p.customers.toLocaleString()}</strong><small>customers</small></span>
-                    <span class="bp-item__num"><strong>${p.open_alerts == null ? '—' : p.open_alerts.toLocaleString()}</strong><small>still open</small></span>
+                    <span class="bp-item__bar"><span class="kd-bars__track"><span style="width: ${p.customers ? Math.max(2, Math.round((p.customers / max) * 100)) : 0}%"></span></span></span>
+                    <span class="bp-item__num"><strong>${p.customers.toLocaleString()}</strong><small>customers</small></span>
+                    <span class="bp-item__num"><strong>${p.hit_count.toLocaleString()}</strong><small>${escapeHtml(p.hit_unit)}</small></span>
+                    <span class="bp-item__num"><strong>${p.open_alerts.toLocaleString()}</strong><small>open alerts</small></span>
                 </button>
-            </li>`;
-        }).join(''));
+            </li>`).join(''));
 
         $("#bpPattern").html('<option value="">All patterns</option>'
-            + this.patterns.filter(p => p.rule_ids.length).map(p => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.label)}</option>`).join(''));
+            + this.patterns.map(p => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.label)}</option>`).join(''));
         this.syncPatternSelection();
     },
 
@@ -174,7 +170,7 @@ const Patterns = {
         try {
             data = await API.get("/dashboard/patterns/customers", params);
         } catch (error) {
-            $("#bpTableBody").html('<tr><td colspan="7" class="rc-empty"><i class="fas fa-triangle-exclamation"></i><strong>Could not load customers</strong><span>Select Refresh to try again.</span></td></tr>');
+            $("#bpTableBody").html('<tr><td colspan="6" class="rc-empty"><i class="fas fa-triangle-exclamation"></i><strong>Could not load customers</strong><span>Select Refresh to try again.</span></td></tr>');
             return;
         }
         this.rows = data.items;
@@ -193,17 +189,16 @@ const Patterns = {
                         </div>
                     </td>
                     <td class="px-3 py-3"><span class="rq-rule">${escapeHtml(r.pattern_label)}</span></td>
-                    <td class="px-3 py-3 text-end">${r.alerts.toLocaleString()}</td>
-                    <td class="px-3 py-3 text-end">${r.open_alerts ? `<strong>${r.open_alerts.toLocaleString()}</strong>` : '<span class="text-muted">0</span>'}</td>
-                    <td class="px-3 py-3"><span class="rq-score rq-score--${band(r.max_risk_score)}">${r.max_risk_score}</span></td>
-                    <td class="px-3 py-3 text-nowrap">${escapeHtml(formatDateTime(r.last_triggered_at))}</td>
+                    <td class="px-3 py-3 bp-evidence">${escapeHtml(r.evidence)}</td>
+                    <td class="px-3 py-3 text-end">${r.open_alerts ? `<strong>${r.open_alerts.toLocaleString()}</strong> <span class="rq-score rq-score--${band(r.max_risk_score)}" title="Highest open alert score">${r.max_risk_score}</span>` : '<span class="text-muted">0</span>'}</td>
+                    <td class="px-3 py-3 text-nowrap">${escapeHtml(formatDate(r.last_triggered_at))}</td>
                     <td class="px-3 py-3 text-end">
                         ${code ? `<button type="button" class="btn btn-sm rc-actions__view bp-cases-btn" data-code="${escapeHtml(code)}" data-pattern="${escapeHtml(r.pattern)}">
                             <i class="fas fa-briefcase me-1"></i>Review cases
                         </button>` : ''}
                     </td>
                 </tr>`;
-        }).join('') || '<tr><td colspan="7" class="rc-empty"><i class="fas fa-folder-open"></i><strong>No customers match</strong><span>No alerts matched this pattern in the last 30 days.</span></td></tr>');
+        }).join('') || '<tr><td colspan="6" class="rc-empty"><i class="fas fa-folder-open"></i><strong>No customers match</strong><span>No customer shows this change in the last 30 days.</span></td></tr>');
 
         const from = this.total ? (this.page - 1) * this.pageSize + 1 : 0;
         const to = Math.min(this.page * this.pageSize, this.total);

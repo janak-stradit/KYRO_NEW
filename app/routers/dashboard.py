@@ -248,19 +248,18 @@ def get_stats(customers: int = 5000, db: Session = Depends(get_db)) -> dict[str,
 @router.get("/patterns")
 def get_behavioral_patterns(db: Session = Depends(get_db)) -> dict[str, Any]:
     """
-    Activity for the six behavioural patterns over the last 30 days, counted
-    from the rules that fired on each alert (see services/pattern_service.py).
+    The six behavioural patterns: each customer's last 30 days of transactions
+    compared with their own previous 90 days (see services/pattern_service.py).
     """
-    activity = pattern_service.pattern_activity(db, days=30)
-    cutoff = datetime.now(timezone.utc) - timedelta(days=30)
-    total_txns_30d = (
-        db.query(func.count(Transaction.id)).filter(Transaction.transaction_date >= cutoff).scalar() or 0
-    )
+    activity = pattern_service.pattern_activity(db)
     return {
         "window_days": activity["window_days"],
-        "total_transactions": total_txns_30d,
-        "total_pattern_hits": activity["matched_alerts"],
-        "customers_affected": activity["matched_customers"],
+        "baseline_days": activity["baseline_days"],
+        "total_transactions": activity["transactions_in_window"],
+        "customers_active": activity["customers_active"],
+        "customers_with_baseline": activity["customers_with_baseline"],
+        "customers_affected": activity["customers_flagged"],
+        "total_pattern_hits": sum(p["hit_count"] for p in activity["patterns"]),
         "patterns": activity["patterns"],
     }
 
@@ -273,8 +272,8 @@ def get_pattern_customers(
     page_size: int = 10,
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    """Which customers triggered which pattern, most open alerts first."""
-    rows = pattern_service.pattern_activity(db, days=30)["customer_rows"]
+    """Which customers show which pattern, with the evidence; most hits first."""
+    rows = pattern_service.pattern_activity(db)["customer_rows"]
     if pattern:
         rows = [r for r in rows if r["pattern"] == pattern]
 
@@ -285,7 +284,7 @@ def get_pattern_customers(
         needle = q.strip().lower()
         rows = [r for r in rows if needle in (names.get(r["customer_id"]) or "").lower()]
 
-    rows.sort(key=lambda r: (-r["open_alerts"], -r["max_risk_score"], names.get(r["customer_id"]) or "", r["pattern"]))
+    rows.sort(key=lambda r: (-r["hits"], -r["max_risk_score"], names.get(r["customer_id"]) or "", r["pattern"]))
     page, page_size = max(1, page), min(max(1, page_size), 100)
     start = (page - 1) * page_size
     return {
@@ -298,7 +297,8 @@ def get_pattern_customers(
                 "customer_name": names.get(r["customer_id"]) or "Unknown customer",
                 "pattern": r["pattern"],
                 "pattern_label": pattern_service.PATTERN_LABELS[r["pattern"]],
-                "alerts": r["alerts"],
+                "hits": r["hits"],
+                "evidence": r["evidence"],
                 "open_alerts": r["open_alerts"],
                 "max_risk_score": r["max_risk_score"],
                 "last_triggered_at": r["last_triggered_at"].isoformat(),

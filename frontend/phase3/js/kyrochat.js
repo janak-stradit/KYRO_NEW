@@ -219,21 +219,20 @@ const KyroChat = {
         const patterns = data.patterns || [];
         const named = patterns.find(p => q.includes(p.label.toLowerCase().split(' ')[0]));
         if (named) {
-            const derived = !named.rule_ids.length;
             return {
                 html: `<strong>${escapeHtml(named.label)}</strong>: ${escapeHtml(named.description)} `
-                    + (derived ? `${this.n(named.hit_count)} customers match it in the last ${data.window_days} days.`
-                               : `In the last ${data.window_days} days it matched <strong>${this.n(named.hit_count)}</strong> alerts for ${this.n(named.customers)} customers (rules ${escapeHtml(named.rule_ids.join(', '))}); ${this.n(named.open_alerts)} are still open.`)
+                    + (named.customers ? `In the last ${data.window_days} days <strong>${this.n(named.customers)}</strong> customer${named.customers === 1 ? ' shows' : 's show'} it (${this.n(named.hit_count)} ${escapeHtml(named.hit_unit)}).`
+                                       : `No customer shows it in the last ${data.window_days} days.`)
                     + `<div class="kc-reg-cites">${this.link('patterns', 'Open Patterns')}</div>`
             };
         }
-        const active = patterns.filter(p => p.hit_count > 0).sort((a, b) => b.hit_count - a.hit_count);
-        if (!active.length) return { html: `No behavioural pattern matched an alert in the last ${data.window_days} days.` };
+        const active = patterns.filter(p => p.customers > 0).sort((a, b) => b.customers - a.customers);
+        if (!active.length) return { html: `No customer's behaviour in the last ${data.window_days} days departs from their previous ${data.baseline_days} days.` };
         return {
-            html: `${this.n(data.total_pattern_hits)} alerts matched a behavioural pattern in the last ${data.window_days} days, for ${this.n(data.customers_affected)} customers. `
-                + `The most active is <strong>${escapeHtml(active[0].label)}</strong> with ${this.n(active[0].hit_count)} alerts.`
+            html: `<strong>${this.n(data.customers_affected)}</strong> of ${this.n(data.customers_active)} active customers behaved differently in the last ${data.window_days} days than in their previous ${data.baseline_days}. `
+                + `The most common change is <strong>${escapeHtml(active[0].label)}</strong>, for ${this.n(active[0].customers)} customers.`
                 + `<div class="kc-reg-cites">${this.link('patterns', 'Open Patterns')}</div>`,
-            details: active.map(p => `<div class="kc-reg-source"><div class="kc-reg-source__head"><strong>${escapeHtml(p.label)}</strong><span>${this.n(p.hit_count)} ${p.rule_ids.length ? 'alerts' : 'customers'}</span></div><p>${escapeHtml(p.description)}</p></div>`).join('')
+            details: active.map(p => `<div class="kc-reg-source"><div class="kc-reg-source__head"><strong>${escapeHtml(p.label)}</strong><span>${this.n(p.customers)} customers</span></div><p>${escapeHtml(p.description)}</p></div>`).join('')
         };
     },
 

@@ -197,7 +197,7 @@ const Dashboard = {
                         <header class="kd-panel__head">
                             <div>
                                 <h2>Behavioral Flags</h2>
-                                <p class="aml-subtitle">Pattern hits, last 30 days</p>
+                                <p class="aml-subtitle">Customers whose last 30 days differ from their own previous 90</p>
                             </div>
                             <a class="kd-link" href="/patterns" data-page="patterns">Details <i class="fas fa-arrow-right"></i></a>
                         </header>
@@ -399,24 +399,24 @@ const Dashboard = {
 
                     if (patternData) {
                         // Update Behavioral Patterns Take Action count
-                        const hits = Number(patternData.total_pattern_hits || 0);
-                        $("#takeActionPatternsVal").text(`${hits.toLocaleString()} Detected`);
-                        $("#kpiPatternHits").text(`${hits.toLocaleString()} pattern hits in ${patternData.window_days || 30} days`);
+                        const flagged = Number(patternData.customers_affected || 0);
+                        $("#takeActionPatternsVal").text(`${flagged.toLocaleString()} Customers`);
+                        $("#kpiPatternHits").text(`${flagged.toLocaleString()} customers with a behaviour change`);
 
-                        // Behavioral flags as proportional bars
+                        // One bar per pattern: how many customers show it
                         if (patternData.patterns) {
-                            const patterns = [...patternData.patterns].sort((x, y) => (y.hit_count || 0) - (x.hit_count || 0));
-                            const max = Math.max(1, ...patterns.map(p => p.hit_count || 0));
+                            const patterns = [...patternData.patterns].sort((x, y) => (y.customers || 0) - (x.customers || 0));
+                            const max = Math.max(1, ...patterns.map(p => p.customers || 0));
                             const html = patterns.map(p => `
-                                <li>
+                                <li title="${this.escapeHtml(p.description)}">
                                     <div class="kd-bars__row">
                                         <span>${this.escapeHtml(p.label)}</span>
-                                        <strong>${Number(p.hit_count || 0).toLocaleString()}</strong>
+                                        <strong>${Number(p.customers || 0).toLocaleString()} <small class="text-muted fw-normal">customer${p.customers === 1 ? '' : 's'}</small></strong>
                                     </div>
-                                    <div class="kd-bars__track"><span style="width: ${Math.round(((p.hit_count || 0) / max) * 100)}%"></span></div>
+                                    <div class="kd-bars__track"><span style="width: ${Math.round(((p.customers || 0) / max) * 100)}%"></span></div>
                                 </li>
                             `).join('');
-                            $("#behavioralFlagsList").html(html || `<li class="kd-empty">No pattern hits in this window.</li>`);
+                            $("#behavioralFlagsList").html(html || `<li class="kd-empty">No behaviour changes in this window.</li>`);
                         }
                     }
                 } else {

@@ -1331,3 +1331,5 @@ td.rc-empty strong { display: block; color: var(--kt-ink); font-size: 15px; marg
 .feed-errors li { padding: 8px 12px; font-size: 13px; color: var(--kt-body); border-bottom: 1px solid var(--kt-border-soft); }
 .feed-errors li:last-child { border-bottom: 0; }
 .feed-errors strong { display: inline-block; min-width: 62px; color: var(--kt-ink); }
+
+#mainContent td.bp-evidence { max-width: 420px; white-space: normal; color: var(--kt-ink); }
