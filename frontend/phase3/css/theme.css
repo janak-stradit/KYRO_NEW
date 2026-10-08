@@ -1317,3 +1317,17 @@ td.rc-empty strong { display: block; color: var(--kt-ink); font-size: 15px; marg
 .cp-other__text { flex: 1; min-width: 0; font-size: 13.5px; color: var(--kt-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cp-disposition { margin-top: 18px; padding: 14px 16px; border-radius: 10px; background: var(--kt-page); font-size: 13.5px; }
 .cp-disposition p { margin: 0 0 6px; color: var(--kt-ink); }
+
+/* Data Feeds page (js/feeds.js) */
+.feed-pick { display: grid; grid-template-columns: minmax(150px, 0.8fr) minmax(0, 2fr) minmax(170px, 1fr) auto; gap: 12px; align-items: center; }
+@media (max-width: 991.98px) { .feed-pick { grid-template-columns: 1fr; } }
+.feed-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 16px 20px; border-top: 1px solid var(--kt-border-soft); }
+.feed-actions #feedName { flex: 1 1 220px; max-width: 360px; margin-left: auto; }
+.feed-actions--end { justify-content: flex-end; padding: 16px 0 0; border-top: 0; }
+.feed-check { display: inline-flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--kt-body); cursor: pointer; }
+.feed-check .form-check-input { margin: 0; }
+.feed-sample { max-width: 320px; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.feed-errors { max-height: 260px; overflow-y: auto; margin: 0; padding: 0; list-style: none; border: 1px solid var(--kt-border-soft); border-radius: 8px; }
+.feed-errors li { padding: 8px 12px; font-size: 13px; color: var(--kt-body); border-bottom: 1px solid var(--kt-border-soft); }
+.feed-errors li:last-child { border-bottom: 0; }
+.feed-errors strong { display: inline-block; min-width: 62px; color: var(--kt-ink); }
