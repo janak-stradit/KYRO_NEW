@@ -490,3 +490,20 @@ const ThemeManager = {
 
 // Initialize Theme Manager to ensure light theme
 ThemeManager.init();
+/**
+ * Close a Bootstrap modal even if it is still animating open (Bootstrap
+ * ignores hide() during the show transition).
+ */
+function closeModalSafely(modalEl) {
+    const modal = bootstrap.Modal.getInstance(modalEl);
+    if (!modal) return;
+    if (modalEl.dataset.shown === "true") {
+        modal.hide();
+    } else {
+        modalEl.addEventListener("shown.bs.modal", () => modal.hide(), { once: true });
+    }
+}
+
+// Record when any modal has finished opening, for closeModalSafely()
+document.addEventListener("shown.bs.modal", (e) => { e.target.dataset.shown = "true"; });
+document.addEventListener("hidden.bs.modal", (e) => { e.target.dataset.shown = "false"; });

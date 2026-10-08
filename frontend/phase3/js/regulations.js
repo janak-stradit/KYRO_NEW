@@ -28,7 +28,7 @@ const Regulations = {
         this.filters = { status: 'PROPOSED', category: '', q: '' };
         this.renderLayout();
         this.setupListeners();
-        await Promise.all([this.loadSources(), this.loadSummary(), this.loadObligations()]);
+        await Promise.all([this.loadSources(), this.loadSummary(), this.loadObligations(), this.loadTraceability()]);
     },
 
     renderLayout() {
@@ -120,6 +120,41 @@ const Regulations = {
                         </div>
                     </div>
                 </div>
+
+                <div class="card border-0 rc-table-card mt-4">
+                    <div class="rc-toolbar">
+                        <div class="rc-toolbar__title">
+                            <h2>Coverage and traceability</h2>
+                            <small class="text-muted">Confirmed obligations, the KYRO control that meets each one, and its live setting</small>
+                        </div>
+                        <div class="rc-toolbar__controls">
+                            ${reviewer ? `
+                            <button type="button" class="btn btn-sm rc-actions__view" id="regProposeMappings">
+                                <i class="fas fa-wand-magic-sparkles me-1"></i>Propose mappings
+                            </button>` : ''}
+                            <button type="button" class="btn btn-sm rc-actions__view" id="regExportTrace">
+                                <i class="fas fa-file-arrow-down me-1"></i>Export CSV
+                            </button>
+                        </div>
+                    </div>
+                    <div id="regTraceSummary"></div>
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0 fp-table reg-table">
+                            <thead>
+                                <tr>
+                                    <th class="px-3 py-2">Section</th>
+                                    <th class="px-3 py-2">Obligation</th>
+                                    <th class="px-3 py-2">Control</th>
+                                    <th class="px-3 py-2">Live setting</th>
+                                    <th class="px-3 py-2 text-end">Alerts</th>
+                                    <th class="px-3 py-2">Status</th>
+                                    <th class="px-3 py-2"><span class="visually-hidden">Actions</span></th>
+                                </tr>
+                            </thead>
+                            <tbody id="regTraceBody"><tr><td colspan="7" class="rc-empty">Loading...</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
         `);
     },
@@ -153,7 +188,45 @@ const Regulations = {
             $btn.prop("disabled", false);
         });
 
+        $("#regProposeMappings").on("click", async (e) => {
+            const $btn = $(e.currentTarget).prop("disabled", true);
+            try {
+                const r = await API.post('/regulatory/mappings/propose');
+                showToast('success', r.obligations_processed
+                    ? `${r.mappings_proposed} mapping(s) proposed for ${r.obligations_processed} obligation(s).`
+                    : 'Every confirmed obligation already has a mapping or a proposal.');
+                await this.loadTraceability();
+            } catch (xhr) { /* API layer already reported it */ }
+            $btn.prop("disabled", false);
+        });
+
+        $("#regExportTrace").on("click", async () => {
+            try {
+                const response = await fetch(`${API.baseUrl}/regulatory/traceability?format=csv`, { headers: API.getHeaders() });
+                if (!response.ok) throw new Error(response.status);
+                downloadBlob(await response.blob(), 'kyro-traceability-matrix.csv');
+            } catch (error) {
+                showToast('error', 'Could not export the traceability matrix.');
+            }
+        });
+
         $("#mainContent").off("click.reg")
+            .on("click.reg", ".reg-map-decide", async (e) => {
+                const $btn = $(e.currentTarget).prop("disabled", true);
+                try {
+                    await API.put(`/regulatory/mappings/${$btn.data("id")}/review`, { decision: $btn.data("decision") });
+                    await this.loadTraceability();
+                } catch (xhr) { $btn.prop("disabled", false); }
+            })
+            .on("change.reg", ".reg-map-select", async (e) => {
+                const $select = $(e.currentTarget);
+                if (!$select.val()) return;
+                try {
+                    await API.post('/regulatory/mappings', { obligation_id: $select.data("id"), control_code: $select.val() });
+                    showToast('success', 'Control mapped.');
+                    await this.loadTraceability();
+                } catch (xhr) { $select.val(''); }
+            })
             .on("click.reg", ".reg-extract-btn", (e) => this.extract($(e.currentTarget)))
             .on("click.reg", ".reg-review-btn", (e) => {
                 const item = this.obligations.find(o => o.id === $(e.currentTarget).data("id"));
@@ -241,6 +314,64 @@ const Regulations = {
         $("#regPageInfo").text(this.total ? `${from}–${to} of ${this.total}` : '');
         $("#regPrev").prop("disabled", this.page <= 1);
         $("#regNext").prop("disabled", to >= this.total);
+    },
+
+    async loadTraceability() {
+        let data;
+        try {
+            [data, this.controls] = await Promise.all([
+                API.get('/regulatory/traceability'),
+                this.controls ? Promise.resolve(this.controls) : API.get('/regulatory/controls')
+            ]);
+        } catch (error) {
+            $("#regTraceBody").html('<tr><td colspan="7" class="rc-empty">Could not load the traceability matrix.</td></tr>');
+            return;
+        }
+        const s = data.summary;
+        const reviewer = this.canReview();
+        const chip = { CONFIRMED: 'low', PROPOSED: 'medium', GAP: 'high' };
+        const label = { CONFIRMED: 'Covered', PROPOSED: 'Proposed', GAP: 'Gap' };
+
+        $("#regTraceSummary").html(`
+            <div class="reg-summary">
+                <div class="fp-summary">
+                    <div><span>Confirmed obligations</span><strong>${s.confirmed_obligations}</strong></div>
+                    <div><span>Covered by a control</span><strong>${s.covered}</strong></div>
+                    <div><span>Mapping awaiting review</span><strong>${s.awaiting_mapping_review}</strong></div>
+                    <div><span>Gaps</span><strong>${s.gaps}</strong></div>
+                    <div><span>Rules not tied to an obligation</span><strong>${s.rules_without_obligation.length}</strong></div>
+                </div>
+                ${s.rules_without_obligation.length ? `
+                <p class="kx-note mb-0">Not yet tied to a confirmed obligation: ${escapeHtml(s.rules_without_obligation.join(', '))}. These are internal policy or still need an obligation.</p>` : ''}
+            </div>`);
+
+        const setting = (row) => {
+            const entries = Object.entries(row.rule_config || {});
+            return entries.length ? entries.map(([k, v]) => `${escapeHtml(k)} = ${escapeHtml(Array.isArray(v) ? `${v.length} values` : String(v))}`).join('<br>') : '—';
+        };
+        const actions = (row) => {
+            if (!reviewer) return '';
+            if (row.mapping_status === 'PROPOSED') return `
+                <button type="button" class="btn btn-sm rc-actions__view reg-map-decide" data-id="${escapeHtml(row.mapping_id)}" data-decision="CONFIRMED">Confirm</button>
+                <button type="button" class="btn btn-sm rc-actions__icon reg-map-decide" data-id="${escapeHtml(row.mapping_id)}" data-decision="REJECTED" title="Reject mapping" aria-label="Reject mapping"><i class="fas fa-xmark"></i></button>`;
+            if (row.mapping_status === 'GAP') return `
+                <select class="form-select form-select-sm reg-map-select" data-id="${escapeHtml(row.obligation_id)}" aria-label="Map a control">
+                    <option value="">Map a control...</option>
+                    ${this.controls.map(c => `<option value="${escapeHtml(c.code)}">${escapeHtml(c.code)} — ${escapeHtml(c.name)}</option>`).join('')}
+                </select>`;
+            return '';
+        };
+
+        $("#regTraceBody").html(data.rows.map(row => `
+            <tr>
+                <td class="px-3 py-2 text-nowrap"><strong>${escapeHtml(row.section_ref)}</strong><br><small class="text-muted">as amended ${escapeHtml(row.section_version)}</small></td>
+                <td class="px-3 py-2 reg-cell reg-cell--wide"><strong>${escapeHtml(row.obligated_party)}</strong> must ${escapeHtml(row.action)}</td>
+                <td class="px-3 py-2 reg-cell">${row.control_code ? `<strong>${escapeHtml(row.control_code)}</strong> ${escapeHtml(row.control_name)}` : '<span class="text-muted">No control mapped</span>'}</td>
+                <td class="px-3 py-2 reg-cell">${setting(row)}</td>
+                <td class="px-3 py-2 text-end">${row.alerts == null ? '—' : row.alerts}</td>
+                <td class="px-3 py-2"><span class="cd-chip cd-chip--${chip[row.mapping_status]}">${label[row.mapping_status]}</span></td>
+                <td class="px-3 py-2 text-end text-nowrap">${actions(row)}</td>
+            </tr>`).join('') || '<tr><td colspan="7" class="rc-empty">Confirm obligations in the register above, then propose mappings to see coverage here.</td></tr>');
     },
 
     async extract($btn) {
@@ -337,9 +468,9 @@ const Regulations = {
             $(".reg-decide").prop("disabled", true);
             try {
                 await API.put(`/regulatory/obligations/${o.id}/review`, payload);
-                modal.hide();
+                closeModalSafely(modalEl);
                 showToast('success', payload.decision === 'CONFIRMED' ? 'Obligation confirmed.' : 'Obligation rejected.');
-                await Promise.all([this.loadSummary(), this.loadObligations()]);
+                await Promise.all([this.loadSummary(), this.loadObligations(), this.loadTraceability()]);
             } catch (xhr) {
                 const detail = xhr && xhr.responseJSON && xhr.responseJSON.detail;
                 $("#regReviewError").text(typeof detail === 'string' ? detail : 'Could not save the review.').removeClass("d-none");

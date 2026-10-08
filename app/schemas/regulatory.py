@@ -133,3 +133,34 @@ class ObligationSummary(BaseModel):
     by_status: dict[str, int]
     by_category: dict[str, int]
     unverified_quotes: int
+
+
+class MappingOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    obligation_id: uuid.UUID
+    control_code: str
+    rationale: str | None = None
+    status: str
+    proposed_by: str
+    reviewed_by: uuid.UUID | None = None
+    reviewed_at: datetime | None = None
+
+
+class MappingCreate(BaseModel):
+    obligation_id: uuid.UUID
+    control_code: str
+    rationale: str | None = Field(default=None, max_length=2000)
+
+
+class MappingReview(BaseModel):
+    decision: Literal["CONFIRMED", "REJECTED"]
+
+
+class ControlOut(BaseModel):
+    code: str
+    kind: str
+    name: str
+    description: str
+    config_keys: list[str]

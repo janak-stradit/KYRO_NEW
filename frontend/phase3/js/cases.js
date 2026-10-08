@@ -985,7 +985,7 @@ const Cases = {
                     });
                 caseData.status = updated.status;
                 caseData.fullData = updated;
-                modal.hide();
+                closeModalSafely(modalEl);
                 showToast('success', outcome === 'ESCALATED' ? 'Case escalated.' : 'Case resolved.');
                 this.updateDashboard();
                 this.renderTable();

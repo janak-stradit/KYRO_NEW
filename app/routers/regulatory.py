@@ -4,9 +4,11 @@ versioned section text and cited Q&A (Phase 11.3).
 """
 from __future__ import annotations
 
+import csv
+import io
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -14,12 +16,17 @@ from app.ai import AIDisabledError, AIGateway, AIProviderError
 from app.database import get_db
 from app.deps import PaginationParams, get_current_user, require_role
 from app.models.obligation import Obligation
+from app.models.obligation_mapping import ObligationMapping
 from app.models.regulatory import RegulatoryIngestionRun, RegulatorySection, RegulatorySource
 from app.models.user import User
 from app.schemas.common import Page
 from app.schemas.regulatory import (
     AskRequest,
     AskResponse,
+    ControlOut,
+    MappingCreate,
+    MappingOut,
+    MappingReview,
     ObligationExtractResult,
     ObligationOut,
     ObligationReview,
@@ -29,7 +36,8 @@ from app.schemas.regulatory import (
     RegulatorySectionSummary,
     RegulatorySourceOut,
 )
-from app.services import obligation_service, regulatory_qa_service
+from app.services import mapping_service, obligation_service, regulatory_qa_service
+from app.services.control_catalogue import CONTROLS, CONTROLS_BY_CODE
 from app.services.regulatory_ingestion_service import ingest_all_enabled, ingest_source
 
 router = APIRouter(prefix="/api/v1/regulatory", tags=["regulatory"], dependencies=[Depends(get_current_user)])
@@ -214,4 +222,92 @@ def review_obligation(
     edits = data.model_dump(exclude={"decision", "notes"}, exclude_none=True)
     return obligation_service.review(
         db, obligation, decision=data.decision, reviewer_id=user.id, edits=edits, notes=data.notes
+    )
+
+
+# ── Obligation → control mapping and traceability (Phase 11.4) ───────────
+
+@router.get("/controls", response_model=list[ControlOut])
+def list_controls() -> list[dict]:
+    """The KYRO controls obligations can be mapped to."""
+    return [
+        {"code": c.code, "kind": c.kind, "name": c.name, "description": c.description, "config_keys": list(c.config_keys)}
+        for c in CONTROLS
+    ]
+
+
+@router.post("/mappings/propose")
+def propose_mappings(
+    db: Session = Depends(get_db),
+    user: User = Depends(require_role("ADMIN", "COMPLIANCE_OFFICER")),
+) -> dict:
+    """Have the AI propose controls for every confirmed obligation that has no mapping yet."""
+    provider = AIGateway(db).status()["provider"]
+    try:
+        result = mapping_service.propose_for_unmapped(db, requested_by=user.id)
+    except AIDisabledError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from None
+    except AIProviderError as exc:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(exc)) from None
+    return {**result, "proposed_by": provider}
+
+
+@router.post("/mappings", response_model=MappingOut, status_code=status.HTTP_201_CREATED)
+def add_mapping(
+    data: MappingCreate,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_role("ADMIN", "COMPLIANCE_OFFICER")),
+) -> ObligationMapping:
+    """Map a control to an obligation by hand; it is confirmed immediately."""
+    obligation = db.get(Obligation, data.obligation_id)
+    if obligation is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Obligation not found")
+    if obligation.status != "CONFIRMED":
+        raise HTTPException(status.HTTP_409_CONFLICT, "Only confirmed obligations can be mapped")
+    if data.control_code not in CONTROLS_BY_CODE:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Unknown control: {data.control_code}")
+    return mapping_service.add_manual(
+        db, obligation, control_code=data.control_code, rationale=data.rationale, user_id=user.id
+    )
+
+
+@router.put("/mappings/{mapping_id}/review", response_model=MappingOut)
+def review_mapping(
+    mapping_id: uuid.UUID,
+    data: MappingReview,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_role("ADMIN", "COMPLIANCE_OFFICER")),
+) -> ObligationMapping:
+    mapping = db.get(ObligationMapping, mapping_id)
+    if mapping is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Mapping not found")
+    return mapping_service.review(db, mapping, decision=data.decision, reviewer_id=user.id)
+
+
+_TRACE_COLUMNS = [
+    "section_ref", "section_version", "obligated_party", "action", "deadline", "category",
+    "mapping_status", "control_code", "control_name", "rule_config", "alerts", "false_positive_rate", "rationale",
+]
+
+
+@router.get("/traceability")
+def traceability(
+    days: int = Query(90, ge=1, le=730),
+    format: str = Query("json", pattern="^(json|csv)$"),
+    db: Session = Depends(get_db),
+):
+    """Regulation version → obligation → control → rule config → alerts. `format=csv` for audits."""
+    data = mapping_service.traceability(db, days=days)
+    if format == "json":
+        return data
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(_TRACE_COLUMNS)
+    for row in data["rows"]:
+        values = {**row, "rule_config": "; ".join(f"{k}={v}" for k, v in row["rule_config"].items())}
+        writer.writerow(["" if values[c] is None else values[c] for c in _TRACE_COLUMNS])
+    return Response(
+        buffer.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=kyro-traceability-matrix.csv"},
     )

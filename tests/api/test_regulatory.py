@@ -358,3 +358,97 @@ def test_changed_section_supersedes_its_obligations(client, compliance_headers, 
     fresh = _obligations(client, compliance_headers, section_ref="99 CFR 9999.10", status_filter="PROPOSED")
     assert fresh and all(o["section_version"] == "2026-09-15" for o in fresh)
     assert any("$10,000" in o["source_quote"] for o in fresh)
+
+
+# ── Obligation → control mapping and traceability ────────────────────────
+
+def _confirmed_obligation(db_session, source, *, action, party="A widget dealer", category="REPORTING"):
+    from app.models.obligation import Obligation
+
+    section = db_session.query(RegulatorySection).filter_by(source_id=source.id, section_ref="99 CFR 9999.10").one()
+    obligation = Obligation(
+        section_id=section.id, section_ref=section.section_ref, section_version=section.version,
+        obligated_party=party, action=action, category=category, status="CONFIRMED", extracted_by="mock",
+        source_quote=action, quote_verified=True,
+    )
+    db_session.add(obligation)
+    db_session.commit()
+    return obligation
+
+
+def _trace(client, headers):
+    body = client.get("/api/v1/regulatory/traceability", headers=headers).json()
+    return body["summary"], [r for r in body["rows"] if r["section_ref"] == "99 CFR 9999.10"]
+
+
+def test_mapping_flow_from_proposal_to_traceability(client, auth_headers, compliance_headers, db_session, source, feed, mock_ai):
+    ingest_source(db_session, source)
+    currency = _confirmed_obligation(db_session, source, action="report each currency transfer of more than $10,000")
+    orphan = _confirmed_obligation(db_session, source, action="paint each widget blue", category="OTHER")
+    before, _ = _trace(client, compliance_headers)
+
+    assert client.post("/api/v1/regulatory/mappings/propose", headers=auth_headers).status_code == 403
+    resp = client.post("/api/v1/regulatory/mappings/propose", headers=compliance_headers)
+    assert resp.status_code == 200 and resp.json()["proposed_by"] == "mock"
+    assert resp.json()["mappings_proposed"] >= 1
+
+    summary, rows = _trace(client, compliance_headers)
+    by_obligation = {r["obligation_id"]: r for r in rows}
+    proposed = by_obligation[str(currency.id)]
+    assert (proposed["mapping_status"], proposed["control_code"], proposed["control_name"]) == ("PROPOSED", "R001", "Amount Threshold")
+    assert "AMOUNT_THRESHOLD" in proposed["rule_config"] and proposed["alerts"] is not None
+    assert by_obligation[str(orphan.id)]["mapping_status"] == "GAP"
+    assert summary["gaps"] == before["gaps"] - 1  # one of the two new obligations now has a proposal
+    assert summary["awaiting_mapping_review"] == before["awaiting_mapping_review"] + 1
+    assert summary["covered"] == before["covered"]  # a proposal is not coverage
+
+    # Confirming the proposal makes it coverage and takes R001 off the untraceable-rules list
+    review = client.put(
+        f"/api/v1/regulatory/mappings/{proposed['mapping_id']}/review", json={"decision": "CONFIRMED"}, headers=compliance_headers
+    )
+    assert review.status_code == 200 and review.json()["status"] == "CONFIRMED"
+    summary, _ = _trace(client, compliance_headers)
+    assert summary["covered"] == before["covered"] + 1
+    assert "R001" not in summary["rules_without_obligation"] and "R008" in summary["rules_without_obligation"]
+
+    # A reviewer closes the gap by hand
+    manual = client.post(
+        "/api/v1/regulatory/mappings",
+        json={"obligation_id": str(orphan.id), "control_code": "EXTERNAL_PROCESS", "rationale": "Done by the paint shop"},
+        headers=compliance_headers,
+    )
+    assert manual.status_code == 201 and (manual.json()["status"], manual.json()["proposed_by"]) == ("CONFIRMED", "user")
+    summary, rows = _trace(client, compliance_headers)
+    assert summary["gaps"] == before["gaps"] - 2
+    assert all(r["mapping_status"] != "GAP" for r in rows)
+
+    bad = client.post(
+        "/api/v1/regulatory/mappings", json={"obligation_id": str(orphan.id), "control_code": "R999"}, headers=compliance_headers
+    )
+    assert bad.status_code == 422
+
+    csv_resp = client.get("/api/v1/regulatory/traceability", params={"format": "csv"}, headers=auth_headers)
+    assert csv_resp.status_code == 200 and csv_resp.headers["content-type"].startswith("text/csv")
+    assert "99 CFR 9999.10" in csv_resp.text and "AMOUNT_THRESHOLD=" in csv_resp.text
+
+
+def test_only_real_controls_are_accepted_from_the_ai(client, compliance_headers, db_session, source, feed, live_ai):
+    ingest_source(db_session, source)
+    obligation = _confirmed_obligation(db_session, source, action="report widget transfers")
+    live_ai["reply"] = (
+        '{"mappings": [{"control_code": "R001", "rationale": "threshold"}, {"control_code": "R777", "rationale": "made up"}]}'
+    )
+    client.post("/api/v1/regulatory/mappings/propose", headers=compliance_headers)
+    _, rows = _trace(client, compliance_headers)
+    assert [r["control_code"] for r in rows if r["obligation_id"] == str(obligation.id)] == ["R001"]
+
+
+def test_unreviewed_obligations_cannot_be_mapped(client, compliance_headers, db_session, source, feed, mock_ai):
+    ingest_source(db_session, source)
+    _extract(client, compliance_headers, source)
+    proposed = _obligations(client, compliance_headers, section_ref="99 CFR 9999.10")[0]
+    resp = client.post(
+        "/api/v1/regulatory/mappings", json={"obligation_id": proposed["id"], "control_code": "R001"}, headers=compliance_headers
+    )
+    assert resp.status_code == 409
+    assert len(client.get("/api/v1/regulatory/controls", headers=compliance_headers).json()) >= 15

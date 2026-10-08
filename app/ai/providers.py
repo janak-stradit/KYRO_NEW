@@ -109,6 +109,26 @@ def _mock_obligations(text: str, limit: int = 8) -> list[dict]:
     return obligations
 
 
+_MOCK_CONTROL_KEYWORDS = (
+    ("R001", r"currency|\$10,000"),
+    ("CASE_DISPOSITION", r"suspicious|\bSAR\b"),
+    ("SCREENING", r"sanction|OFAC|government list|designated"),
+    ("UBO_REGISTER", r"beneficial owner"),
+    ("CUSTOMER_ONBOARDING", r"identity of|identif\w+ (?:of|number|information)|customer identification"),
+    ("KYC_REVIEW", r"ongoing|periodic|update customer information"),
+    ("AUDIT_LOG", r"\bretain|\brecords?\b"),
+)
+
+
+def _mock_mappings(obligation_text: str) -> list[dict]:
+    """Keyword stand-in for the model; an obligation with no keyword hit is a gap."""
+    return [
+        {"control_code": code, "rationale": "Mock mapping: the obligation mentions terms this control deals with."}
+        for code, pattern in _MOCK_CONTROL_KEYWORDS
+        if re.search(pattern, obligation_text, re.I)
+    ][:3]
+
+
 class MockProvider:
     name = "mock"
 
@@ -122,6 +142,8 @@ class MockProvider:
             text = json.dumps({"status": "ok", "echo": echo.group(1), "mock": True})
         elif "obligations" in system and "Section text:" in user:
             text = json.dumps({"obligations": _mock_obligations(user.split("Section text:", 1)[1])})
+        elif "Control catalogue:" in user:
+            text = json.dumps({"mappings": _mock_mappings(user.split("Control catalogue:", 1)[0])})
         elif "JSON" in system or "json" in system:
             text = json.dumps({"mock": True, "summary": "Mock response: AI provider is in mock mode."})
         else:
