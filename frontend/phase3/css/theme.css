@@ -1221,3 +1221,32 @@ td.rc-empty strong { display: block; color: var(--kt-ink); font-size: 15px; marg
 #mainContent .rq-table th { white-space: nowrap; }
 #mainContent .rq-table td { vertical-align: middle; font-size: 13.5px; }
 #mainContent .rc-customer__text small .cd-chip { margin-left: 4px; padding: 1px 7px; font-size: 10px; }
+
+/* Behavior Patterns page (js/patterns.js) */
+.rq-tiles--four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 991.98px) { .rq-tiles--four { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.rq-tile--static { cursor: default; }
+.rq-tile--static:hover { border-color: var(--kt-border); box-shadow: none; }
+.bp-list { list-style: none; margin: 0 0 4px; padding: 0; }
+.bp-list li + li { border-top: 1px solid var(--kt-border-soft); }
+.bp-item {
+    display: grid; grid-template-columns: minmax(220px, 2.2fr) minmax(120px, 1.6fr) repeat(3, minmax(72px, 0.6fr));
+    align-items: center; gap: 20px; width: 100%; padding: 14px 10px; border: 0; border-radius: 8px;
+    background: none; text-align: left; cursor: pointer; transition: var(--kt-transition);
+}
+.bp-item:hover:not(:disabled), .bp-item:focus-visible { background: var(--kt-page); outline: none; }
+.bp-item.is-active { background: var(--kt-tint); box-shadow: inset 3px 0 0 var(--kt-accent); }
+.bp-item:disabled { cursor: default; }
+.bp-item__main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.bp-item__main strong { font-size: 15px; color: var(--kt-ink); }
+.bp-item__main small { font-size: 13px; color: var(--kt-body); }
+.bp-item__main .bp-item__rules { font-size: 12px; color: var(--kt-muted); }
+.bp-item__num { display: flex; flex-direction: column; align-items: flex-end; font-variant-numeric: tabular-nums; }
+.bp-item__num strong { font-size: 18px; color: var(--kt-ink); }
+.bp-item__num small { font-size: 12px; color: var(--kt-muted); }
+@media (max-width: 991.98px) {
+    .bp-item { grid-template-columns: 1fr repeat(3, auto); }
+    .bp-item__bar { display: none; }
+}
+.bp-item__bar, .bp-item__bar .kd-bars__track { display: block; width: 100%; }
+.bp-item__bar .kd-bars__track span { display: block; height: 100%; border-radius: 999px; background: var(--kt-accent); }

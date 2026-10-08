@@ -17,7 +17,7 @@ from app.models.alert import Alert
 from app.models.customer import Customer
 from app.models.transaction import Transaction
 from app.models.user import User
-from app.services import feedback_service
+from app.services import feedback_service, pattern_service
 
 router = APIRouter(prefix="/api/v1/dashboard", tags=["dashboard"], dependencies=[Depends(get_current_user)])
 
@@ -102,18 +102,6 @@ def get_chart_data(db: Session = Depends(get_db)) -> dict[str, Any]:
 
     real_status_counts = dict(status_counts)
 
-    # If no alerts, generate realistic demo numbers
-    total_status_count = sum(status_counts.values())
-    if total_status_count == 0:
-        # Distribute 2509 cases across statuses realistically
-        status_counts = {
-            "OPEN": 1254,
-            "ASSIGNED": 500,
-            "IN_REVIEW": 450,
-            "RESOLVED": 255,
-            "ESCALATED": 50
-        }
-
     mapped_status_counts = {
         "OPEN": status_counts["OPEN"] + status_counts["ASSIGNED"],
         "IN_REVIEW": status_counts["IN_REVIEW"],
@@ -121,73 +109,7 @@ def get_chart_data(db: Session = Depends(get_db)) -> dict[str, Any]:
         "ESCALATED": status_counts["ESCALATED"]
     }
 
-    # 3. Review Case Volume (Last 7 days daily breakdown)
-    now_dt = datetime.now(timezone.utc)
-    today = now_dt.date()
-    dates = []
-    alert_counts = []
-    flag_counts = []
-
-    # Get total DB counts
-    total_alerts_db = db.query(func.count(Alert.id)).scalar() or 2509
-    total_flags_db = db.query(func.count(TransactionRiskFlag.id)).scalar() or 10588
-
-    # Realistic daily distribution factors for 7 days (Mon-Sun)
-    daily_factors = [0.15, 0.18, 0.16, 0.19, 0.14, 0.09, 0.09]
-
-    for i in range(6, -1, -1):
-        d = today - timedelta(days=i)
-        d_str = d.strftime("%Y-%m-%d")
-        dates.append(d_str)
-
-        a_cnt = db.query(func.count(Alert.id)).filter(func.date(Alert.created_at) == d).scalar() or 0
-        f_cnt = db.query(func.count(TransactionRiskFlag.id)).filter(func.date(TransactionRiskFlag.triggered_at) == d).scalar() or 0
-
-        idx = (6 - i) % 7
-        # If DB data is concentrated on a single date, apply realistic daily variation
-        if a_cnt == 0 or a_cnt == total_alerts_db:
-            a_cnt = int(round(total_alerts_db * daily_factors[idx]))
-        if f_cnt == 0 or f_cnt == total_flags_db:
-            f_cnt = int(round(a_cnt * (1.1 + (idx % 3) * 0.15)))
-
-        alert_counts.append(a_cnt)
-        flag_counts.append(f_cnt)
-
-    total_period_volume = sum(alert_counts)
-
-    # 4. Behavior Pattern Trends (Last 6 Months Detected vs Flagged)
-    trend_labels = []
-    detected_trend = []
-    flagged_trend = []
-
-    # Realistic 6-month growth curve ratios
-    monthly_ratios = [0.65, 0.72, 0.81, 0.88, 0.94, 1.00]
-
-    for i in range(5, -1, -1):
-        dt = now_dt - timedelta(days=i*30)
-        year = dt.year
-        month = dt.month
-        label = dt.strftime("%b")
-
-        det = db.query(func.count(TransactionRiskFlag.id)).filter(
-            extract("year", TransactionRiskFlag.triggered_at) == year,
-            extract("month", TransactionRiskFlag.triggered_at) == month
-        ).scalar() or 0
-
-        flg = db.query(func.count(Alert.id)).filter(
-            extract("year", Alert.created_at) == year,
-            extract("month", Alert.created_at) == month
-        ).scalar() or 0
-
-        idx = (5 - i) % 6
-        if det == 0 or det == total_flags_db:
-            det = int(round(total_flags_db * monthly_ratios[idx]))
-        if flg == 0 or flg == total_alerts_db:
-            flg = int(round(total_alerts_db * monthly_ratios[idx]))
-
-        trend_labels.append(label)
-        detected_trend.append(det)
-        flagged_trend.append(flg)
+    today = datetime.now(timezone.utc).date()
 
     # 5. Model Performance Metrics from Alerts
     avg_conf_raw = db.query(func.avg(Alert.confidence)).scalar()
@@ -252,17 +174,6 @@ def get_chart_data(db: Session = Depends(get_db)) -> dict[str, Any]:
         },
         "open_alert_bands": open_bands,
         "alerts_by_rule": {"window_days": 30, "rules": alerts_by_rule},
-        "alert_volume": {
-            "dates": dates,
-            "counts": alert_counts,
-            "flags": flag_counts,
-            "total_period": total_period_volume
-        },
-        "behavior_trends": {
-            "labels": trend_labels,
-            "detected": detected_trend,
-            "flagged": flagged_trend
-        },
         "model_performance": model_performance
     }
 
@@ -337,144 +248,61 @@ def get_stats(customers: int = 5000, db: Session = Depends(get_db)) -> dict[str,
 @router.get("/patterns")
 def get_behavioral_patterns(db: Session = Depends(get_db)) -> dict[str, Any]:
     """
-    Return counts for all 6 canonical behavioral patterns.
-    Legacy rule ID → pattern mapping:
-      THRESHOLD_BREACH  ← R001 (Amount Threshold), R009 (Round Amount)
-      VELOCITY_SPIKE    ← R002 (Velocity Daily), R003 (Velocity Hourly)
-      GEOGRAPHIC_SHIFT  ← R004 (High Risk Country)
-      COUNTERPARTY_CHANGES ← R007 (New Counterparty)
-      COMPLEXITY_SHIFT  ← R008 (Weekend Activity), R010 (Rapid Succession)
-      INACTIVE_REACTIVATION ← derived from customers with gap + recent burst
+    Activity for the six behavioural patterns over the last 30 days, counted
+    from the rules that fired on each alert (see services/pattern_service.py).
     """
-    thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
-
-    # Use app.alerts for real pattern hit counts (TransactionRiskFlag may be empty)
-    total_alerts_30d = (
-        db.query(func.count(Alert.id))
-        .filter(Alert.created_at >= thirty_days_ago)
-        .scalar() or 0
-    )
-
-    # Distribute alerts across pattern types using alert_type field
-    behavioral_alerts = (
-        db.query(func.count(Alert.id))
-        .filter(Alert.created_at >= thirty_days_ago, Alert.alert_type == "BEHAVIORAL_ANOMALY")
-        .scalar() or 0
-    )
-    large_amount_alerts = (
-        db.query(func.count(Alert.id))
-        .filter(Alert.created_at >= thirty_days_ago, Alert.alert_type == "LARGE_AMOUNT")
-        .scalar() or 0
-    )
-    high_risk_alerts = (
-        db.query(func.count(Alert.id))
-        .filter(Alert.created_at >= thirty_days_ago, Alert.alert_type == "HIGH_RISK_CUSTOMER")
-        .scalar() or 0
-    )
-
-    # Map alert types to canonical patterns
-    threshold_breach = large_amount_alerts + max(1, high_risk_alerts // 4)
-    velocity_spike = max(1, behavioral_alerts // 3)
-    geographic_shift = max(1, behavioral_alerts // 4)
-    counterparty_changes = max(1, behavioral_alerts // 4)
-    complexity_shift = max(1, (behavioral_alerts - behavioral_alerts // 3 - behavioral_alerts // 4 - behavioral_alerts // 4))
-
-    # INACTIVE_REACTIVATION: customers with recent activity but none in prior 30-90 day window
-    try:
-        active_recent = db.execute(
-            text(
-                """
-                SELECT COUNT(DISTINCT t.customer_id) FROM app.transactions t
-                WHERE t.transaction_date >= NOW() - INTERVAL '30 days'
-                  AND t.customer_id NOT IN (
-                      SELECT DISTINCT customer_id FROM app.transactions
-                      WHERE transaction_date >= NOW() - INTERVAL '90 days'
-                        AND transaction_date < NOW() - INTERVAL '30 days'
-                  )
-                """
-            )
-        ).scalar() or 0
-    except Exception:
-        active_recent = max(1, high_risk_alerts // 4)
-
-    total_flagged = total_alerts_30d
-
+    activity = pattern_service.pattern_activity(db, days=30)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=30)
     total_txns_30d = (
-        db.query(func.count(Transaction.id))
-        .filter(Transaction.transaction_date >= thirty_days_ago)
-        .scalar() or 0
+        db.query(func.count(Transaction.id)).filter(Transaction.transaction_date >= cutoff).scalar() or 0
     )
-
     return {
-        "window_days": 30,
+        "window_days": activity["window_days"],
         "total_transactions": total_txns_30d,
-        "total_pattern_hits": total_flagged,
-        "patterns": [
+        "total_pattern_hits": activity["matched_alerts"],
+        "customers_affected": activity["matched_customers"],
+        "patterns": activity["patterns"],
+    }
+
+
+@router.get("/patterns/customers")
+def get_pattern_customers(
+    pattern: str | None = None,
+    q: str | None = None,
+    page: int = 1,
+    page_size: int = 10,
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    """Which customers triggered which pattern, most open alerts first."""
+    rows = pattern_service.pattern_activity(db, days=30)["customer_rows"]
+    if pattern:
+        rows = [r for r in rows if r["pattern"] == pattern]
+
+    names = dict(
+        db.query(Customer.id, Customer.full_name).filter(Customer.id.in_({r["customer_id"] for r in rows})).all()
+    ) if rows else {}
+    if q and q.strip():
+        needle = q.strip().lower()
+        rows = [r for r in rows if needle in (names.get(r["customer_id"]) or "").lower()]
+
+    rows.sort(key=lambda r: (-r["open_alerts"], -r["max_risk_score"], names.get(r["customer_id"]) or "", r["pattern"]))
+    page, page_size = max(1, page), min(max(1, page_size), 100)
+    start = (page - 1) * page_size
+    return {
+        "total": len(rows),
+        "page": page,
+        "page_size": page_size,
+        "items": [
             {
-                "id": "THRESHOLD_BREACH",
-                "legacy_name": "TRANSACTION_SIZE",
-                "label": "Threshold Breach",
-                "description": "Monitors transaction amounts to detect unusually large or small sizes.",
-                "icon": "fa-money-bill-wave",
-                "color": "danger",
-                "rule_ids": ["R001", "R009"],
-                "hit_count": threshold_breach,
-                "severity": "HIGH",
-            },
-            {
-                "id": "VELOCITY_SPIKE",
-                "legacy_name": "FREQUENCY",
-                "label": "Velocity Spike",
-                "description": "Monitors transactions per day to detect sudden surges in volume.",
-                "icon": "fa-tachometer-alt",
-                "color": "warning",
-                "rule_ids": ["R002", "R003"],
-                "hit_count": velocity_spike,
-                "severity": "MEDIUM",
-            },
-            {
-                "id": "GEOGRAPHIC_SHIFT",
-                "legacy_name": "GEOGRAPHY",
-                "label": "Geographic Shift",
-                "description": "Monitors transaction locations and flags activity in new or unusually diverse countries.",
-                "icon": "fa-globe",
-                "color": "info",
-                "rule_ids": ["R004"],
-                "hit_count": geographic_shift,
-                "severity": "HIGH",
-            },
-            {
-                "id": "COUNTERPARTY_CHANGES",
-                "legacy_name": "COUNTERPARTY",
-                "label": "Counterparty Changes",
-                "description": "Monitors recipient types and flags unexpected shifts in the customer's typical network.",
-                "icon": "fa-network-wired",
-                "color": "primary",
-                "rule_ids": ["R007"],
-                "hit_count": counterparty_changes,
-                "severity": "MEDIUM",
-            },
-            {
-                "id": "COMPLEXITY_SHIFT",
-                "legacy_name": "COMPLEXITY_SHIFT",
-                "label": "Complexity Shift",
-                "description": "Analyzes metadata richness to detect when routine transactions suddenly become complex — potential layering.",
-                "icon": "fa-project-diagram",
-                "color": "secondary",
-                "rule_ids": ["R008", "R010"],
-                "hit_count": complexity_shift,
-                "severity": "MEDIUM",
-            },
-            {
-                "id": "INACTIVE_REACTIVATION",
-                "legacy_name": "INACTIVE_REACTIVATION",
-                "label": "Inactive Reactivation",
-                "description": "Analyzes transaction gaps to detect periods of dormancy followed by a sudden burst of activity.",
-                "icon": "fa-redo",
-                "color": "success",
-                "rule_ids": [],
-                "hit_count": int(active_recent),
-                "severity": "HIGH",
-            },
+                "customer_id": str(r["customer_id"]),
+                "customer_name": names.get(r["customer_id"]) or "Unknown customer",
+                "pattern": r["pattern"],
+                "pattern_label": pattern_service.PATTERN_LABELS[r["pattern"]],
+                "alerts": r["alerts"],
+                "open_alerts": r["open_alerts"],
+                "max_risk_score": r["max_risk_score"],
+                "last_triggered_at": r["last_triggered_at"].isoformat(),
+            }
+            for r in rows[start:start + page_size]
         ],
     }

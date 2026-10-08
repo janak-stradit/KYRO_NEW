@@ -1,1204 +1,245 @@
 /**
- * KYRO Behavioral Patterns - AML Pattern Detection Analytics
- * 6 canonical AML pattern detectors with live counts
+ * KYRO Behavior Patterns - which behavioural patterns are firing and for whom.
+ * Every number is counted from the rules that fired on alerts in the last
+ * 30 days; nothing on this page is sample data.
  */
 
 const Patterns = {
-    patternsData: [],
-    customerPatternData: [],
-    
-    // Pagination settings
-    pagination: {
-        currentPage: 1,
-        pageSize: 10,
-        pageSizeOptions: [10, 25, 50, 100]
+    patterns: [],
+    rows: [],
+    total: 0,
+    page: 1,
+    pageSize: 10,
+    filters: { pattern: '', q: '' },
+    customerCodes: {},   // customer UUID -> display code (CUST-001), as on Review Cases
+
+    async init() {
+        this.page = 1;
+        this.filters = { pattern: '', q: '' };
+        this.renderLayout();
+        this.setupEventListeners();
+        await this.loadCustomerCodes();
+        await Promise.all([this.loadSummary(), this.loadRows()]);
     },
-    
-    charts: {
-        transactionSize: null,
-        transactionFrequency: null,
-        patternTypeDonut: null,
-        patternTypeArea: null
-    },
-    currentFilters: {
-        customer: 'all',
-        search: '',
-        patternType: 'all'
-    },
-    
-    async init(params = {}) {
-        console.log("Initializing Behavioral Patterns page...");
-        await this.fetchRealCustomersAndGeneratePatterns();
-        this.loadDashboard();
-    },
-    
-    async fetchRealCustomersAndGeneratePatterns() {
-        try {
-            // Fetch real customers from API (max page_size: 10000)
-            const response = await API.get("/customers", { page_size: 10000 });
-            const customers = response.items || [];
-            
-            console.log(`✅ Fetched ${customers.length} real customers from API`);
-            
-            if (customers.length > 0) {
-                this.allCustomersList = customers.map((cust, idx) => {
-                    const code = `CUST-${String(idx + 1).padStart(3, '0')}`;
-                    const name = cust.full_name || `Customer ${idx + 1}`;
-                    return {
-                        id: code,
-                        name: name,
-                        displayName: `${name} (${code})`,
-                        uuid: cust.id,
-                        kycStatus: cust.kyc_status || 'VERIFIED'
-                    };
-                });
-            } else {
-                this.generateFallbackCustomers();
-            }
-        } catch (error) {
-            console.error("❌ Error fetching customers:", error);
-            this.generateFallbackCustomers();
-        }
-        
-        // Now generate pattern data using full customer list
-        this.generateCustomerPatternData();
-    },
-    
-    generateFallbackCustomers() {
-        const names = [
-            'Sarah Chen', 'Mike Rodriguez', 'Priya Patel', 'James Wilson', 'Alex Morgan',
-            'David Kim', 'Emma Watson', 'Robert Taylor', 'Linda Garcia', 'Michael Brown',
-            'Jennifer Martinez', 'William Davis', 'Elizabeth Miller', 'Christopher Wilson',
-            'Jessica Anderson', 'Thomas Thomas', 'Karen Jackson', 'Daniel White', 'Nancy Harris'
-        ];
-        this.allCustomersList = [];
-        for (let i = 1; i <= 100; i++) {
-            const code = `CUST-${String(i).padStart(3, '0')}`;
-            const name = `${names[i % names.length]} ${Math.floor(i / names.length) + 1}`;
-            this.allCustomersList.push({
-                id: code,
-                name: name,
-                displayName: `${name} (${code})`,
-                kycStatus: i % 5 === 0 ? 'UNDER_REVIEW' : 'VERIFIED'
-            });
-        }
-        console.log(`⚠️ Using fallback: ${this.allCustomersList.length} customers`);
-    },
-    
-    generateCustomerPatternData() {
-        const patternTypes = [
-            { name: 'Complexity Shift', value: 'complexity_shift', color: '#8b5cf6' },
-            { name: 'Counterparty Changes', value: 'counterparty_changes', color: '#22c55e' },
-            { name: 'Geographic Shift', value: 'geographic_shift', color: '#0ea5e9' },
-            { name: 'Inactive Reactivation', value: 'inactive_reactivation', color: '#eab308' },
-            { name: 'Threshold Breach', value: 'threshold_breach', color: '#ef4444' },
-            { name: 'Velocity Spike', value: 'velocity_spike', color: '#FF8D28' }
-        ];
-        
-        this.customerPatternData = [];
-        const customersToUse = this.allCustomersList || [];
-        
-        customersToUse.forEach((cust, idx) => {
-            // Assign patterns to customers
-            const pattern = patternTypes[idx % patternTypes.length];
-            this.customerPatternData.push({
-                customerId: cust.id,
-                customerName: cust.name,
-                displayName: cust.displayName,
-                patternType: pattern.value,
-                patternName: pattern.name,
-                patternColor: pattern.color,
-                lastKyc: cust.kycStatus || 'VERIFIED',
-                baselineValue: (10000 + (idx * 137) % 45000).toFixed(2),
-                stdDeviation: (200 + (idx * 43) % 1200).toFixed(2),
-                lastUpdated: '7/7/2026'
-            });
-            
-            // Add second pattern for subset of customers
-            if (idx % 3 === 0) {
-                const secPattern = patternTypes[(idx + 2) % patternTypes.length];
-                this.customerPatternData.push({
-                    customerId: cust.id,
-                    customerName: cust.name,
-                    displayName: cust.displayName,
-                    patternType: secPattern.value,
-                    patternName: secPattern.name,
-                    patternColor: secPattern.color,
-                    lastKyc: cust.kycStatus || 'VERIFIED',
-                    baselineValue: (15000 + (idx * 211) % 50000).toFixed(2),
-                    stdDeviation: (300 + (idx * 67) % 1500).toFixed(2),
-                    lastUpdated: '7/7/2026'
-                });
-            }
-        });
-        
-        console.log(`Generated ${this.customerPatternData.length} pattern records for ${customersToUse.length} customers`);
-    },
-    
-    async loadDashboard() {
-        // Build customer dropdown options with ALL real database customers (Full Name + ID)
-        const customerList = this.allCustomersList || [];
-        const customerOptions = customerList.map(cust => 
-            `<option value="${cust.id}">${cust.displayName}</option>`
-        ).join('');
-        
-        const html = `
+
+    renderLayout() {
+        $("#mainContent").html(`
             <div class="kyro-page">
-                <!-- Header -->
                 <div class="kyro-page-head">
                     <div>
                         <span class="kyro-kicker">Behavior Analytics</span>
                         <h1 class="kyro-page-title">Behavior Patterns</h1>
-                        <p class="kyro-page-sub">Customer behavioral baselines and anomaly detection analytics.</p>
-                        <div class="mt-3">
-                            <span class="badge bg-success d-inline-flex align-items-center" style="font-size: 12px;">
-                                <i class="fas fa-circle me-1" style="font-size: 6px;"></i>
-                                Real-Time pattern monitoring active
-                            </span>
-                        </div>
+                        <p class="kyro-page-sub">Which behavioural patterns fired in the last 30 days, and which customers triggered them.</p>
                     </div>
                     <div class="kyro-page-actions">
-                        <button class="btn btn-primary px-4" id="refreshPatternsBtn"><i class="fas fa-rotate-right me-2"></i>Refresh</button>
-                    </div>
-                </div>
-                
-                <!-- Stats Cards -->
-                <div class="row g-3 mb-4">
-                    <div class="col-md-3">
-                        <div class="card border-0 shadow-sm">
-                            <div class="card-body p-4 d-flex align-items-center">
-                                <div class="me-3">
-                                    <div class="icon-wrapper" style="width: 50px; height: 50px; background: rgba(59, 130, 246, 0.1); border-radius: 10px; display: flex; align-items: center; justify-content: center;">
-                                        <i class="fas fa-project-diagram" style="font-size: 24px; color: #3b82f6;"></i>
-                                    </div>
-                                </div>
-                                <div class="flex-grow-1">
-                                    <small class="text-muted d-block mb-1" style="font-size: 12px;">Pattern Hits (30 days)</small>
-                                    <h2 class="mb-0" style="font-weight: 700; font-size: 2rem;" id="totalPatternsCount">&ndash;</h2>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="card border-0 shadow-sm">
-                            <div class="card-body p-4 d-flex align-items-center">
-                                <div class="me-3">
-                                    <div class="icon-wrapper" style="width: 50px; height: 50px; background: rgba(255, 141, 40, 0.1); border-radius: 10px; display: flex; align-items: center; justify-content: center;">
-                                        <i class="fas fa-users" style="font-size: 24px; color: #FF8D28;"></i>
-                                    </div>
-                                </div>
-                                <div class="flex-grow-1">
-                                    <small class="text-muted d-block mb-1" style="font-size: 12px;">Customers</small>
-                                    <h2 class="mb-0" style="font-weight: 700; font-size: 2rem;" id="customersCount">&ndash;</h2>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="card border-0 shadow-sm">
-                            <div class="card-body p-4 d-flex align-items-center">
-                                <div class="me-3">
-                                    <div class="icon-wrapper" style="width: 50px; height: 50px; background: rgba(34, 197, 94, 0.1); border-radius: 10px; display: flex; align-items: center; justify-content: center;">
-                                        <i class="fas fa-chart-bar" style="font-size: 24px; color: #22c55e;"></i>
-                                    </div>
-                                </div>
-                                <div class="flex-grow-1">
-                                    <small class="text-muted d-block mb-1" style="font-size: 12px;">Pattern Types</small>
-                                    <h2 class="mb-0" style="font-weight: 700; font-size: 2rem;" id="patternTypesCount">6</h2>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="card border-0 shadow-sm">
-                            <div class="card-body p-4 d-flex align-items-center">
-                                <div class="me-3">
-                                    <div class="icon-wrapper" style="width: 50px; height: 50px; background: rgba(239, 68, 68, 0.1); border-radius: 10px; display: flex; align-items: center; justify-content: center;">
-                                        <i class="fas fa-exclamation-triangle" style="font-size: 24px; color: #ef4444;"></i>
-                                    </div>
-                                </div>
-                                <div class="flex-grow-1">
-                                    <small class="text-muted d-block mb-1" style="font-size: 12px;">Transactions Analysed (30 days)</small>
-                                    <h2 class="mb-0" style="font-weight: 700; font-size: 2rem;" id="anomaliesCount">&ndash;</h2>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Charts Section at Top -->
-                <div class="row g-3 mb-4">
-                    <div class="col-md-6">
-                        <div class="card border-0 shadow-sm" style="height: 100%;">
-                            <div class="card-body p-4">
-                                <div class="d-flex align-items-center mb-3">
-                                    <i class="fas fa-chart-area me-2" style="color: #8b5cf6; font-size: 18px;"></i>
-                                    <h6 class="mb-0" style="font-weight: 600;">Transaction Size Baseline</h6><span class="kp-sample" title="Illustrative values: per-customer baselines are not calculated by the backend yet">Sample data</span>
-                                </div>
-                                <div style="height: 280px;">
-                                    <canvas id="transactionSizeChart"></canvas>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="col-md-6">
-                        <div class="card border-0 shadow-sm" style="height: 100%;">
-                            <div class="card-body p-4">
-                                <div class="d-flex align-items-center mb-3">
-                                    <i class="fas fa-chart-line me-2" style="color: #22c55e; font-size: 18px;"></i>
-                                    <h6 class="mb-0" style="font-weight: 600;">Transaction Frequency Baselines</h6><span class="kp-sample" title="Illustrative values: per-customer baselines are not calculated by the backend yet">Sample data</span>
-                                </div>
-                                <div style="height: 280px;">
-                                    <canvas id="transactionFrequencyChart"></canvas>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Pattern Type Distribution Charts -->
-                <div class="row g-3 mb-4">
-                    <div class="col-md-6">
-                        <div class="card border-0 shadow-sm" style="height: 100%;">
-                            <div class="card-body p-4">
-                                <div class="d-flex align-items-center mb-3">
-                                    <i class="fas fa-chart-pie me-2" style="color: #22c55e; font-size: 18px;"></i>
-                                    <h6 class="mb-0" style="font-weight: 600;">Pattern Type Distribution</h6>
-                                </div>
-                                <div style="height: 180px; display: flex; align-items: center; justify-content: center;">
-                                    <canvas id="patternTypeDonutChart" style="max-height: 180px;"></canvas>
-                                </div>
-                                <div class="mt-3 row g-2" style="font-size: 12px;" id="patternDonutLegend">
-                                    <div class="col-6">
-                                        <div class="d-flex align-items-center mb-2">
-                                            <i class="fas fa-circle me-2" style="font-size: 8px; color: #FF8D28;"></i>
-                                            <span class="text-muted">Counterparty Changes</span>
-                                            <strong class="ms-auto">&ndash;</strong>
-                                        </div>
-                                    </div>
-                                    <div class="col-6">
-                                        <div class="d-flex align-items-center mb-2">
-                                            <i class="fas fa-circle me-2" style="font-size: 8px; color: #1f2937;"></i>
-                                            <span class="text-muted">Geographic Shift</span>
-                                            <strong class="ms-auto">&ndash;</strong>
-                                        </div>
-                                    </div>
-                                    <div class="col-6">
-                                        <div class="d-flex align-items-center mb-2">
-                                            <i class="fas fa-circle me-2" style="font-size: 8px; color: #9ca3af;"></i>
-                                            <span class="text-muted">Threshold Breach</span>
-                                            <strong class="ms-auto">&ndash;</strong>
-                                        </div>
-                                    </div>
-                                    <div class="col-6">
-                                        <div class="d-flex align-items-center mb-2">
-                                            <i class="fas fa-circle me-2" style="font-size: 8px; color: #6b7280;"></i>
-                                            <span class="text-muted">Velocity Spike</span>
-                                            <strong class="ms-auto">&ndash;</strong>
-                                        </div>
-                                    </div>
-                                    <div class="col-6">
-                                        <div class="d-flex align-items-center">
-                                            <i class="fas fa-circle me-2" style="font-size: 8px; color: #d1d5db;"></i>
-                                            <span class="text-muted">Complexity Shift</span>
-                                            <strong class="ms-auto">&ndash;</strong>
-                                        </div>
-                                    </div>
-                                    <div class="col-6">
-                                        <div class="d-flex align-items-center">
-                                            <i class="fas fa-circle me-2" style="font-size: 8px; color: #374151;"></i>
-                                            <span class="text-muted">Inactive Reactivation</span>
-                                            <strong class="ms-auto">&ndash;</strong>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="col-md-6">
-                        <div class="card border-0 shadow-sm" style="height: 100%;">
-                            <div class="card-body p-4">
-                                <div class="d-flex align-items-center justify-content-between mb-3">
-                                    <div class="d-flex align-items-center">
-                                        <i class="fas fa-chart-area me-2" style="color: #FF8D28; font-size: 18px;"></i>
-                                        <h6 class="mb-0" style="font-weight: 600;">Detected vs. Flagged Patterns</h6>
-                                    </div>
-                                    <span class="text-muted" style="font-size: 12px;">By month</span>
-                                </div>
-                                <div style="height: 280px;">
-                                    <canvas id="patternTypeAreaChart"></canvas>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Pattern Type Cards Grid -->
-                <div class="row g-3 mb-4">
-                    <div class="col-md-4">
-                        <div class="card border-0 shadow-sm pattern-card" data-pattern="complexity_shift">
-                            <div class="card-body p-4">
-                                <div class="d-flex align-items-start mb-3">
-                                    <div class="icon-wrapper me-3" style="width: 40px; height: 40px; background: rgba(139, 92, 246, 0.1); border-radius: 8px; display: flex; align-items: center; justify-content: center;">
-                                        <i class="fas fa-exchange-alt" style="font-size: 18px; color: #8b5cf6;"></i>
-                                    </div>
-                                    <div class="flex-grow-1">
-                                        <h6 class="mb-1" style="font-weight: 600; font-size: 14px;">Complexity Pattern</h6>
-                                        <div class="d-flex align-items-center">
-                                            <i class="fas fa-circle me-2" style="font-size: 8px; color: #8b5cf6;"></i>
-                                            <span class="text-muted" style="font-size: 12px;">Complexity shift</span>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="text-end">
-                                    <h3 class="mb-0" style="font-weight: 700; color: #8b5cf6;" id="complexityCount">&ndash;</h3>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="col-md-4">
-                        <div class="card border-0 shadow-sm pattern-card" data-pattern="counterparty_changes">
-                            <div class="card-body p-4">
-                                <div class="d-flex align-items-start mb-3">
-                                    <div class="icon-wrapper me-3" style="width: 40px; height: 40px; background: rgba(34, 197, 94, 0.1); border-radius: 8px; display: flex; align-items: center; justify-content: center;">
-                                        <i class="fas fa-user-friends" style="font-size: 18px; color: #22c55e;"></i>
-                                    </div>
-                                    <div class="flex-grow-1">
-                                        <h6 class="mb-1" style="font-weight: 600; font-size: 14px;">Counterparty Pattern</h6>
-                                        <div class="d-flex align-items-center">
-                                            <i class="fas fa-circle me-2" style="font-size: 8px; color: #22c55e;"></i>
-                                            <span class="text-muted" style="font-size: 12px;">Counterparty changes</span>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="text-end">
-                                    <h3 class="mb-0" style="font-weight: 700; color: #22c55e;" id="counterpartyCount">&ndash;</h3>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="col-md-4">
-                        <div class="card border-0 shadow-sm pattern-card" data-pattern="geographic_shift">
-                            <div class="card-body p-4">
-                                <div class="d-flex align-items-start mb-3">
-                                    <div class="icon-wrapper me-3" style="width: 40px; height: 40px; background: rgba(14, 165, 233, 0.1); border-radius: 8px; display: flex; align-items: center; justify-content: center;">
-                                        <i class="fas fa-globe-americas" style="font-size: 18px; color: #0ea5e9;"></i>
-                                    </div>
-                                    <div class="flex-grow-1">
-                                        <h6 class="mb-1" style="font-weight: 600; font-size: 14px;">Geographic Pattern</h6>
-                                        <div class="d-flex align-items-center">
-                                            <i class="fas fa-circle me-2" style="font-size: 8px; color: #0ea5e9;"></i>
-                                            <span class="text-muted" style="font-size: 12px;">Geographic shift</span>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="text-end">
-                                    <h3 class="mb-0" style="font-weight: 700; color: #0ea5e9;" id="geographicCount">&ndash;</h3>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="col-md-4">
-                        <div class="card border-0 shadow-sm pattern-card" data-pattern="inactive_reactivation">
-                            <div class="card-body p-4">
-                                <div class="d-flex align-items-start mb-3">
-                                    <div class="icon-wrapper me-3" style="width: 40px; height: 40px; background: rgba(234, 179, 8, 0.1); border-radius: 8px; display: flex; align-items-center; justify-content: center;">
-                                        <i class="fas fa-undo-alt" style="font-size: 18px; color: #eab308;"></i>
-                                    </div>
-                                    <div class="flex-grow-1">
-                                        <h6 class="mb-1" style="font-weight: 600; font-size: 14px;">Reactivation Pattern</h6>
-                                        <div class="d-flex align-items-center">
-                                            <i class="fas fa-circle me-2" style="font-size: 8px; color: #eab308;"></i>
-                                            <span class="text-muted" style="font-size: 12px;">Inactive reactivation</span>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="text-end">
-                                    <h3 class="mb-0" style="font-weight: 700; color: #eab308;" id="inactiveCount">&ndash;</h3>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="col-md-4">
-                        <div class="card border-0 shadow-sm pattern-card" data-pattern="threshold_breach">
-                            <div class="card-body p-4">
-                                <div class="d-flex align-items-start mb-3">
-                                    <div class="icon-wrapper me-3" style="width: 40px; height: 40px; background: rgba(239, 68, 68, 0.1); border-radius: 8px; display: flex; align-items-center; justify-content: center;">
-                                        <i class="fas fa-exclamation-triangle" style="font-size: 18px; color: #ef4444;"></i>
-                                    </div>
-                                    <div class="flex-grow-1">
-                                        <h6 class="mb-1" style="font-weight: 600; font-size: 14px;">Threshold Pattern</h6>
-                                        <div class="d-flex align-items-center">
-                                            <i class="fas fa-circle me-2" style="font-size: 8px; color: #ef4444;"></i>
-                                            <span class="text-muted" style="font-size: 12px;">Threshold breach</span>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="text-end">
-                                    <h3 class="mb-0" style="font-weight: 700; color: #ef4444;" id="thresholdCount">&ndash;</h3>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="col-md-4">
-                        <div class="card border-0 shadow-sm pattern-card" data-pattern="velocity_spike">
-                            <div class="card-body p-4">
-                                <div class="d-flex align-items-start mb-3">
-                                    <div class="icon-wrapper me-3" style="width: 40px; height: 40px; background: rgba(255, 141, 40, 0.1); border-radius: 8px; display: flex; align-items: center; justify-content: center;">
-                                        <i class="fas fa-bolt" style="font-size: 18px; color: #FF8D28;"></i>
-                                    </div>
-                                    <div class="flex-grow-1">
-                                        <h6 class="mb-1" style="font-weight: 600; font-size: 14px;">Velocity Pattern</h6>
-                                        <div class="d-flex align-items-center">
-                                            <i class="fas fa-circle me-2" style="font-size: 8px; color: #FF8D28;"></i>
-                                            <span class="text-muted" style="font-size: 12px;">Velocity spike</span>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="text-end">
-                                    <h3 class="mb-0" style="font-weight: 700; color: #FF8D28;" id="velocityCount">&ndash;</h3>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Customer Behavioral Patterns Table -->
-                <div class="card rc-table-card mt-4">
-                    <div class="card-body p-0">
-                        <div class="rc-toolbar">
-                            <div class="rc-toolbar__title">
-                                <h2>Customer Behavioral Patterns <span class="kp-sample" title="Illustrative values: per-customer baselines are not calculated by the backend yet">Sample data</span></h2>
-                                <small class="text-muted" id="patternsCount">Loading patterns...</small>
-                            </div>
-                            <div class="rc-toolbar__controls">
-                                <div class="rc-search">
-                                    <i class="fas fa-magnifying-glass" aria-hidden="true"></i>
-                                    <input type="search" class="form-control" id="patternSearch" placeholder="Search customer name or ID" aria-label="Search customers" autocomplete="off">
-                                </div>
-                                <select class="form-select" id="filterPatternType" aria-label="Filter by pattern type">
-                                    <option value="all">All pattern types</option>
-                                    <option value="complexity_shift">Complexity shift</option>
-                                    <option value="counterparty_changes">Counterparty changes</option>
-                                    <option value="geographic_shift">Geographic shift</option>
-                                    <option value="inactive_reactivation">Inactive reactivation</option>
-                                    <option value="threshold_breach">Threshold breach</option>
-                                    <option value="velocity_spike">Velocity spike</option>
-                                </select>
-                                <button type="button" class="btn rc-clear d-none" id="clearFiltersBtn">
-                                    <i class="fas fa-xmark me-1"></i>Clear
-                                </button>
-                            </div>
-                        </div>
-
-                        <div class="table-responsive">
-                            <table class="table table-hover align-middle mb-0" style="font-size: 13px;">
-                                <thead style="background: #f8f9fa; border-bottom: 2px solid #dee2e6;">
-                                    <tr>
-                                        <th class="px-3 py-3 text-uppercase" style="font-size: 11px; font-weight: 600; color: #6c757d;">CUSTOMER ID</th>
-                                        <th class="px-3 py-3 text-uppercase" style="font-size: 11px; font-weight: 600; color: #6c757d;">PATTERN TYPE</th>
-                                        <th class="px-3 py-3 text-uppercase" style="font-size: 11px; font-weight: 600; color: #6c757d;">LAST KYC</th>
-                                        <th class="px-3 py-3 text-uppercase" style="font-size: 11px; font-weight: 600; color: #6c757d;">BASELINE VALUE</th>
-                                        <th class="px-3 py-3 text-uppercase" style="font-size: 11px; font-weight: 600; color: #6c757d;">STD DEVIATION</th>
-                                        <th class="px-3 py-3 text-uppercase" style="font-size: 11px; font-weight: 600; color: #6c757d;">LAST UPDATED</th>
-                                        <th class="px-3 py-3 text-uppercase" style="font-size: 11px; font-weight: 600; color: #6c757d;">ACTIONS</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="patternsTableBody">
-                                    <tr>
-                                        <td colspan="7" class="text-center py-5">
-                                            <div class="spinner-border text-primary" role="status">
-                                                <span class="visually-hidden">Loading...</span>
-                                            </div>
-                                            <p class="mt-2 text-muted">Loading patterns...</p>
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                        
-                        <!-- Pagination Controls -->
-                        <div class="d-flex justify-content-between align-items-center p-3" style="border-top: 1px solid #e5e7eb;">
-                            <div class="d-flex align-items-center gap-2">
-                                <span class="text-muted" style="font-size: 13px;">Rows per page:</span>
-                                <select class="form-select form-select-sm" id="pageSizeSelect" style="width: 80px; font-size: 13px;">
-                                    <option value="10">10</option>
-                                    <option value="25">25</option>
-                                    <option value="50">50</option>
-                                    <option value="100">100</option>
-                                </select>
-                                <span class="text-muted ms-3" id="paginationInfo" style="font-size: 13px;">1-10 of 30</span>
-                            </div>
-                            <nav aria-label="Table pagination">
-                                <ul class="pagination pagination-sm mb-0" id="paginationControls">
-                                    <li class="page-item disabled">
-                                        <a class="page-link" href="#" id="prevPage">
-                                            <i class="fas fa-chevron-left"></i>
-                                        </a>
-                                    </li>
-                                    <li class="page-item active"><a class="page-link" href="#">1</a></li>
-                                    <li class="page-item">
-                                        <a class="page-link" href="#" id="nextPage">
-                                            <i class="fas fa-chevron-right"></i>
-                                        </a>
-                                    </li>
-                                </ul>
-                            </nav>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-        
-        $("#mainContent").html(html);
-        this.renderTable();
-        this.initCharts();
-        this.updateStats();
-        this.setupEventListeners();
-    },
-    
-    async updateStats() {
-        // Pattern hits and transactions come from the backend pattern detector
-        const [patternsRes, kpisRes, chartsRes] = await Promise.allSettled([
-            API.get("/dashboard/patterns"),
-            API.get(API.endpoints.kpis),
-            API.get("/dashboard/charts")
-        ]);
-        const summary = patternsRes.status === "fulfilled" ? patternsRes.value : null;
-        const kpis = kpisRes.status === "fulfilled" ? kpisRes.value : null;
-        const charts = chartsRes.status === "fulfilled" ? chartsRes.value : null;
-
-        $("#customersCount").text(kpis ? Number(kpis.total_customers || 0).toLocaleString() : "–");
-        $("#patternTypesCount").text("6");
-        $("#totalPatternsCount").text(summary ? Number(summary.total_pattern_hits || 0).toLocaleString() : "–");
-        $("#anomaliesCount").text(summary ? Number(summary.total_transactions || 0).toLocaleString() : "–");
-
-        if (summary && Array.isArray(summary.patterns)) {
-            this.applyPatternSummary(summary.patterns);
-        }
-        if (charts && charts.behavior_trends) {
-            this.applyTrend(charts.behavior_trends);
-        }
-    },
-
-    applyPatternSummary(patterns) {
-        const cardIds = {
-            COMPLEXITY_SHIFT: "#complexityCount",
-            COUNTERPARTY_CHANGES: "#counterpartyCount",
-            GEOGRAPHIC_SHIFT: "#geographicCount",
-            INACTIVE_REACTIVATION: "#inactiveCount",
-            THRESHOLD_BREACH: "#thresholdCount",
-            VELOCITY_SPIKE: "#velocityCount"
-        };
-        patterns.forEach(p => {
-            if (cardIds[p.id]) $(cardIds[p.id]).text(Number(p.hit_count || 0).toLocaleString());
-        });
-
-        const colors = ["#FF8D28", "#1f2937", "#9ca3af", "#6b7280", "#d1d5db", "#374151"];
-        const sorted = [...patterns].sort((a, b) => (b.hit_count || 0) - (a.hit_count || 0));
-        const total = sorted.reduce((sum, p) => sum + (p.hit_count || 0), 0);
-
-        if (this.charts.patternTypeDonut) {
-            const chart = this.charts.patternTypeDonut;
-            chart.data.labels = sorted.map(p => p.label);
-            chart.data.datasets[0].data = sorted.map(p => p.hit_count || 0);
-            chart.data.datasets[0].backgroundColor = colors;
-            chart.options.plugins.tooltip.callbacks.label = (ctx) => {
-                const pct = total ? ((ctx.parsed / total) * 100).toFixed(1) : "0.0";
-                return `${ctx.label}: ${ctx.parsed.toLocaleString()} (${pct}%)`;
-            };
-            chart.update();
-        }
-        $("#patternDonutLegend").html(sorted.map((p, i) => `
-            <div class="col-6">
-                <div class="d-flex align-items-center mb-2">
-                    <i class="fas fa-circle me-2" style="font-size: 8px; color: ${colors[i]};"></i>
-                    <span class="text-muted">${escapeHtml(p.label)}</span>
-                    <strong class="ms-auto">${total ? ((p.hit_count || 0) / total * 100).toFixed(1) : "0.0"}%</strong>
-                </div>
-            </div>
-        `).join(""));
-    },
-
-    applyTrend(trend) {
-        const chart = this.charts.patternTypeArea;
-        if (!chart || !trend.labels || !trend.labels.length) return;
-        chart.data.labels = trend.labels;
-        chart.data.datasets = [
-            {
-                label: "Detected",
-                data: trend.detected || [],
-                borderColor: "#1f2937",
-                backgroundColor: "rgba(31, 41, 55, 0.06)",
-                borderWidth: 3, fill: true, tension: 0.4,
-                pointRadius: 4, pointBackgroundColor: "#1f2937", pointBorderColor: "#fff", pointBorderWidth: 2
-            },
-            {
-                label: "Flagged",
-                data: trend.flagged || [],
-                borderColor: "#FF8D28",
-                backgroundColor: "rgba(255, 141, 40, 0.15)",
-                borderWidth: 3, fill: true, tension: 0.4,
-                pointRadius: 4, pointBackgroundColor: "#FF8D28", pointBorderColor: "#fff", pointBorderWidth: 2
-            }
-        ];
-        chart.options.plugins.legend = { display: true, position: "bottom", labels: { usePointStyle: true, boxWidth: 8 } };
-        chart.options.scales.y.max = undefined;
-        chart.options.scales.y.ticks.callback = (value) => Number(value).toLocaleString();
-        chart.update();
-    },
-
-    renderTable() {
-        let filteredData = this.customerPatternData;
-        
-        // Apply filters
-        const q = (this.currentFilters.search || '').trim().toLowerCase();
-        if (q) {
-            filteredData = filteredData.filter(d => `${d.customerName || ''} ${d.customerId}`.toLowerCase().includes(q));
-        }
-        if (this.currentFilters.patternType !== 'all') {
-            filteredData = filteredData.filter(d => d.patternType === this.currentFilters.patternType);
-        }
-        
-        const total = filteredData.length;
-        
-        // Calculate pagination
-        const startIdx = (this.pagination.currentPage - 1) * this.pagination.pageSize;
-        const endIdx = Math.min(startIdx + this.pagination.pageSize, total);
-        const paginatedData = filteredData.slice(startIdx, endIdx);
-        $("#patternsCount").text(total
-            ? `Showing ${startIdx + 1}-${endIdx} of ${total.toLocaleString()} pattern records`
-            : "No matching pattern records");
-        
-        // Generate table rows
-        const rows = paginatedData.map(data => {
-            const stdClass = parseFloat(data.stdDeviation) > 500 ? 'text-danger' : 'text-success';
-            const bgColor = data.patternColor + '26'; // Add transparency
-            const displayName = data.customerName ? `<strong>${data.customerName}</strong><br><span class="text-muted" style="font-size: 11px;">${data.customerId}</span>` : `<strong>${data.customerId}</strong>`;
-            
-            return `
-                <tr class="pattern-table-row" data-customer="${data.customerId}" data-pattern="${data.patternType}">
-                    <td class="px-3 py-3">${displayName}</td>
-                    <td class="px-3 py-3">
-                        <span class="badge" style="background: ${bgColor}; color: ${data.patternColor}; font-size: 11px;">
-                            ${data.patternName}
-                        </span>
-                    </td>
-                    <td class="px-3 py-3 text-muted">${data.lastKyc}</td>
-                    <td class="px-3 py-3">${data.baselineValue}</td>
-                    <td class="px-3 py-3">
-                        <span class="${stdClass} fw-bold">${data.stdDeviation}</span>
-                    </td>
-                    <td class="px-3 py-3">${data.lastUpdated}</td>
-                    <td class="px-3 py-3">
-                        <button type="button" class="btn btn-sm rc-actions__view view-cases-btn" data-customer="${data.customerId}" data-pattern="${data.patternType}">
-                            View Cases
+                        <button class="btn btn-primary px-4" id="refreshPatternsBtn">
+                            <i class="fas fa-rotate-right me-2"></i>Refresh
                         </button>
-                    </td>
-                </tr>
-            `;
-        }).join('');
-        
-        $("#patternsTableBody").html(rows || '<tr><td colspan="7" class="text-center py-4 text-muted">No patterns found</td></tr>');
-        
-        // Render pagination controls
-        this.renderPaginationControls(total, startIdx, endIdx);
-        
-        // Update filter status
-        const activeFilters = [];
-        if (this.currentFilters.customer !== 'all') activeFilters.push(`Customer: ${this.currentFilters.customer}`);
-        if (this.currentFilters.patternType !== 'all') {
-            const patternName = this.currentFilters.patternType.replace(/_/g, ' ');
-            activeFilters.push(`Pattern: ${patternName}`);
-        }
-        
-        if (activeFilters.length > 0) {
-            $("#filterStatus").text(activeFilters.join(', '));
-        } else {
-            $("#filterStatus").text('No filters applied');
+                    </div>
+                </div>
+
+                <div class="rq-tiles rq-tiles--four" id="bpTiles" aria-label="Pattern summary"></div>
+
+                <section class="card kd-panel mb-4">
+                    <header class="kd-panel__head">
+                        <div>
+                            <h2>Patterns</h2>
+                            <p class="aml-subtitle">Alerts that matched each pattern. Select a pattern to see its customers below.</p>
+                        </div>
+                    </header>
+                    <ul class="bp-list" id="bpList"><li class="kd-skeleton"></li><li class="kd-skeleton"></li><li class="kd-skeleton"></li></ul>
+                    <p class="kx-note">An alert can match more than one pattern, so the pattern counts add up to more than the total.</p>
+                </section>
+
+                <div class="card border-0 rc-table-card">
+                    <div class="rc-toolbar">
+                        <div class="rc-toolbar__title">
+                            <h2>Customers by pattern</h2>
+                            <small class="text-muted" id="bpCount">&nbsp;</small>
+                        </div>
+                        <div class="rc-toolbar__controls">
+                            <div class="rc-search">
+                                <i class="fas fa-search"></i>
+                                <input type="search" class="form-control" id="bpSearch" placeholder="Search customer name" aria-label="Search customer name">
+                            </div>
+                            <select class="form-select" id="bpPattern" aria-label="Filter by pattern">
+                                <option value="">All patterns</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0 rq-table">
+                            <thead>
+                                <tr>
+                                    <th class="px-3 py-3">Customer</th>
+                                    <th class="px-3 py-3">Pattern</th>
+                                    <th class="px-3 py-3 text-end">Alerts (30 days)</th>
+                                    <th class="px-3 py-3 text-end">Still open</th>
+                                    <th class="px-3 py-3">Highest risk score</th>
+                                    <th class="px-3 py-3">Last triggered</th>
+                                    <th class="px-3 py-3"><span class="visually-hidden">Actions</span></th>
+                                </tr>
+                            </thead>
+                            <tbody id="bpTableBody"><tr><td colspan="7" class="rc-empty">Loading...</td></tr></tbody>
+                        </table>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center p-3" style="border-top: 1px solid #f0f0f0;">
+                        <span class="text-muted" id="bpPageInfo" style="font-size: 13px;"></span>
+                        <div class="d-flex gap-2">
+                            <button type="button" class="btn btn-sm btn-outline-primary" id="bpPrev">Previous</button>
+                            <button type="button" class="btn btn-sm btn-outline-primary" id="bpNext">Next</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `);
+    },
+
+    async loadCustomerCodes() {
+        if (Object.keys(this.customerCodes).length) return;
+        try {
+            const response = await API.get("/customers", { page_size: 10000 });
+            (response.items || []).forEach((c, idx) => {
+                this.customerCodes[c.id] = `CUST-${String(idx + 1).padStart(3, '0')}`;
+            });
+        } catch (err) {
+            console.warn("Could not load customer codes:", err);
         }
     },
-    
-    renderPaginationControls(total, startIdx, endIdx) {
-        // Update pagination info
-        if (total === 0) {
-            $("#paginationInfo").text("0 patterns");
-        } else {
-            $("#paginationInfo").text(`${startIdx + 1}-${endIdx} of ${total}`);
-        }
-        
-        // Update page size selector
-        $("#pageSizeSelect").val(this.pagination.pageSize);
-        
-        // Calculate total pages
-        const totalPages = Math.ceil(total / this.pagination.pageSize);
-        
-        if (totalPages <= 1) {
-            $("#paginationControls").html(`
-                <li class="page-item disabled">
-                    <a class="page-link" href="#" id="prevPage">
-                        <i class="fas fa-chevron-left"></i>
-                    </a>
-                </li>
-                <li class="page-item active"><a class="page-link" href="#">1</a></li>
-                <li class="page-item disabled">
-                    <a class="page-link" href="#" id="nextPage">
-                        <i class="fas fa-chevron-right"></i>
-                    </a>
-                </li>
-            `);
+
+    async loadSummary() {
+        let data;
+        try {
+            data = await API.get("/dashboard/patterns");
+        } catch (error) {
+            $("#bpTiles").html('<div class="kd-empty kd-empty--error"><i class="fas fa-triangle-exclamation"></i>Could not load pattern activity.</div>');
+            $("#bpList").empty();
             return;
         }
-        
-        // Build pagination buttons
-        let paginationHTML = '';
-        
-        // Previous button
-        paginationHTML += `
-            <li class="page-item ${this.pagination.currentPage === 1 ? 'disabled' : ''}">
-                <a class="page-link" href="#" id="prevPage">
-                    <i class="fas fa-chevron-left"></i>
-                </a>
-            </li>
-        `;
-        
-        // Page numbers
-        const maxVisiblePages = 5;
-        let startPage = Math.max(1, this.pagination.currentPage - Math.floor(maxVisiblePages / 2));
-        let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
-        
-        // Adjust start if we're at the end
-        if (endPage - startPage < maxVisiblePages - 1) {
-            startPage = Math.max(1, endPage - maxVisiblePages + 1);
-        }
-        
-        // First page
-        if (startPage > 1) {
-            paginationHTML += `
-                <li class="page-item">
-                    <a class="page-link page-num-btn" href="#" data-page="1">1</a>
-                </li>
-            `;
-            if (startPage > 2) {
-                paginationHTML += `<li class="page-item disabled"><a class="page-link">...</a></li>`;
-            }
-        }
-        
-        // Page numbers
-        for (let i = startPage; i <= endPage; i++) {
-            paginationHTML += `
-                <li class="page-item ${i === this.pagination.currentPage ? 'active' : ''}">
-                    <a class="page-link page-num-btn" href="#" data-page="${i}">${i}</a>
-                </li>
-            `;
-        }
-        
-        // Last page
-        if (endPage < totalPages) {
-            if (endPage < totalPages - 1) {
-                paginationHTML += `<li class="page-item disabled"><a class="page-link">...</a></li>`;
-            }
-            paginationHTML += `
-                <li class="page-item">
-                    <a class="page-link page-num-btn" href="#" data-page="${totalPages}">${totalPages}</a>
-                </li>
-            `;
-        }
-        
-        // Next button
-        paginationHTML += `
-            <li class="page-item ${this.pagination.currentPage === totalPages ? 'disabled' : ''}">
-                <a class="page-link" href="#" id="nextPage">
-                    <i class="fas fa-chevron-right"></i>
-                </a>
-            </li>
-        `;
-        
-        $("#paginationControls").html(paginationHTML);
-    },
-    
-    initCharts() {
-        // Transaction Size Baseline Chart (Area Chart - Purple/Blue)
-        const sizeCtx = document.getElementById('transactionSizeChart');
-        if (sizeCtx) {
-            const ctx = sizeCtx.getContext('2d');
-            const gradient = ctx.createLinearGradient(0, 0, 0, 280);
-            gradient.addColorStop(0, 'rgba(139, 92, 246, 0.5)');
-            gradient.addColorStop(1, 'rgba(139, 92, 246, 0.05)');
-            
-            this.charts.transactionSize = new Chart(sizeCtx, {
-                type: 'line',
-                data: {
-                    labels: ['Jan 1', 'Jan 15', 'Feb 1', 'Feb 15', 'Mar 1', 'Mar 15', 'Apr 1', 'Apr 15', 'May 1', 'May 15'],
-                    datasets: [{
-                        data: [8000, 9500, 11000, 10500, 12000, 10000, 11500, 10800, 12500, 9000],
-                        borderColor: '#8b5cf6',
-                        backgroundColor: gradient,
-                        borderWidth: 2,
-                        fill: true,
-                        tension: 0.4,
-                        pointRadius: 0
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
-                    scales: {
-                        x: { 
-                            grid: { display: false },
-                            ticks: { font: { size: 11 } }
-                        },
-                        y: {
-                            grid: { color: 'rgba(0,0,0,0.05)' },
-                            ticks: { 
-                                font: { size: 11 },
-                                callback: value => '$' + (value/1000) + 'k'
-                            }
-                        }
-                    }
-                }
-            });
-        }
-        
-        // Transaction Frequency Baselines Chart (Area Chart - Green)
-        const freqCtx = document.getElementById('transactionFrequencyChart');
-        if (freqCtx) {
-            const ctx = freqCtx.getContext('2d');
-            const gradient = ctx.createLinearGradient(0, 0, 0, 280);
-            gradient.addColorStop(0, 'rgba(34, 197, 94, 0.5)');
-            gradient.addColorStop(1, 'rgba(34, 197, 94, 0.05)');
-            
-            this.charts.transactionFrequency = new Chart(freqCtx, {
-                type: 'line',
-                data: {
-                    labels: ['Jan 1', 'Jan 15', 'Feb 1', 'Feb 15', 'Mar 1', 'Mar 15', 'Apr 1', 'Apr 15', 'May 1', 'May 15'],
-                    datasets: [{
-                        data: [100, 120, 150, 180, 140, 160, 190, 170, 200, 150],
-                        borderColor: '#22c55e',
-                        backgroundColor: gradient,
-                        borderWidth: 2,
-                        fill: true,
-                        tension: 0.4,
-                        pointRadius: 0
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
-                    scales: {
-                        x: { 
-                            grid: { display: false },
-                            ticks: { font: { size: 11 } }
-                        },
-                        y: {
-                            grid: { color: 'rgba(0,0,0,0.05)' },
-                            ticks: { font: { size: 11 } }
-                        }
-                    }
-                }
-            });
-        }
-        
-        // Pattern Type Distribution Donut Chart (Left)
-        const donutCtx = document.getElementById('patternTypeDonutChart');
-        if (donutCtx) {
-            this.charts.patternTypeDonut = new Chart(donutCtx, {
-                type: 'doughnut',
-                data: {
-                    labels: [
-                        'Counterparty Changes',
-                        'Geographic Shift',
-                        'Threshold Breach',
-                        'Velocity Spike',
-                        'Complexity Shift',
-                        'Inactive Reactivation'
-                    ],
-                    datasets: [{
-                        data: [16.7, 16.7, 16.7, 16.7, 16.7, 16.7],
-                        backgroundColor: [
-                            '#FF8D28',
-                            '#1f2937',
-                            '#9ca3af',
-                            '#6b7280',
-                            '#d1d5db',
-                            '#374151'
-                        ],
-                        borderWidth: 0,
-                        cutout: '65%'
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    return context.label + ': ' + context.parsed + '%';
-                                }
-                            }
-                        }
-                    }
-                }
-            });
-        }
-        
-        // Pattern Type Distribution Area Chart (Right)
-        const areaCtx = document.getElementById('patternTypeAreaChart');
-        if (areaCtx) {
-            const ctx = areaCtx.getContext('2d');
-            const gradient = ctx.createLinearGradient(0, 0, 0, 280);
-            gradient.addColorStop(0, 'rgba(255, 141, 40, 0.4)');
-            gradient.addColorStop(1, 'rgba(255, 141, 40, 0.05)');
-            
-            this.charts.patternTypeArea = new Chart(areaCtx, {
-                type: 'line',
-                data: {
-                    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul'],
-                    datasets: [{
-                        data: [15, 18, 22, 20, 25, 28, 24],
-                        borderColor: '#FF8D28',
-                        backgroundColor: gradient,
-                        borderWidth: 3,
-                        fill: true,
-                        tension: 0.4,
-                        pointRadius: 4,
-                        pointBackgroundColor: '#FF8D28',
-                        pointBorderColor: '#fff',
-                        pointBorderWidth: 2
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
-                    scales: {
-                        x: { 
-                            grid: { display: false },
-                            ticks: { font: { size: 11 } }
-                        },
-                        y: {
-                            grid: { color: 'rgba(0,0,0,0.05)' },
-                            ticks: { 
-                                font: { size: 11 },
-                                callback: value => value + '%'
-                            },
-                            beginAtZero: true,
-                            max: 35
-                        }
-                    }
-                }
-            });
-        }
-    },
-    
-    
-    getChartDataForPattern(patternType) {
-        // Different chart data for each pattern type
-        const chartData = {
-            all: {
-                size: [8000, 9500, 11000, 10500, 12000, 10000, 11500, 10800, 12500, 9000],
-                frequency: [100, 120, 150, 180, 140, 160, 190, 170, 200, 150]
-            },
-            complexity_shift: {
-                size: [5000, 7000, 12000, 15000, 18000, 14000, 16000, 13000, 19000, 11000],
-                frequency: [80, 90, 140, 180, 220, 180, 200, 160, 230, 120]
-            },
-            counterparty_changes: {
-                size: [9000, 8500, 11000, 13000, 10000, 12000, 14000, 11500, 13500, 10500],
-                frequency: [120, 140, 180, 200, 160, 190, 210, 180, 220, 170]
-            },
-            geographic_shift: {
-                size: [6000, 8000, 10000, 9000, 11000, 13000, 12000, 14000, 11000, 9500],
-                frequency: [90, 110, 130, 120, 150, 170, 160, 180, 140, 115]
-            },
-            inactive_reactivation: {
-                size: [3000, 4000, 8000, 12000, 15000, 18000, 16000, 14000, 17000, 13000],
-                frequency: [40, 60, 100, 140, 180, 210, 190, 170, 200, 150]
-            },
-            threshold_breach: {
-                size: [10000, 15000, 20000, 25000, 22000, 24000, 26000, 23000, 27000, 21000],
-                frequency: [150, 200, 250, 300, 280, 290, 310, 285, 320, 270]
-            },
-            velocity_spike: {
-                size: [7000, 12000, 18000, 22000, 20000, 25000, 23000, 21000, 26000, 19000],
-                frequency: [110, 160, 220, 280, 260, 300, 280, 270, 310, 240]
-            }
-        };
-        
-        return chartData[patternType] || chartData.all;
-    },
-    
-    updateChartsForPattern(patternType) {
-        const data = this.getChartDataForPattern(patternType);
-        
-        // Update Transaction Size Baseline chart with animation
-        if (this.charts.transactionSize) {
-            this.charts.transactionSize.data.datasets[0].data = data.size;
-            this.charts.transactionSize.update({
-                duration: 800,
-                easing: 'easeInOutQuart'
-            });
-        }
-        
-        // Update Transaction Frequency Baselines chart with animation
-        if (this.charts.transactionFrequency) {
-            this.charts.transactionFrequency.data.datasets[0].data = data.frequency;
-            this.charts.transactionFrequency.update({
-                duration: 800,
-                easing: 'easeInOutQuart'
-            });
-        }
-    },
-    
-    setupEventListeners() {
-        const self = this;
-        
-        // Refresh button
-        $("#refreshPatternsBtn").on("click", async () => {
-            await this.fetchRealCustomersAndGeneratePatterns();
-            this.renderTable();
-            this.updateStats();
-            this.updateChartsForPattern(this.currentFilters.patternType);
-        });
-        
-        // Search + pattern filter (table only; baseline charts follow the pattern)
-        const applyFilters = () => {
-            self.currentFilters.search = $("#patternSearch").val() || '';
-            self.currentFilters.patternType = $("#filterPatternType").val();
-            self.pagination.currentPage = 1;
-            $("#clearFiltersBtn").toggleClass("d-none",
-                self.currentFilters.search.trim() === '' && self.currentFilters.patternType === 'all');
-            self.renderTable();
-            self.updateChartsForPattern(self.currentFilters.patternType);
-        };
-        $("#filterPatternType").on("change", applyFilters);
-        $("#patternSearch").on("input", debounce(applyFilters, 200));
-        $("#clearFiltersBtn").on("click", () => {
-            $("#patternSearch").val('');
-            $("#filterPatternType").val('all');
-            $(".pattern-card").removeClass("border-primary");
-            applyFilters();
-        });
+        this.patterns = data.patterns || [];
+        const busiest = [...this.patterns].sort((a, b) => b.hit_count - a.hit_count)[0];
 
-        // Pattern card clicks
-        $(document).off("click.patterns", ".pattern-card").on("click.patterns", ".pattern-card", function() {
-            const pattern = $(this).data("pattern");
-            
-            // Highlight selected card
-            $(".pattern-card").removeClass("border-primary");
-            $(this).addClass("border-primary");
-            
-            // Update the dropdown to the clicked pattern
-            $("#filterPatternType").val(pattern).trigger("change");
+        const tile = (label, value, note) => `
+            <div class="rq-tile rq-tile--static">
+                <span class="rq-tile__label">${label}</span>
+                <strong class="rq-tile__value">${value}</strong>
+                <span class="rq-tile__note">${note}</span>
+            </div>`;
+        $("#bpTiles").html(
+            tile('Alerts matching a pattern', Number(data.total_pattern_hits || 0).toLocaleString(), `last ${data.window_days} days`)
+            + tile('Customers affected', Number(data.customers_affected || 0).toLocaleString(), 'triggered at least one pattern')
+            + tile('Most active pattern', busiest && busiest.hit_count ? escapeHtml(busiest.label) : '—',
+                   busiest && busiest.hit_count ? `${busiest.hit_count.toLocaleString()} alerts, ${(busiest.open_alerts || 0).toLocaleString()} still open` : 'no pattern activity')
+            + tile('Transactions analysed', Number(data.total_transactions || 0).toLocaleString(), `last ${data.window_days} days`)
+        );
+
+        const sorted = [...this.patterns].sort((a, b) => b.hit_count - a.hit_count);
+        const max = Math.max(1, ...sorted.map(p => p.hit_count));
+        $("#bpList").html(sorted.map(p => {
+            const derived = !p.rule_ids.length;
+            return `
+            <li>
+                <button type="button" class="bp-item" data-pattern="${escapeHtml(p.id)}" ${derived ? 'disabled' : ''} aria-pressed="false">
+                    <span class="bp-item__main">
+                        <strong>${escapeHtml(p.label)}</strong>
+                        <small>${escapeHtml(p.description)}</small>
+                        <small class="bp-item__rules">${derived ? 'From transaction history, not a rule' : `Rules ${escapeHtml(p.rule_ids.join(', '))}`}</small>
+                    </span>
+                    <span class="bp-item__bar"><span class="kd-bars__track"><span style="width: ${p.hit_count ? Math.max(2, Math.round((p.hit_count / max) * 100)) : 0}%"></span></span></span>
+                    <span class="bp-item__num"><strong>${p.hit_count.toLocaleString()}</strong><small>${derived ? 'customers' : 'alerts'}</small></span>
+                    <span class="bp-item__num"><strong>${derived ? '—' : p.customers.toLocaleString()}</strong><small>customers</small></span>
+                    <span class="bp-item__num"><strong>${p.open_alerts == null ? '—' : p.open_alerts.toLocaleString()}</strong><small>still open</small></span>
+                </button>
+            </li>`;
+        }).join(''));
+
+        $("#bpPattern").html('<option value="">All patterns</option>'
+            + this.patterns.filter(p => p.rule_ids.length).map(p => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.label)}</option>`).join(''));
+        this.syncPatternSelection();
+    },
+
+    syncPatternSelection() {
+        $("#bpPattern").val(this.filters.pattern);
+        $(".bp-item").each((_, el) => {
+            const active = $(el).data("pattern") === this.filters.pattern;
+            $(el).toggleClass("is-active", active).attr("aria-pressed", String(active));
         });
-        
-        // View Cases button clicks - use body instead of document for better delegation
-        $("body").off("click", ".view-cases-btn").on("click", ".view-cases-btn", function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            
-            const customerId = $(this).data("customer");
-            const patternType = $(this).data("pattern");
-            const patternName = patternType.replace(/_/g, ' ');
-            
-            console.log("View Cases clicked:", customerId, patternType);
-            
-            
-            // Navigate to cases page using App.navigateTo
-            if (window.App && App.navigateTo) {
-                App.navigateTo('cases', { customer: customerId, pattern: patternType });
-            } else {
-                console.error("App.navigateTo not available");
-            }
+    },
+
+    async loadRows() {
+        const params = { page: this.page, page_size: this.pageSize };
+        if (this.filters.pattern) params.pattern = this.filters.pattern;
+        if (this.filters.q) params.q = this.filters.q;
+        let data;
+        try {
+            data = await API.get("/dashboard/patterns/customers", params);
+        } catch (error) {
+            $("#bpTableBody").html('<tr><td colspan="7" class="rc-empty"><i class="fas fa-triangle-exclamation"></i><strong>Could not load customers</strong><span>Select Refresh to try again.</span></td></tr>');
+            return;
+        }
+        this.rows = data.items;
+        this.total = data.total;
+
+        const band = (score) => (score >= 80 ? 'high' : score >= 60 ? 'medium' : 'low');
+        $("#bpTableBody").html(this.rows.map(r => {
+            const code = this.customerCodes[r.customer_id] || '';
+            const initials = r.customer_name.split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?';
+            return `
+                <tr>
+                    <td class="px-3 py-3">
+                        <div class="rc-customer">
+                            <span class="rc-customer__avatar" aria-hidden="true">${escapeHtml(initials)}</span>
+                            <span class="rc-customer__text"><strong>${escapeHtml(r.customer_name)}</strong><small>${escapeHtml(code)}</small></span>
+                        </div>
+                    </td>
+                    <td class="px-3 py-3"><span class="rq-rule">${escapeHtml(r.pattern_label)}</span></td>
+                    <td class="px-3 py-3 text-end">${r.alerts.toLocaleString()}</td>
+                    <td class="px-3 py-3 text-end">${r.open_alerts ? `<strong>${r.open_alerts.toLocaleString()}</strong>` : '<span class="text-muted">0</span>'}</td>
+                    <td class="px-3 py-3"><span class="rq-score rq-score--${band(r.max_risk_score)}">${r.max_risk_score}</span></td>
+                    <td class="px-3 py-3 text-nowrap">${escapeHtml(formatDateTime(r.last_triggered_at))}</td>
+                    <td class="px-3 py-3 text-end">
+                        ${code ? `<button type="button" class="btn btn-sm rc-actions__view bp-cases-btn" data-code="${escapeHtml(code)}" data-pattern="${escapeHtml(r.pattern)}">
+                            <i class="fas fa-briefcase me-1"></i>Review cases
+                        </button>` : ''}
+                    </td>
+                </tr>`;
+        }).join('') || '<tr><td colspan="7" class="rc-empty"><i class="fas fa-folder-open"></i><strong>No customers match</strong><span>No alerts matched this pattern in the last 30 days.</span></td></tr>');
+
+        const from = this.total ? (this.page - 1) * this.pageSize + 1 : 0;
+        const to = Math.min(this.page * this.pageSize, this.total);
+        $("#bpCount").text(this.total ? `Showing ${from.toLocaleString()}–${to.toLocaleString()} of ${this.total.toLocaleString()} customer and pattern pairs` : 'No matching customers');
+        $("#bpPageInfo").text(this.total ? `Page ${this.page} of ${Math.max(1, Math.ceil(this.total / this.pageSize))}` : '');
+        $("#bpPrev").prop("disabled", this.page <= 1);
+        $("#bpNext").prop("disabled", to >= this.total);
+    },
+
+    setPattern(pattern) {
+        this.filters.pattern = pattern;
+        this.page = 1;
+        this.syncPatternSelection();
+        this.loadRows();
+    },
+
+    setupEventListeners() {
+        let searchTimer;
+        $("#bpSearch").on("input", () => {
+            clearTimeout(searchTimer);
+            searchTimer = setTimeout(() => { this.filters.q = $("#bpSearch").val().trim(); this.page = 1; this.loadRows(); }, 300);
         });
-        
-        // Page size selector
-        $("body").off("change", "#pageSizeSelect").on("change", "#pageSizeSelect", function(e) {
-            self.pagination.pageSize = parseInt($(this).val());
-            self.pagination.currentPage = 1; // Reset to first page
-            self.renderTable();
-        });
-        
-        // Previous page button
-        $("body").off("click", "#prevPage").on("click", "#prevPage", function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            
-            if (!$(this).parent().hasClass('disabled') && self.pagination.currentPage > 1) {
-                self.pagination.currentPage--;
-                self.renderTable();
-                
-                // Scroll to top of table
-                $(".table-responsive").get(0)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
-        });
-        
-        // Next page button
-        $("body").off("click", "#nextPage").on("click", "#nextPage", function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            
-            let filteredData = self.customerPatternData;
-            const q = (self.currentFilters.search || '').trim().toLowerCase();
-            if (q) {
-                filteredData = filteredData.filter(d => `${d.customerName || ''} ${d.customerId}`.toLowerCase().includes(q));
-            }
-            if (self.currentFilters.patternType !== 'all') {
-                filteredData = filteredData.filter(d => d.patternType === self.currentFilters.patternType);
-            }
-            
-            const totalPages = Math.ceil(filteredData.length / self.pagination.pageSize);
-            
-            if (!$(this).parent().hasClass('disabled') && self.pagination.currentPage < totalPages) {
-                self.pagination.currentPage++;
-                self.renderTable();
-                
-                // Scroll to top of table
-                $(".table-responsive").get(0)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
-        });
-        
-        // Page number buttons
-        $("body").off("click", ".page-num-btn").on("click", ".page-num-btn", function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            
-            const page = parseInt($(this).data("page"));
-            if (page && page !== self.pagination.currentPage) {
-                self.pagination.currentPage = page;
-                self.renderTable();
-                
-                // Scroll to top of table
-                $(".table-responsive").get(0)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
-        });
-        
-        // Table row click to highlight (but not when clicking button)
-        $(document).on("click", ".pattern-table-row", function(e) {
-            // Don't highlight if clicking the button
-            if ($(e.target).hasClass('view-cases-btn') || $(e.target).closest('.view-cases-btn').length) {
-                return;
-            }
-            
-            $(".pattern-table-row").removeClass("table-active");
-            $(this).addClass("table-active");
-            
-            const customerId = $(this).data("customer");
-            const patternType = $(this).data("pattern");
-            const patternName = patternType.replace(/_/g, ' ');
-            
-        });
+        $("#bpPattern").on("change", () => this.setPattern($("#bpPattern").val()));
+        $("#bpPrev").on("click", () => { if (this.page > 1) { this.page--; this.loadRows(); } });
+        $("#bpNext").on("click", () => { this.page++; this.loadRows(); });
+        $("#refreshPatternsBtn").on("click", () => { this.loadSummary(); this.loadRows(); });
+
+        $("#mainContent").off("click.patterns")
+            .on("click.patterns", ".bp-item", (e) => {
+                const pattern = $(e.currentTarget).data("pattern");
+                this.setPattern(this.filters.pattern === pattern ? '' : pattern);
+            })
+            .on("click.patterns", ".bp-cases-btn", (e) => {
+                const $btn = $(e.currentTarget);
+                App.navigateTo('cases', { customer: $btn.data("code"), pattern: $btn.data("pattern") });
+            });
     }
 };
 

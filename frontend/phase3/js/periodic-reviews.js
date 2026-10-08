@@ -100,6 +100,7 @@ const PeriodicReviews = {
 
                     return {
                         id: review.id,
+                        reviewStatus: review.review_status,
                         customerId: displayCode,
                         customerName: displayName,
                         riskLevel: review.risk_level_after || 'MEDIUM',
@@ -144,7 +145,7 @@ const PeriodicReviews = {
                     <div>
                         <span class="kyro-kicker">Ongoing Due Diligence</span>
                         <h1 class="kyro-page-title">Periodic Reviews</h1>
-                        <p class="kyro-page-sub">Manage automatic periodic AML review schedules with intelligent monitoring.</p>
+                        <p class="kyro-page-sub">Customer reviews that are due or overdue, most overdue first.</p>
                     </div>
                     
                     <div class="kyro-page-actions">
@@ -163,107 +164,11 @@ const PeriodicReviews = {
                     </div>
                 </div>
                 
-                <!-- Cards -->
-                <div class="aml-pr-cards">
-                    <!-- Review Frequency -->
-                    <section class="aml-pr-card">
-                        <div class="aml-pr-card-head">
-                            <span class="aml-icon-chip blue">
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-                                    <path d="M8 20V12M12 20V6M16 20v-4"/><rect x="3" y="3" width="18" height="18" rx="2" stroke-width="1.6"/>
-                                </svg>
-                            </span>
-                            <h2>Review Frequency</h2>
-                        </div>
-                        
-                        <div class="aml-freq-chart">
-                            <!-- Y-axis labels -->
-                            <span class="aml-freq-y" id="freqYAxis0" style="top: 0%;">16</span>
-                            <span class="aml-freq-y" id="freqYAxis25" style="top: 25%;">12</span>
-                            <span class="aml-freq-y" id="freqYAxis50" style="top: 50%;">8</span>
-                            <span class="aml-freq-y" id="freqYAxis75" style="top: 75%;">4</span>
-                            <span class="aml-freq-y" style="top: 100%;">0</span>
-                            
-                            <!-- Horizontal grid lines -->
-                            <div class="aml-freq-h" style="top: 0%;"></div>
-                            <div class="aml-freq-h" style="top: 25%;"></div>
-                            <div class="aml-freq-h" style="top: 50%;"></div>
-                            <div class="aml-freq-h" style="top: 75%;"></div>
-                            
-                            <!-- Vertical grid lines -->
-                            <div class="aml-freq-v" style="left: 20%;"></div>
-                            <div class="aml-freq-v" style="left: 53%;"></div>
-                            <div class="aml-freq-v" style="left: 86%;"></div>
-                            
-                            <!-- X-axis labels -->
-                            <span class="aml-freq-x" style="left: 20%;">3 Months</span>
-                            <span class="aml-freq-x" style="left: 53%;">6 Months</span>
-                            <span class="aml-freq-x" style="left: 86%;">12 Months</span>
-                            
-                            <!-- Bar chart bars - dynamically updated with animation -->
-                            <div id="freqBar3M" class="freq-bar-animated" style="position: absolute; bottom: 0; left: 13%; width: 14%; height: 0%; background: #ee4444; border-radius: 6px 6px 0 0; transition: height 0.8s cubic-bezier(0.4, 0, 0.2, 1);"></div>
-                            <div id="freqBar6M" class="freq-bar-animated" style="position: absolute; bottom: 0; left: 46%; width: 14%; height: 0%; background: #f5a623; border-radius: 6px 6px 0 0; transition: height 0.8s cubic-bezier(0.4, 0, 0.2, 1) 0.15s;"></div>
-                            <div id="freqBar12M" class="freq-bar-animated" style="position: absolute; bottom: 0; left: 79%; width: 14%; height: 0%; background: #1fb877; border-radius: 6px 6px 0 0; transition: height 0.8s cubic-bezier(0.4, 0, 0.2, 1) 0.3s;"></div>
-                        </div>
-                    </section>
-                    
-                    <!-- Schedule Status -->
-                    <section class="aml-pr-card">
-                        <div class="aml-pr-card-head">
-                            <span class="aml-icon-chip green">
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5"/>
-                                </svg>
-                            </span>
-                            <h2>Schedule Status</h2>
-                        </div>
-                        
-                        <div class="aml-pr-donut-wrap">
-                            <div class="aml-pr-donut donut-animated" id="scheduleDonut" role="img" aria-label="Active schedules"></div>
-                        </div>
-                        
-                        <div class="aml-pr-status-legend">
-                            <div class="aml-pr-status-item">
-                                <span class="aml-pr-dot green" style="background-color: #1fb877;"></span>
-                                <div><b style="color: #1fb877; font-weight: 700;">Active</b><span id="activePercent" style="color: #10b981; font-weight: 600;">0 (0%)</span></div>
-                            </div>
-                            <div class="aml-pr-status-item">
-                                <span class="aml-pr-dot gray" style="background-color: #9ca3af;"></span>
-                                <div><b style="color: #6b7280; font-weight: 700;">Inactive</b><span id="inactivePercent" style="color: #6b7280; font-weight: 600;">0 (0%)</span></div>
-                            </div>
-                        </div>
-                    </section>
-                    
-                    <!-- Review Urgency -->
-                    <section class="aml-pr-card">
-                        <div class="aml-pr-card-head">
-                            <span class="aml-icon-chip amber">
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-                                    <circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>
-                                </svg>
-                            </span>
-                            <h2>Review Urgency</h2>
-                        </div>
-                        
-                        <div class="aml-pr-urgency-list">
-                            <div class="aml-pr-urgency-row">
-                                <span class="aml-pr-dot red" style="background-color: #ef4444;"></span> Overdue
-                                <span class="aml-pr-count red" id="overdueCount" style="color: #ef4444; background: #fee2e2;">0</span>
-                            </div>
-                            <div class="aml-pr-urgency-row">
-                                <span class="aml-pr-dot amber"></span> Due Soon (7 days)
-                                <span class="aml-pr-count amber" id="dueSoonCount">0</span>
-                            </div>
-                            <div class="aml-pr-urgency-row">
-                                <span class="aml-pr-dot green"></span> Future
-                                <span class="aml-pr-count green" id="futureCount">0</span>
-                            </div>
-                        </div>
-                    </section>
-                </div>
-                
+                <!-- What needs attention: each tile is also a one-click filter -->
+                <div class="rq-tiles" id="prTiles" aria-label="Review summary"></div>
+
                 <!-- Scheduled Reviews Table -->
-                <div class="card rc-table-card" style="margin-top: 28px;">
+                <div class="card rc-table-card">
                     <div class="rc-toolbar">
                         <div class="rc-toolbar__title">
                             <h2>Scheduled Reviews</h2>
@@ -278,10 +183,12 @@ const PeriodicReviews = {
                                 <option value="all">Any due date</option>
                                 <option value="overdue">Overdue</option>
                                 <option value="soon">Due in 7 days</option>
+                                <option value="month">Due in 30 days</option>
                                 <option value="future">Later</option>
                             </select>
                             <select class="form-select" id="filterReviewRisk" aria-label="Filter by risk level">
                                 <option value="all">All risk levels</option>
+                                <option value="ELEVATED">Medium or high</option>
                                 <option value="HIGH">High</option>
                                 <option value="MEDIUM">Medium</option>
                                 <option value="LOW">Low</option>
@@ -289,6 +196,7 @@ const PeriodicReviews = {
                             <select class="form-select" id="filterReviewStatus" aria-label="Filter by schedule status">
                                 <option value="all">All schedules</option>
                                 <option value="Active">Active</option>
+                                <option value="IN_PROGRESS">In progress</option>
                                 <option value="Inactive">Completed</option>
                             </select>
                             <button type="button" class="btn rc-clear d-none" id="clearReviewFiltersBtn">
@@ -394,7 +302,6 @@ const PeriodicReviews = {
         
         console.log("Rendering donut chart...");
         // Render donut chart with CSS
-        this.renderScheduleDonut();
         
         console.log("Initializing table...");
         // Initialize DataTable
@@ -411,134 +318,110 @@ const PeriodicReviews = {
         }
     },
     
+    /** Summary tiles; each one is also a one-click filter on the table. */
     updateStats() {
-        const overdue = this.reviewsData.filter(r => r.overdue).length;
-        const dueSoon = this.reviewsData.filter(r => !r.overdue && r.dueIn <= 7).length;
-        const future = this.reviewsData.filter(r => !r.overdue && r.dueIn > 7).length;
-        
-        // Animate count updates
-        this.animateCount("#overdueCount", 0, overdue, 600);
-        this.animateCount("#dueSoonCount", 0, dueSoon, 600);
-        this.animateCount("#futureCount", 0, future, 600);
-        
-        const active = this.reviewsData.filter(r => r.status === 'Active').length;
-        const inactive = this.reviewsData.filter(r => r.status === 'Inactive').length;
-        const total = this.reviewsData.length;
-        
-        const activePercent = total > 0 ? ((active / total) * 100).toFixed(0) : 0;
-        const inactivePercent = total > 0 ? ((inactive / total) * 100).toFixed(0) : 0;
-        
-        $("#activePercent").text(`${active} (${activePercent}%)`);
-        $("#inactivePercent").text(`${inactive} (${inactivePercent}%)`);
-        
-        // Update subtitle to reflect real accurate count
-        
-        // Update bar chart based on frequency data
-        this.updateFrequencyChart();
+        const active = this.reviewsData.filter(r => r.status === 'Active');
+        const overdue = active.filter(r => r.overdue);
+        const elevated = overdue.filter(r => r.riskLevel === 'HIGH' || r.riskLevel === 'MEDIUM').length;
+        const soon = active.filter(r => !r.overdue && r.dueIn <= 7).length;
+        const month = active.filter(r => !r.overdue && r.dueIn <= 30).length;
+        const inProgress = active.filter(r => r.reviewStatus === 'IN_PROGRESS').length;
+        const longest = overdue.reduce((max, r) => Math.max(max, r.dueIn), 0);
+
+        const tile = (key, label, value, note, alertClass = '') => `
+            <button type="button" class="rq-tile ${alertClass}" data-tile="${key}">
+                <span class="rq-tile__label">${label}</span>
+                <strong class="rq-tile__value">${value}</strong>
+                <span class="rq-tile__note">${note}</span>
+            </button>`;
+        $("#prTiles").html(
+            tile('overdue', 'Overdue', overdue.length.toLocaleString(), 'past their review date', overdue.length ? 'rq-tile--alert' : '')
+            + tile('elevated', 'Overdue, medium or high risk', elevated.toLocaleString(), 'review these first', elevated ? 'rq-tile--alert' : '')
+            + tile('longest', 'Longest overdue', overdue.length ? `${longest} d` : '—', 'days past the review date')
+            + tile('soon', 'Due in 7 days', soon.toLocaleString(), 'not yet overdue', soon ? 'rq-tile--warn' : '')
+            + tile('month', 'Due in 30 days', month.toLocaleString(), 'plan the workload')
+            + tile('progress', 'In progress', inProgress.toLocaleString(), `${active.length.toLocaleString()} reviews scheduled in total`)
+        );
     },
-    
-    animateCount(selector, start, end, duration) {
-        const $el = $(selector);
-        const range = end - start;
-        const increment = range / (duration / 16); // 60fps
-        let current = start;
-        
-        const timer = setInterval(() => {
-            current += increment;
-            if ((increment > 0 && current >= end) || (increment < 0 && current <= end)) {
-                current = end;
-                clearInterval(timer);
-            }
-            $el.text(Math.floor(current));
-        }, 16);
-    },
-    
-    updateFrequencyChart() {
-        // Count reviews by frequency
-        const freq3Months = this.reviewsData.filter(r => r.frequency === '3 months').length;
-        const freq6Months = this.reviewsData.filter(r => r.frequency === '6 months').length;
-        const freq12Months = this.reviewsData.filter(r => r.frequency === '12 months').length;
-        
-        // Find max for scaling dynamically
-        const maxVal = Math.max(freq3Months, freq6Months, freq12Months, 1);
-        const scale = maxVal <= 16 ? 16 : Math.ceil(maxVal / 10) * 10;
-        
-        // Calculate heights as percentages (bounded strictly 0-100%)
-        const height3M = Math.min(100, Math.max(0, (freq3Months / scale) * 100));
-        const height6M = Math.min(100, Math.max(0, (freq6Months / scale) * 100));
-        const height12M = Math.min(100, Math.max(0, (freq12Months / scale) * 100));
-        
-        // Update Y-axis labels
-        $("#freqYAxis0").text(Math.round(scale));
-        $("#freqYAxis25").text(Math.round(scale * 0.75));
-        $("#freqYAxis50").text(Math.round(scale * 0.5));
-        $("#freqYAxis75").text(Math.round(scale * 0.25));
-        
-        // Reset heights to 0 first for animation
-        $("#freqBar3M").css('height', '0%');
-        $("#freqBar6M").css('height', '0%');
-        $("#freqBar12M").css('height', '0%');
-        
-        // Trigger animation after a small delay
-        setTimeout(() => {
-            $("#freqBar3M").css('height', `${height3M}%`);
-            $("#freqBar6M").css('height', `${height6M}%`);
-            $("#freqBar12M").css('height', `${height12M}%`);
-        }, 100);
-    },
-    
-    renderScheduleDonut() {
-        const active = this.reviewsData.filter(r => r.status === 'Active').length;
-        const inactive = this.reviewsData.filter(r => r.status === 'Inactive').length;
-        const total = this.reviewsData.length || 1;
-        
-        const activeTurn = active / total;
-        
-        console.log("Donut data:", { active, inactive, total, activeTurn });
-        
-        // Green (#1fb877) for Active, Grey (#9ca3af) for Inactive
-        let donutStyle = '';
-        if (active === 0 && inactive === 0) {
-            donutStyle = 'background: #e5e7eb;'; // no schedules yet
-        } else if (inactive === 0) {
-            donutStyle = 'background: #1fb877;';
-        } else if (active === 0) {
-            donutStyle = 'background: #9ca3af;';
-        } else {
-            donutStyle = `
-                background: conic-gradient(
-                    #1fb877 0turn ${activeTurn.toFixed(3)}turn,
-                    #9ca3af ${activeTurn.toFixed(3)}turn 1turn
-                );
-            `;
-        }
-        
-        console.log("Applying donut style:", donutStyle);
-        
-        // Reset and animate
-        const $donut = $("#scheduleDonut");
-        $donut.css({
-            'transform': 'scale(0)',
-            'opacity': '0'
-        });
-        
-        setTimeout(() => {
-            $donut.attr("style", donutStyle + " transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.6s ease; transform: scale(1); opacity: 1;");
-        }, 200);
-    },
-    
+
     getFilteredReviews() {
         const f = this.filters;
         const q = (f.search || '').trim().toLowerCase();
-        return this.reviewsData.filter(r => {
+        const rows = this.reviewsData.filter(r => {
             if (q && !`${r.customerName || ''} ${r.customerId}`.toLowerCase().includes(q)) return false;
-            if (f.risk !== 'all' && r.riskLevel !== f.risk) return false;
-            if (f.status !== 'all' && r.status !== f.status) return false;
+            if (f.risk === 'ELEVATED' ? !(r.riskLevel === 'HIGH' || r.riskLevel === 'MEDIUM') : (f.risk !== 'all' && r.riskLevel !== f.risk)) return false;
+            if (f.status === 'IN_PROGRESS' ? r.reviewStatus !== 'IN_PROGRESS' : (f.status !== 'all' && r.status !== f.status)) return false;
+            if (f.urgency !== 'all' && r.status !== 'Active') return false;
             if (f.urgency === 'overdue' && !r.overdue) return false;
             if (f.urgency === 'soon' && (r.overdue || r.dueIn > 7)) return false;
+            if (f.urgency === 'month' && (r.overdue || r.dueIn > 30)) return false;
             if (f.urgency === 'future' && (r.overdue || r.dueIn <= 7)) return false;
             return true;
         });
+        // Most overdue first, then soonest due; completed reviews last
+        const rank = (r) => (r.status !== 'Active' ? 2 : r.overdue ? 0 : 1);
+        const riskRank = { HIGH: 0, MEDIUM: 1, LOW: 2 };
+        return rows.sort((a, b) =>
+            rank(a) - rank(b)
+            || (a.overdue ? b.dueIn - a.dueIn : a.dueIn - b.dueIn)
+            || (riskRank[a.riskLevel] ?? 3) - (riskRank[b.riskLevel] ?? 3));
+    },
+
+    /** Record the outcome of a review: findings and the risk rating after it. */
+    showCompleteModal(review) {
+        const displayName = review.customerName || review.customerId;
+        $("#completeReviewModal").remove();
+        $("body").append(`
+            <div class="modal fade" id="completeReviewModal" tabindex="-1" aria-labelledby="completeReviewTitle" aria-hidden="true">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content kx-modal">
+                        <div class="modal-header">
+                            <div>
+                                <h5 class="modal-title" id="completeReviewTitle">Complete review</h5>
+                                <small class="text-muted">${escapeHtml(displayName)} &middot; ${escapeHtml(review.customerId)} &middot; ${review.overdue ? `${review.dueIn} days overdue` : `due ${escapeHtml(review.nextReview)}`}</small>
+                            </div>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <label class="kx-label" for="reviewRiskAfter">Risk rating after this review</label>
+                            <select class="form-select mb-3" id="reviewRiskAfter">
+                                ${['LOW', 'MEDIUM', 'HIGH'].map(l => `<option value="${l}" ${l === review.riskLevel ? 'selected' : ''}>${l.charAt(0) + l.slice(1).toLowerCase()}</option>`).join('')}
+                            </select>
+                            <label class="kx-label" for="reviewFindings">Findings</label>
+                            <textarea class="form-control" id="reviewFindings" rows="4" placeholder="What was checked, what changed, and any follow-up needed"></textarea>
+                            <div class="text-danger small mt-2 d-none" id="reviewError" role="alert"></div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-outline-primary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="button" class="btn btn-primary" id="confirmCompleteReviewBtn">Complete review</button>
+                        </div>
+                    </div>
+                </div>
+            </div>`);
+        const modalEl = document.getElementById('completeReviewModal');
+        new bootstrap.Modal(modalEl).show();
+
+        $("#confirmCompleteReviewBtn").on("click", async () => {
+            const findings = $("#reviewFindings").val().trim();
+            if (!findings) { $("#reviewError").text('Findings are required to complete a review.').removeClass("d-none"); return; }
+            const $btn = $("#confirmCompleteReviewBtn").prop("disabled", true);
+            try {
+                await API.put(`/kyc-reviews/${review.id}`, {
+                    review_status: 'COMPLETED',
+                    completed_date: new Date().toISOString(),
+                    findings,
+                    risk_level_after: $("#reviewRiskAfter").val()
+                });
+                closeModalSafely(modalEl);
+                showToast('success', 'Review completed.');
+                this.loadDashboard();
+            } catch (xhr) {
+                const detail = xhr && xhr.responseJSON && xhr.responseJSON.detail;
+                $("#reviewError").text(typeof detail === 'string' ? detail : 'Could not save the review.').removeClass("d-none");
+                $btn.prop("disabled", false);
+            }
+        });
+        $(modalEl).on("hidden.bs.modal", function() { setTimeout(() => $(this).remove(), 0); });
     },
 
     emptyRow() {
@@ -625,17 +508,19 @@ const PeriodicReviews = {
                 </td>
                 <td style="padding: 14px 20px;">
                     <span style="font-size: 13px; padding: 5px 11px; border-radius: 8px; font-weight: 600; display: inline-block; ${statusColors[review.status]}">
-                        ${review.status === 'Inactive' ? 'Completed' : 'Active'}
+                        ${review.status === 'Inactive' ? 'Completed' : review.reviewStatus === 'IN_PROGRESS' ? 'In progress' : 'Scheduled'}
                     </span>
                 </td>
                 <td class="px-3 py-3">
                     <div class="rc-actions">
-                        <button type="button" class="btn btn-sm rc-actions__view trigger-review-btn" data-customer="${review.customerId}">
-                            <i class="fas fa-play me-1"></i>Trigger
-                        </button>
-                        <button type="button" class="btn btn-sm rc-actions__icon edit-schedule-btn" data-customer="${review.customerId}" title="Edit schedule" aria-label="Edit review schedule for ${escapeHtml(displayName)}">
-                            <i class="fas fa-pen"></i>
-                        </button>
+                        ${review.status !== 'Active' ? '<span class="text-muted" style="font-size: 13px;">Done</span>' : `
+                        ${review.reviewStatus === 'IN_PROGRESS' ? '' : `
+                        <button type="button" class="btn btn-sm rc-actions__icon start-review-btn" data-id="${escapeHtml(review.id)}" title="Mark as in progress" aria-label="Start review for ${escapeHtml(displayName)}">
+                            <i class="fas fa-play"></i>
+                        </button>`}
+                        <button type="button" class="btn btn-sm rc-actions__view complete-review-btn" data-id="${escapeHtml(review.id)}">
+                            <i class="fas fa-check me-1"></i>Complete
+                        </button>`}
                     </div>
                 </td>
             </tr>
@@ -886,8 +771,7 @@ const PeriodicReviews = {
                 
                 // Refresh the dashboard
                 this.updateStats();
-                this.renderScheduleDonut();
-                this.initializeTable();
+                        this.initializeTable();
             } else {
                 showToast("error", "Failed to schedule review");
             }
@@ -986,17 +870,33 @@ const PeriodicReviews = {
             }
         });
         
-        // Trigger review button
-        $(document).on("click", ".trigger-review-btn", function() {
-            const customerId = $(this).data("customer");
-            showToast("info", `Triggering review for ${customerId}`);
-        });
-        
-        // Edit schedule button
-        $(document).on("click", ".edit-schedule-btn", function() {
-            const customerId = $(this).data("customer");
-            showToast("info", `Edit schedule for ${customerId}`);
-        });
+        const setFilters = (values) => {
+            $("#reviewSearch").val('');
+            $("#filterReviewUrgency").val(values.urgency || 'all');
+            $("#filterReviewRisk").val(values.risk || 'all');
+            $("#filterReviewStatus").val(values.status || 'all');
+            applyFilters();
+        };
+        $("#mainContent").off("click.reviews")
+            .on("click.reviews", "#prTiles .rq-tile", function() {
+                const presets = {
+                    overdue: { urgency: 'overdue' }, elevated: { urgency: 'overdue', risk: 'ELEVATED' }, longest: { urgency: 'overdue' },
+                    soon: { urgency: 'soon' }, month: { urgency: 'month' }, progress: { status: 'IN_PROGRESS' }
+                };
+                setFilters(presets[$(this).data("tile")] || {});
+            })
+            .on("click.reviews", ".start-review-btn", async function() {
+                const $btn = $(this).prop("disabled", true);
+                try {
+                    await API.put(`/kyc-reviews/${$btn.data("id")}`, { review_status: 'IN_PROGRESS' });
+                    showToast('success', 'Review marked as in progress.');
+                    self.loadDashboard();
+                } catch (xhr) { $btn.prop("disabled", false); }
+            })
+            .on("click.reviews", ".complete-review-btn", function() {
+                const review = self.reviewsData.find(r => r.id === $(this).data("id"));
+                if (review) self.showCompleteModal(review);
+            });
     }
 };
 
