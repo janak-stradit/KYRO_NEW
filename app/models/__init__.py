@@ -14,6 +14,7 @@ from app.models.knowledge_chunk import KnowledgeChunk
 from app.models.obligation import Obligation
 from app.models.obligation_mapping import ObligationMapping
 from app.models.change_management import RegulatoryChange, RuleConfigChange
+from app.models.document import Document, DocumentExtraction, DocumentPage
 from app.models.regulatory import RegulatoryIngestionRun, RegulatorySection, RegulatorySource
 
 __all__ = [
@@ -47,4 +48,7 @@ __all__ = [
     "ObligationMapping",
     "RegulatoryChange",
     "RuleConfigChange",
+    "Document",
+    "DocumentPage",
+    "DocumentExtraction",
 ]

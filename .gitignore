@@ -104,3 +104,6 @@ GITHUB_STATUS.md
 # ── Editor/backup leftovers ─────────────────────────────────────
 *.backup
 *.bak
+
+# Uploaded KYC documents and other local runtime data
+var/

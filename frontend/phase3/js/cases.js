@@ -548,6 +548,10 @@ const Cases = {
                                         </li>`).join('')}
                                 </ul>` : `<p class="cd-explanation text-muted">No rule triggers recorded.</p>`}
 
+                            ${alert.id ? `
+                                <h6 class="cd-heading">Documents</h6>
+                                <div id="caseDocuments"></div>` : ''}
+
                             ${alert.resolution_outcome ? `
                                 <h6 class="cd-heading">Disposition</h6>
                                 <p class="cd-explanation">
@@ -575,6 +579,10 @@ const Cases = {
         const modalEl = document.getElementById('caseDetailsModal');
         const modal = new bootstrap.Modal(modalEl);
         modal.show();
+
+        if (alert.id) {
+            Documents.renderSection('#caseDocuments', { customerId: caseData.rawCustomerId, alertId: alert.id, customerName: displayName });
+        }
 
         // Hand over to the export dialog once this modal has closed
         $("#caseDetailsExportBtn").on("click", () => {

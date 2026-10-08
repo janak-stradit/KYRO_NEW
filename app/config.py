@@ -70,6 +70,10 @@ class Settings(BaseSettings):
     # change through an approved change request (/changes/rules).
     rule_changes_require_approval: bool = False
 
+    # Where uploaded KYC documents are kept (local disk in development; use
+    # encrypted object storage in production). Never inside the repository tree.
+    document_storage_dir: str = "var/documents"
+
     # ── Watchlist screening (Phase 4.1) ─────────────────────────────
     watchlist_confirmed_match_score: float = 92.0
     watchlist_potential_match_score: float = 75.0

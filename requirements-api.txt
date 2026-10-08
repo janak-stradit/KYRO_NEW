@@ -43,3 +43,5 @@ rapidfuzz>=3.9.0
 # ── Compliance AI (Phase 11) ──────────────────────────────────
 # HTTP client for the OpenAI-compatible LLM endpoint (also used by tests)
 httpx>=0.27.0
+# Text from digital PDFs for the document review copilot (pure Python)
+pypdf>=4.0

@@ -33,6 +33,7 @@ class CustomerCreate(CustomerBase):
 
 class CustomerUpdate(BaseModel):
     full_name: str | None = None
+    date_of_birth: date | None = None
     phone: str | None = None
     country: str | None = None
     residency_country: str | None = None

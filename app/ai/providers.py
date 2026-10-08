@@ -129,6 +129,50 @@ def _mock_mappings(obligation_text: str) -> list[dict]:
     ][:3]
 
 
+_MOCK_DOCUMENT_LABELS = (
+    ("full_name", r"(?:full )?name|surname and given names|account holder|customer"),
+    ("company_name", r"company name|registered name|legal name|entity name"),
+    ("date_of_birth", r"date of birth|dob|born"),
+    ("nationality", r"nationality|citizenship"),
+    ("id_number", r"(?:passport|document|id|identity card|licen[cs]e) (?:number|no\.?)"),
+    ("issue_date", r"(?:date of issue|issue date|issued(?: on)?|statement date|date)"),
+    ("expiry_date", r"(?:date of expiry|expiry date|expires(?: on)?|valid until)"),
+    ("registration_number", r"(?:company|registration|registered) (?:number|no\.?)"),
+    ("incorporation_date", r"(?:date of incorporation|incorporated(?: on)?)"),
+    ("address", r"(?:registered |residential )?address"),
+    ("country", r"country(?: of (?:residence|incorporation))?"),
+    ("director", r"director"),
+    ("beneficial_owner", r"(?:ultimate )?beneficial owner|shareholder|ubo"),
+    ("period_end", r"period end(?:ing)?|year end(?:ed)?"),
+    ("total_assets", r"total assets"),
+    ("revenue", r"revenue|turnover"),
+    ("net_income", r"net (?:income|profit)"),
+    ("source_of_funds", r"source of (?:funds|wealth)"),
+    ("amount", r"amount"),
+)
+
+
+def _mock_document_fields(user: str) -> list[dict]:
+    """
+    Stand-in for the model on documents: reads "Label: value" lines. It only
+    finds fields a document labels explicitly, which is enough to exercise
+    the review workflow without a provider.
+    """
+    wanted = set(re.findall(r"[a-z_]+", user.split("Fields to extract:", 1)[1].split("\n", 1)[0]))
+    fields, page = [], 1
+    for line in user.split("Document text:", 1)[1].splitlines():
+        marker = re.fullmatch(r"\s*\[Page (\d+)\]\s*", line)
+        if marker:
+            page = int(marker.group(1))
+            continue
+        for field, labels in _MOCK_DOCUMENT_LABELS:
+            match = re.match(rf"\s*(?:{labels})\s*[:\-]\s*(.+?)\s*$", line, re.I)
+            if match and field in wanted:
+                fields.append({"field": field, "value": match.group(1), "page": page, "source_quote": line.strip(), "confidence": 0.6})
+                break
+    return fields[:40]
+
+
 class MockProvider:
     name = "mock"
 
@@ -142,6 +186,8 @@ class MockProvider:
             text = json.dumps({"status": "ok", "echo": echo.group(1), "mock": True})
         elif "obligations" in system and "Section text:" in user:
             text = json.dumps({"obligations": _mock_obligations(user.split("Section text:", 1)[1])})
+        elif "Document text:" in user and "Fields to extract:" in user:
+            text = json.dumps({"fields": _mock_document_fields(user)})
         elif "Control catalogue:" in user:
             text = json.dumps({"mappings": _mock_mappings(user.split("Control catalogue:", 1)[0])})
         elif "JSON" in system or "json" in system:
