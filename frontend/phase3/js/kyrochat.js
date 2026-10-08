@@ -281,9 +281,10 @@ const KyroChat = {
     },
 
     async customerSummary(id, code) {
-        const [customer, queue] = await Promise.all([
+        const [customer, queue, profile] = await Promise.all([
             API.get(`/customers/${id}`),
-            API.get('/alerts/queue', { customer_id: id, page_size: 5 })
+            API.get('/alerts/queue', { customer_id: id, page_size: 5 }),
+            API.get(`/customers/${id}/risk-profile`).catch(() => [])
         ]);
         const flags = [customer.pep_flag ? 'a PEP' : null, customer.sanctions_flag ? 'a sanctions match' : null, customer.adverse_media_flag ? 'adverse media' : null].filter(Boolean);
         const human = (v) => String(v || 'not set').replace(/_/g, ' ').toLowerCase();
@@ -292,9 +293,14 @@ const KyroChat = {
             + (queue.total ? `There ${queue.total === 1 ? 'is' : 'are'} <strong>${this.n(queue.total)}</strong> unresolved alert${queue.total === 1 ? '' : 's'}; the highest score is ${queue.items[0].risk_score}.`
                            : 'There are no unresolved alerts.')
             + (queue.total ? `<div class="kc-reg-cites">${this.link('cases', 'Review this customer\'s cases', code)}</div>` : '');
-        const details = queue.items.map(a => `
+        const why = profile.length ? `
             <div class="kc-reg-source">
-                <div class="kc-reg-source__head"><strong>Score ${a.risk_score}</strong><span>${escapeHtml(human(a.status))}</span></div>
+                <div class="kc-reg-source__head"><strong>Why this rating (score ${customer.risk_score})</strong></div>
+                ${profile.map(f => `<p>${escapeHtml(f.risk_factor)}: +${Number(f.risk_weight)}</p>`).join('')}
+            </div>` : '';
+        const details = why + queue.items.map(a => `
+            <div class="kc-reg-source">
+                <div class="kc-reg-source__head"><strong>Alert score ${a.risk_score}</strong><span>${escapeHtml(human(a.status))}</span></div>
                 <div class="kc-reg-source__meta">${escapeHtml(this.rulesText(a))} &middot; created ${escapeHtml(formatDateTime(a.created_at))}</div>
             </div>`).join('');
         return { html, details: details || null };

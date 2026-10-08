@@ -30,7 +30,7 @@ from app.schemas.alert import (
     ResolutionOptions,
 )
 from app.schemas.common import Page
-from app.services import feedback_service
+from app.services import customer_risk_service, feedback_service
 from app.services.audit_service import log_action
 from app.utils.security import decode_token
 
@@ -381,6 +381,10 @@ def resolve(
             "is_false_positive": alert.is_false_positive,
         },
     )
+    # Closing an alert (or filing a SAR) can change the customer's rating
+    customer = db.get(Customer, alert.customer_id)
+    if customer is not None:
+        customer_risk_service.assess_customer(db, customer, performed_by=user.id)
     db.commit()
     db.refresh(alert)
     return alert

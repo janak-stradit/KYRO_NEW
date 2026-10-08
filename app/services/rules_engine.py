@@ -227,4 +227,9 @@ def apply_to_transaction(db: Session, txn: Transaction, customer: Customer) -> t
         db.add(alert)
 
     db.flush()
+    if alert is not None:
+        # A new alert can change the customer's rating
+        from app.services import customer_risk_service  # imported here to avoid an import cycle
+
+        customer_risk_service.assess_customer(db, customer)
     return rules, score, alert

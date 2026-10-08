@@ -51,7 +51,7 @@ class CustomerRiskProfile(Base, UUIDPrimaryKeyMixin):
     __tablename__ = "customer_risk_profiles"
     __table_args__ = (
         CheckConstraint(
-            "risk_category IN ('GEOGRAPHIC','PRODUCT','CHANNEL','BEHAVIORAL')",
+            "risk_category IN ('GEOGRAPHIC','PRODUCT','CHANNEL','BEHAVIORAL','SCREENING')",
             name="chk_risk_profile_category",
         ),
         {"schema": SCHEMA},

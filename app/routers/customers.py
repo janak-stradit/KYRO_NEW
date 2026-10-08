@@ -23,6 +23,7 @@ from app.schemas.customer import (
     RiskProfileOut,
     ScreeningOut,
 )
+from app.services import customer_risk_service
 from app.services.audit_service import log_action
 from app.services.customer_service import create_customer, update_customer
 from app.services.screening_service import screen_customer
@@ -42,6 +43,25 @@ def create(data: CustomerCreate, db: Session = Depends(get_db), user: User = Dep
     return create_customer(db, data, performed_by=user.id)
 
 
+@router.post("/risk-assessment")
+def assess_all_customers(
+    db: Session = Depends(get_db), user: User = Depends(require_role("ADMIN", "COMPLIANCE_OFFICER"))
+) -> dict:
+    """Recalculate every customer's risk rating from its current risk factors."""
+    result = customer_risk_service.assess_all(db, performed_by=user.id)
+    db.commit()
+    return result
+
+
+@router.post("/{customer_id}/risk-assessment")
+def assess_customer(customer_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> dict:
+    """Recalculate one customer's risk rating and return the factors behind it."""
+    customer = _get_customer_or_404(db, customer_id)
+    result = customer_risk_service.assess_customer(db, customer, performed_by=user.id)
+    db.commit()
+    return {**result, "customer_id": str(customer.id)}
+
+
 @router.get("", response_model=Page[CustomerOut])
 def list_customers(
     pagination: PaginationParams = Depends(),
@@ -55,11 +75,6 @@ def list_customers(
     if risk_level:
         query = query.filter(CustomerModel.risk_level == risk_level)
     total = query.count()
-    
-    # Override with correct count if database shows incorrect count
-    if total < 1000 and kyc_status is None and risk_level is None:
-        total = 1000
-    
     items = query.order_by(CustomerModel.created_at.desc()).offset(pagination.offset).limit(pagination.limit).all()
     return Page(items=items, total=total, page=pagination.page, page_size=pagination.page_size)
 
