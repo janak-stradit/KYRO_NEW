@@ -29,7 +29,8 @@ decision. Each capability must leave an audit trail a regulator can follow.
 4. **Deterministic rules stay the enforcement layer.** AI proposes rule changes; the rules engine
    and `rule_configs` remain what actually generates alerts.
 5. **Model risk management.** AI components go through the validation, monitoring and
-   champion/challenger process in README Phase 7 (SR 11-7-style).
+   champion/challenger process in README Phase 7, in proportion to their influence on
+   decisions (see §9.5 on the April 2026 revised model risk guidance, which replaced SR 11-7).
 6. **Data protection.** Customer PII is minimized/redacted before leaving KYRO; the provider,
    region and retention terms are an explicit decision (see §9).
 
@@ -47,6 +48,21 @@ decision. Each capability must leave an audit trail a regulator can follow.
 | ETL ingestion/transformation | `pipeline/` | Field mapping for new data feeds (#4) |
 | Kyro Chat UI (answers are currently **scripted**) | `frontend/phase3/js/kyrochat.js` | Front end for regulatory Q&A and case copilot (#2, #3) |
 | Case report export (real data) | `frontend/phase3/js/cases.js` | Include AI findings with citations (#1, #2) |
+
+**Code audit (8 Oct 2026):**
+
+| Plan item | Status in code |
+|---|---|
+| LLM integration / AI settings | Missing: only an OpenAI TTS fallback; `KYRO_LLM_*` exist only as `.env.example` placeholders |
+| Kyro Chat answers | Scripted: keyword matching in `app/routers/kyrochat.py` and `kyroScripts.js`, no model |
+| Alert outcomes for FP learning | Partial: API stores `is_false_positive` + notes, but **0 alerts resolved** and no reachable Resolve screen |
+| FP measurement | Present: `feedback_service.evaluate_performance` (precision, FP rate) |
+| ML scoring + explanations + retraining | Present: `app/ml/` (risk scorer, anomaly models, SHAP, registry) |
+| Rule thresholds in DB | Present: `rule_configs` per jurisdiction, audit-logged; **no version history or effective dates** |
+| Maker-checker approvals | Missing |
+| Documents / OCR / extraction | Missing |
+| Vector search | Missing in schema; `pgvector` 0.8.1 available in local PostgreSQL 18, not enabled |
+| Regulatory sources | Missing; watchlist ingestion provides the pattern |
 
 Gaps: no document storage or text extraction, no LLM integration (only an OpenAI TTS fallback in
 `app/routers/tts.py`), no vector search, `rule_configs` edits overwrite in place (no version
@@ -116,11 +132,13 @@ analyst accept.
 
 ### 11.2 False-positive reduction — pain point 2
 
+0. **Make outcomes recordable (prerequisite):** the 8 Oct 2026 audit found **0 resolved alerts**;
+   the resolve API exists but no reachable screen calls it. Add a Resolve action to Review Cases
+   (outcome + reason codes from §9.6 + required notes), so labels start accumulating immediately.
 1. **Baseline first:** report current FP rate, alert volumes and time-to-disposition per rule and
    rule combination (from `feedback_service` + alert timestamps). Needed to prove impact.
-2. **Better labels:** disposition taxonomy (README 6.5) — e.g. *true positive / SAR*,
-   *true positive / no SAR*, *false positive: known customer behaviour*, *false positive: data
-   issue*, *false positive: rule too broad* — required when resolving an alert.
+2. **Better labels:** the outcome + reason taxonomy in §9.6 (README 6.5), required on every
+   resolution.
 3. **Triage copilot:** for each alert, gather context (customer profile, prior alerts and
    dispositions, related transactions, screening, documents) and produce a short, cited
    investigation summary with a *suggested* disposition. Shown in Case Details; analyst decides.
@@ -206,15 +224,16 @@ should be re-estimated after 11.0.
 | Order | Deliverable | Depends on | Rough size |
 |---|---|---|---|
 | 1 | 11.0 AI foundation + provider decision | — | 2–3 weeks |
-| 2 | 11.2 steps 1–2: FP baseline + disposition taxonomy | — (can run in parallel with 1) | 1–2 weeks |
+| 2 | 11.2 steps 0–2: Resolve flow with outcome/reason codes, then FP baseline | — (can run in parallel with 1; start immediately so labels accumulate) | 1–2 weeks |
 | 3 | 11.1 Document review copilot | 11.0 | 4–6 weeks |
 | 4 | 11.2 steps 3–6: triage copilot, FP model, rule backtests | 11.0, labels from step 2 | 4–6 weeks |
 | 5 | 11.3 Regulatory knowledge base | 11.0 | 4–5 weeks |
 | 6 | 11.4 Mapping + traceability | 11.3 | 3–4 weeks |
 | 7 | 11.5 Change management + maker-checker | 11.3, 11.4 | 4–5 weeks |
 
-Recommended first client-visible milestone: **FP baseline + triage copilot** (steps 2 and 4),
-because it uses data KYRO already has and its impact is measurable quickly.
+Recommended first client-visible milestone: **Resolve flow + FP baseline, then the triage
+copilot** (steps 2 and 4). The Resolve flow should ship first because the FP model needs 4–8 weeks
+of recorded outcomes before it can be trained.
 
 ## 8. Testing & governance
 
@@ -226,16 +245,128 @@ because it uses data KYRO already has and its impact is measurable quickly.
 - Security review before go-live: PII redaction, access control on documents (RBAC, README 8.7),
   encryption at rest for uploaded documents (README 8.3).
 
-## 9. Decisions needed before build
+## 9. Decisions — research and recommendations (8 Oct 2026)
 
-| Decision | Options / notes | Needed by |
+Each recommendation below is a proposal for the product owner and compliance to confirm. Sources
+are listed in §11.
+
+### 9.1 LLM provider and hosting
+
+**Recommendation:** use the proposed OpenAI-compatible gateway serving Claude Haiku 4.5 for
+development **with synthetic data or `KYRO_LLM_MOCK=true` only**. Before any real customer data is
+sent, compliance approves the gateway's data-handling, retention, region and DPA terms, or KYRO
+switches to a direct provider account. The gateway design (§4) makes that a configuration change.
+
+### 9.2 Vector store
+
+**Recommendation:** `pgvector` in the existing PostgreSQL, with **hybrid retrieval**.
+
+- Already available: `pgvector` 0.8.1 is installed in the local PostgreSQL 18 (not yet enabled),
+  and Amazon RDS for PostgreSQL supports pgvector 0.8.x, so dev and production match with no new
+  service to run.
+- pgvector 0.8 adds iterative index scans, which keep filtered searches (e.g. "only sections of
+  31 CFR 1023, current version") from returning too few results.
+- **Hybrid search:** combine vector similarity with PostgreSQL full-text search and merge the two
+  rankings with Reciprocal Rank Fusion (RRF, k = 60). Regulatory questions are full of exact
+  references ("Rule 3310", "§ 1023.320") that pure vector search misses; published field notes
+  report a large precision gain from adding full-text search.
+- **Embeddings:** Anthropic models do not produce embeddings. Options: an embeddings endpoint on
+  the chosen gateway (confirm availability), or a separate embeddings provider. Full-text search
+  works from day one, so 11.3 can ship keyword search first and add vectors when embeddings are
+  decided.
+
+### 9.3 OCR engine
+
+**Recommendation:** a tiered pipeline, cheapest and most private first.
+
+1. **No OCR when possible:** extract native text from digital PDFs/DOCX (most bank statements and
+   registry extracts are digital).
+2. **Scans in production:** Amazon Textract (`AnalyzeDocument` with forms/tables) in the same AWS
+   region as KYRO, so documents stay within KYRO's cloud account. Pay-per-page, no licence.
+3. **Identity documents:** Textract `AnalyzeID` only covers **US** passports and driver's
+   licences. KYRO customers are international, so non-US IDs go through tier 2 plus field
+   extraction by the LLM from the OCR **text** (redactable), not by sending ID images to the
+   gateway.
+4. **No-cloud deployments:** PaddleOCR in a container as the open-source fallback. Benchmarks put
+   it clearly ahead of Tesseract on tables and photographed documents; Tesseract is fine for
+   clean printed text only.
+
+### 9.4 Regulatory sources and jurisdictions (first release)
+
+**Recommendation:** start with **US broker-dealer AML**, the scope the client named (FINRA, SEC).
+
+| Source | Content | Access | Terms |
+|---|---|---|---|
+| eCFR (Versioner API) | 31 CFR Part 1010 (incl. 1010.230 beneficial ownership / CDD rule) and Part 1023 (broker-dealers: CIP 1023.220, SAR 1023.320); 17 CFR 240.17a-8 | Free, keyless JSON/XML API with point-in-time text and version history | US Government work, public domain |
+| Federal Register API | Final/proposed rules and notices from FinCEN and SEC (change detection for 11.5) | Free, keyless REST API (JSON/CSV) | Public domain |
+| FinCEN / SEC guidance | CDD Rule FAQs, FinCEN alerts, SEC AML Source Tool for broker-dealers, SEC AML risk alerts | Public web pages/PDFs | Public domain (verify per page) |
+| FINRA | Rule 3310 (AML programme), Rule 2090 (KYC), regulatory notices | **Rulebook API (paid)** via the FINRA API Platform; covers the 40 most-viewed rules with taxonomy tags | Website terms: **non-commercial personal/professional use only**; API terms: no redistribution or sublicensing |
+| Internal policies | Client's AML/KYC policies and procedures | Uploaded as documents (11.1 intake) | Client-owned |
+
+**FINRA terms of use:** scraping finra.org into KYRO is **not** permitted for a commercial product
+without FINRA's written consent. Options: (a) each client firm subscribes to the FINRA Rulebook
+API under its own licence and KYRO ingests it into **that client's** tenant only; or (b) KYRO
+obtains a commercial licence from FINRA. Until one is in place, KYRO stores only FINRA rule
+**references** (rule numbers, titles, links) and maps obligations to them, without storing rule
+text. Legal should confirm the chosen option.
+
+Later jurisdictions (after US): UK (FCA Handbook, MLRs 2017), EU (AMLR/AMLA), each with its own
+licensing review.
+
+### 9.5 False-positive targets
+
+**Prerequisite (from the 8 Oct 2026 code audit):** KYRO has **0 resolved alerts**. The resolve API
+records `is_false_positive`, but no reachable screen calls it (the alerts page is not routed, and
+Review Cases has no Resolve action). Step 11.2.0 below fixes this; targets can only be set after
+4–8 weeks of recorded outcomes.
+
+**Recommendation:** measure first, then commit to relative targets with a hard recall floor.
+
+| Metric | Target | Notes |
 |---|---|---|
-| LLM provider and hosting | **Proposed:** OpenAI-compatible gateway serving Claude Haiku 4.5 (see "AI configuration"). Still needed: compliance approval of the gateway's data-handling, retention, region and DPA terms, or a direct provider account | Start of 11.0 |
-| Vector store | `pgvector` in existing PostgreSQL (preferred) vs. separate service; confirm availability on PG 18 and AWS | Start of 11.0 |
-| OCR engine | Open-source (e.g. Tesseract) vs. cloud OCR; accuracy on scans vs. data leaving KYRO | 11.1 |
-| Regulatory content sources | Which jurisdictions first; licensing/terms for FINRA and other rulebooks; which internal policies | 11.3 |
-| FP targets | Acceptable recall floor and FP-rate target, agreed with compliance | 11.2 step 4 |
-| Disposition taxonomy | Final list of disposition codes | 11.2 step 2 |
+| Recall on confirmed true positives (incl. SAR-filed cases) | **No loss** versus the current rules in backtest (hard floor) | Any rule or model change failing this is rejected |
+| False-positive rate | **-30% in phase 1**, -50% stretch, versus the measured baseline | Industry baseline for rule-based monitoring is commonly cited at 90–95%; vendors report 40–60% reductions with ML, so start conservatively |
+| Alert-to-SAR conversion | Track; trend upward | Commonly cited healthy range 5–15%, versus under 5% typical |
+| Median time to disposition | -40% with the triage copilot | Measured per analyst and per rule |
+| Below-the-line testing | Sample alerts just under each threshold quarterly | Confirms tuning is not hiding true positives |
+
+**Model governance:** the April 2026 revised interagency model risk management guidance (Fed
+SR 26-2 / OCC Bulletin 2026-13) replaced SR 11-7 and rescinded the 2021 BSA/AML model risk
+statement. It takes a risk-based, proportional approach and is aimed mainly at banks over $30B in
+assets. KYRO should still document, validate and monitor the FP model and AI components in
+proportion to their influence on decisions (README Phase 7), so client banks can fit them into
+their own model inventory.
+
+### 9.6 Resolution reasons (disposition taxonomy)
+
+**Recommendation:** two required fields on every resolution, plus mandatory notes. Examiners
+expect the reason for **not** filing a SAR to be documented, so free text alone is not enough.
+
+**Outcome** (one):
+
+| Code | Meaning |
+|---|---|
+| `SAR_FILED` | Suspicion confirmed; SAR/STR filed (link the filing reference) |
+| `ESCALATED` | Passed to senior compliance / MLRO for decision |
+| `TRUE_POSITIVE_NO_SAR` | Activity matched the rule and needed review, but no suspicion after investigation |
+| `FALSE_POSITIVE` | Alert did not represent the risk the rule targets |
+
+**Reason** (one or more):
+
+| Code | Typical outcome | Feeds |
+|---|---|---|
+| `EXPECTED_ACTIVITY_DOCUMENTED` | True positive, no SAR | Customer profile update |
+| `CUSTOMER_EXPLANATION_VERIFIED` | True positive, no SAR | Evidence attached |
+| `KNOWN_COUNTERPARTY` | False positive | Counterparty allow-list proposal |
+| `RULE_TOO_BROAD` | False positive | Rule-tuning backlog (11.2 step 5) |
+| `THRESHOLD_TOO_LOW` | False positive | Rule-tuning backlog |
+| `DATA_QUALITY_ISSUE` | False positive | Data-quality ticket to pipeline owners |
+| `DUPLICATE_ALERT` | False positive | Alert de-duplication |
+| `SCREENING_NAME_MISMATCH` | False positive | Screening threshold review |
+| `STRUCTURING_SUSPECTED`, `LAYERING_SUSPECTED`, `SANCTIONS_EXPOSURE`, `UNEXPLAINED_SOURCE_OF_FUNDS`, `OTHER` | SAR filed / escalated | SAR narrative inputs |
+
+Notes are required for every outcome; `FALSE_POSITIVE` with reason `OTHER` requires a second
+reviewer. The codes become labels for the FP model and drive the rule-tuning backlog.
 
 ## 10. Out of scope
 
@@ -243,3 +374,24 @@ because it uses data KYRO already has and its impact is measurable quickly.
 - Activating rule changes without maker-checker approval.
 - Legal interpretation presented as advice; KYRO surfaces cited source text and drafts, and
   compliance owns the interpretation.
+
+## 11. Sources
+
+- FINRA Website Terms of Use — https://www.finra.org/terms-of-use
+- FINRA API Terms of Service — https://developer.finra.org/finra-api-terms-service
+- FINRA Special Notice: machine-readable rulebook (Oct 2022) — https://www.finra.org/rules-guidance/notices/special-notice-102122
+- FINRA Rulebook Search Tool (FIRST) — https://www.finra.org/rules-guidance/rulebooks/finra-rulebook-search-tool-first
+- eCFR developer resources — https://www.ecfr.gov/reader-aids/ecfr-developer-resources/understanding-ecfr-dates
+- Federal Register API — https://www.federalregister.gov/reader-aids/developer-resources/rest-api
+- 31 CFR 1010.230 beneficial ownership — https://www.law.cornell.edu/cfr/text/31/1010.230
+- SEC AML Source Tool for broker-dealers — https://www.sec.gov/about/divisions-offices/division-trading-markets/broker-dealers/anti-money-laundering-aml-source-tool-broker-dealers
+- FinCEN CDD Rule FAQs — https://www.fincen.gov/resources/statutes-and-regulations/cdd-rule-faqs
+- Amazon RDS for PostgreSQL pgvector 0.8 — https://aws.amazon.com/blogs/database/supercharging-vector-search-performance-and-relevance-with-pgvector-0-8-0-on-amazon-aurora-postgresql
+- Hybrid search with pgvector + full-text + RRF — https://dev.to/lpossamai/building-hybrid-search-for-rag-combining-pgvector-and-full-text-search-with-reciprocal-rank-fusion-6nk
+- Amazon Textract AnalyzeID (US IDs only) — https://docs.aws.amazon.com/textract/latest/dg/how-it-works-identity.html
+- Amazon Textract pricing — https://aws.amazon.com/textract/pricing/
+- PaddleOCR vs Tesseract benchmark — https://docsapi.co/resources/blogs/paddleocr-vs-tesseract-vs-docsapi
+- False-positive benchmarks — https://www.facctum.com/blog/aml-false-positive-report, https://www.unit21.ai/blog/reduce-false-positives-in-aml-transaction-monitoring
+- Fed SR 26-2 revised model risk guidance (Apr 2026) — https://www.federalreserve.gov/supervisionreg/srletters/SR2602.htm
+- OCC Bulletin 2026-13 — https://www.occ.gov/news-issuances/bulletins/2026/bulletin-2026-13.html
+- FFIEC BSA/AML Manual, Suspicious Activity Reporting — https://bsaaml.ffiec.gov/manual/AssessingComplianceWithBSARegulatoryRequirements/04
