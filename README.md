@@ -167,6 +167,11 @@ Phased by dependency order. Each phase is independently shippable.
 | 10.2 | Centralized structured logging (ELK/Loki) | No centralized log aggregation today |
 | 10.3 | Alerting on pipeline failures, DLQ growth, model drift, alert-queue aging | Ops currently finds out about failures manually |
 
+### Phase 11 — Compliance AI (client pain points)
+AI-assisted document review, false-positive reduction, regulatory knowledge base, obligation and
+data mapping, and regulatory change management, all human-in-the-loop and fully audited.
+Detailed plan: [`docs/plans/COMPLIANCE_AI_PLAN.md`](docs/plans/COMPLIANCE_AI_PLAN.md).
+
 ## 4. Quick wins (low effort, do first)
 
 - ~~Fix `CORSMiddleware(allow_origins=["*"])` in `app/main.py`.~~ **Done** — see `SECURITY.md`.
