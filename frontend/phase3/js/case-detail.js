@@ -21,7 +21,7 @@ const CaseDetail = {
     },
 
     human(v) {
-        return v ? String(v).replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, c => c.toUpperCase()) : '—';
+        return v ? String(v).replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, c => c.toUpperCase()).replace(/\b(Pep|Kyc|Sar|Fx)\b/g, m => m.toUpperCase()) : '—';
     },
 
     empty(message) {
