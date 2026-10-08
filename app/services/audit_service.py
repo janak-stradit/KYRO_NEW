@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.models.audit import AuditLog
 
-ENTITY_TYPES = {"CUSTOMER", "ACCOUNT", "TRANSACTION", "ALERT"}
+ENTITY_TYPES = {"CUSTOMER", "ACCOUNT", "TRANSACTION", "ALERT", "RULE_CONFIG", "OBLIGATION"}
 ACTIONS = {"CREATE", "UPDATE", "DELETE", "REVIEW", "APPROVE", "REJECT"}
 
 

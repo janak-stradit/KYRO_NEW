@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.ai.retrieval import index_text
 from app.models.knowledge_chunk import KnowledgeChunk
+from app.models.obligation import Obligation
 from app.models.regulatory import RegulatoryIngestionRun, RegulatorySection, RegulatorySource
 from app.services import ecfr_adapter
 from app.services.ecfr_adapter import SectionRecord
@@ -26,6 +27,13 @@ ADAPTERS: dict[str, Callable[[dict[str, Any]], tuple[str, list[SectionRecord]]]]
 
 def _hash(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _supersede_obligations(db: Session, section: RegulatorySection) -> None:
+    """Obligations drawn from text that has changed or gone need a fresh look."""
+    db.query(Obligation).filter(
+        Obligation.section_id == section.id, Obligation.status.in_(("PROPOSED", "CONFIRMED"))
+    ).update({Obligation.status: "SUPERSEDED"}, synchronize_session=False)
 
 
 def ingest_source(db: Session, source: RegulatorySource) -> RegulatoryIngestionRun:
@@ -69,6 +77,7 @@ def ingest_source(db: Session, source: RegulatorySource) -> RegulatoryIngestionR
             if existing is not None:
                 existing.is_current = False
                 existing.superseded_at = now
+                _supersede_obligations(db, existing)
                 run.sections_changed += 1
             else:
                 run.sections_added += 1
@@ -100,6 +109,7 @@ def ingest_source(db: Session, source: RegulatorySource) -> RegulatoryIngestionR
         for ref in set(current) - set(hashes):
             current[ref].is_current = False
             current[ref].superseded_at = now
+            _supersede_obligations(db, current[ref])
             db.query(KnowledgeChunk).filter(
                 KnowledgeChunk.source_type == "REGULATION", KnowledgeChunk.source_ref == ref
             ).update({KnowledgeChunk.is_current: False}, synchronize_session=False)

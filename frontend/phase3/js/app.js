@@ -149,6 +149,7 @@ const App = {
             'periodic-reviews': PeriodicReviews,
             cases: Cases,
             patterns: Patterns,
+            regulations: Regulations,
             kyrochat: KyroChat
         };
     },

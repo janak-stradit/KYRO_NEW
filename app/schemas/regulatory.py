@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -82,3 +82,54 @@ class AskResponse(BaseModel):
     sources: list[AskSource]
     interaction_id: str | None = None
     warnings: list[str]
+
+
+ObligationCategory = Literal[
+    "REPORTING", "RECORDKEEPING", "CUSTOMER_IDENTIFICATION", "PROGRAM", "MONITORING", "OTHER"
+]
+
+
+class ObligationOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    section_id: uuid.UUID
+    section_ref: str
+    section_version: str
+    obligated_party: str
+    action: str
+    deadline: str | None = None
+    condition: str | None = None
+    category: str
+    source_quote: str | None = None
+    quote_verified: bool
+    status: str
+    extracted_by: str
+    reviewed_by: uuid.UUID | None = None
+    reviewed_at: datetime | None = None
+    review_notes: str | None = None
+
+
+class ObligationReview(BaseModel):
+    """A reviewer's decision. Any field given here replaces the proposed value."""
+
+    decision: Literal["CONFIRMED", "REJECTED"]
+    notes: str | None = Field(default=None, max_length=2000)
+    obligated_party: str | None = Field(default=None, min_length=1, max_length=255)
+    action: str | None = Field(default=None, min_length=1)
+    deadline: str | None = Field(default=None, max_length=255)
+    condition: str | None = None
+    category: ObligationCategory | None = None
+
+
+class ObligationExtractResult(BaseModel):
+    sections_processed: int
+    sections_skipped: int
+    obligations_proposed: int
+    extracted_by: str
+
+
+class ObligationSummary(BaseModel):
+    by_status: dict[str, int]
+    by_category: dict[str, int]
+    unverified_quotes: int

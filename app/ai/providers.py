@@ -67,6 +67,48 @@ class OpenAICompatibleProvider:
         )
 
 
+_MOCK_DEADLINE = re.compile(
+    r"(within \d+ (?:calendar |business )?days[^,.;]*|no later than [^,.;]*|for (?:a period of )?\w+ years)", re.I
+)
+_MOCK_CATEGORIES = (
+    ("REPORTING", r"\b(report|file|filing|notif)"),
+    ("RECORDKEEPING", r"\b(record|retain|maintain a copy)"),
+    ("CUSTOMER_IDENTIFICATION", r"\b(identif|verif)"),
+    ("PROGRAM", r"\b(program|polic|procedure|training|independent testing)"),
+    ("MONITORING", r"\b(monitor|due diligence)"),
+)
+
+
+def _mock_obligations(text: str, limit: int = 8) -> list[dict]:
+    """
+    Rule-of-thumb stand-in for the model: every sentence saying someone
+    "shall" or "must" do something becomes a proposed obligation. Good enough
+    to exercise the review workflow without a provider; not a substitute for it.
+    """
+    obligations = []
+    for sentence in re.split(r"(?<=[.;:])\s+", text):
+        sentence = sentence.strip()
+        match = re.match(r"^(?:\([A-Za-z0-9]+\)\s*)*(?:[A-Z][\w ]{2,40}\.\s+)?(.*?)\b(shall|must)\b\s+(.+)$", sentence, re.S)
+        if not match or re.match(r"(not be construed|mean)\b", match.group(3)):
+            continue
+        party = re.sub(r"^(?:\([A-Za-z0-9]+\)\s*)+", "", match.group(1)).strip(" ,") or "Covered institution"
+        deadline = _MOCK_DEADLINE.search(sentence)
+        category = next((c for c, pattern in _MOCK_CATEGORIES if re.search(pattern, sentence, re.I)), "OTHER")
+        obligations.append(
+            {
+                "obligated_party": party[:200],
+                "action": match.group(3).rstrip(".;:")[:400],
+                "deadline": deadline.group(1) if deadline else None,
+                "condition": None,
+                "category": category,
+                "source_quote": sentence,
+            }
+        )
+        if len(obligations) >= limit:
+            break
+    return obligations
+
+
 class MockProvider:
     name = "mock"
 
@@ -78,6 +120,8 @@ class MockProvider:
         echo = re.search(r'"echo":\s*"([^"]*)"', user)
         if echo:
             text = json.dumps({"status": "ok", "echo": echo.group(1), "mock": True})
+        elif "obligations" in system and "Section text:" in user:
+            text = json.dumps({"obligations": _mock_obligations(user.split("Section text:", 1)[1])})
         elif "JSON" in system or "json" in system:
             text = json.dumps({"mock": True, "summary": "Mock response: AI provider is in mock mode."})
         else:

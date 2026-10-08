@@ -236,3 +236,125 @@ def test_ingest_endpoint_requires_compliance_or_admin(client, auth_headers, comp
     runs = client.get("/api/v1/regulatory/runs", params=params, headers=auth_headers).json()
     assert runs["total"] == 1
     assert any(s["code"] == "TEST_99_9999" for s in client.get("/api/v1/regulatory/sources", headers=auth_headers).json())
+
+
+# ── Obligations register ─────────────────────────────────────────────────
+
+@pytest.fixture
+def mock_ai(monkeypatch):
+    settings = get_settings()
+    monkeypatch.setattr(settings, "kyro_ai_enabled", True)
+    monkeypatch.setattr(settings, "kyro_llm_mock", True)
+    return settings
+
+
+def _extract(client, headers, source):
+    return client.post("/api/v1/regulatory/obligations/extract", params={"source_id": str(source.id)}, headers=headers)
+
+
+def _obligations(client, headers, **params):
+    return client.get("/api/v1/regulatory/obligations", params=params, headers=headers).json()["items"]
+
+
+def test_extract_proposes_obligations_with_verified_quotes(client, auth_headers, compliance_headers, db_session, source, feed, mock_ai):
+    ingest_source(db_session, source)
+    assert _extract(client, auth_headers, source).status_code == 403
+
+    resp = _extract(client, compliance_headers, source)
+    assert resp.status_code == 200, resp.text
+    assert resp.json() == {
+        "sections_processed": 2, "sections_skipped": 0, "obligations_proposed": 3, "extracted_by": "mock",
+    }
+
+    items = _obligations(client, auth_headers, section_ref="99 CFR 9999.10")
+    assert {o["status"] for o in items} == {"PROPOSED"} and all(o["quote_verified"] for o in items)
+    report = next(o for o in items if "report each widget transfer" in o["action"])
+    assert report["obligated_party"] == "A widget dealer" and report["category"] == "REPORTING"
+    assert report["section_version"] == "2024-03-01" and "$7,500" in report["source_quote"]
+    deadline = next(o for o in items if o["deadline"])
+    assert deadline["deadline"] == "within 15 calendar days"
+
+    # Sections that already have obligations are skipped on the next run
+    assert _extract(client, compliance_headers, source).json()["sections_processed"] == 0
+
+
+def test_extract_requires_ai_to_be_enabled(client, compliance_headers, db_session, source, feed):
+    ingest_source(db_session, source)
+    assert _extract(client, compliance_headers, source).status_code == 409
+
+
+def test_quote_not_in_section_is_flagged_unverified(client, compliance_headers, db_session, source, feed, live_ai):
+    ingest_source(db_session, source)
+    live_ai["reply"] = (
+        '{"obligations": [{"obligated_party": "Widget dealer", "action": "report transfers", "deadline": null, '
+        '"condition": null, "category": "NOT_A_CATEGORY", "source_quote": "Dealers must report within 5 days."}]}'
+    )
+    section = db_session.query(RegulatorySection).filter_by(source_id=source.id, section_ref="99 CFR 9999.10").one()
+    resp = client.post(
+        "/api/v1/regulatory/obligations/extract", params={"section_id": str(section.id)}, headers=compliance_headers
+    )
+    assert resp.status_code == 200 and resp.json()["obligations_proposed"] == 1
+
+    item = _obligations(client, compliance_headers, section_ref="99 CFR 9999.10")[0]
+    assert item["quote_verified"] is False and item["category"] == "OTHER"
+    assert item["extracted_by"] == "openai_compatible"
+    summary = client.get("/api/v1/regulatory/obligations/summary", headers=compliance_headers).json()
+    assert summary["unverified_quotes"] >= 1 and summary["by_status"]["PROPOSED"] >= 1
+
+
+def test_review_confirms_with_edits_and_records_the_decision(client, auth_headers, compliance_headers, compliance_user, db_session, source, feed, mock_ai):
+    ingest_source(db_session, source)
+    _extract(client, compliance_headers, source)
+    item = _obligations(client, compliance_headers, section_ref="99 CFR 9999.20")[0]
+    url = f"/api/v1/regulatory/obligations/{item['id']}/review"
+
+    assert client.put(url, json={"decision": "CONFIRMED"}, headers=auth_headers).status_code == 403
+    assert client.put(url, json={"decision": "MAYBE"}, headers=compliance_headers).status_code == 422
+
+    resp = client.put(
+        url,
+        json={"decision": "CONFIRMED", "obligated_party": "Gadget dealers", "category": "RECORDKEEPING", "notes": "ok"},
+        headers=compliance_headers,
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert (body["status"], body["obligated_party"], body["category"]) == ("CONFIRMED", "Gadget dealers", "RECORDKEEPING")
+    assert body["reviewed_by"] == str(compliance_user.id) and body["reviewed_at"]
+
+    from app.models.audit import AuditLog
+    from app.models.obligation import Obligation
+
+    obligation = db_session.get(Obligation, item["id"])
+    interaction = db_session.get(AIInteraction, obligation.ai_interaction_id)
+    assert (interaction.human_decision, interaction.decided_by) == ("EDITED", compliance_user.id)
+    audit = db_session.query(AuditLog).filter_by(entity_type="OBLIGATION", entity_id=obligation.id).one()
+    assert audit.action == "APPROVE" and audit.new_values["obligated_party"] == "Gadget dealers"
+
+    # Re-extraction replaces open proposals but never a reviewed obligation
+    client.post(
+        "/api/v1/regulatory/obligations/extract",
+        params={"source_id": str(source.id), "redo": "true"}, headers=compliance_headers,
+    )
+    gadget = _obligations(client, compliance_headers, section_ref="99 CFR 9999.20")
+    assert [(o["status"], o["obligated_party"]) for o in gadget] == [("CONFIRMED", "Gadget dealers")]
+
+
+def test_changed_section_supersedes_its_obligations(client, compliance_headers, db_session, source, feed, mock_ai):
+    ingest_source(db_session, source)
+    _extract(client, compliance_headers, source)
+    feed.update(xml=_xml(widget_limit="$10,000"), amended={"9999.10": "2026-09-15"})
+    ingest_source(db_session, source)
+
+    widget = _obligations(client, compliance_headers, section_ref="99 CFR 9999.10")
+    assert widget and {o["status"] for o in widget} == {"SUPERSEDED"}
+    assert {o["status"] for o in _obligations(client, compliance_headers, section_ref="99 CFR 9999.20")} == {"PROPOSED"}
+    review = client.put(
+        f"/api/v1/regulatory/obligations/{widget[0]['id']}/review", json={"decision": "CONFIRMED"}, headers=compliance_headers
+    )
+    assert review.status_code == 409
+
+    # Extracting again picks up the new version of the changed section only
+    assert _extract(client, compliance_headers, source).json()["sections_processed"] == 1
+    fresh = _obligations(client, compliance_headers, section_ref="99 CFR 9999.10", status_filter="PROPOSED")
+    assert fresh and all(o["section_version"] == "2026-09-15" for o in fresh)
+    assert any("$10,000" in o["source_quote"] for o in fresh)
