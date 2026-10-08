@@ -188,3 +188,73 @@ def test_disposition_baseline_reports_fp_rate_per_rule(client, auth_headers, com
     assert body["overall"]["false_positives"] == before["overall"]["false_positives"] + 1
 
     assert client.get("/api/v1/alerts/disposition-baseline", headers=auth_headers).status_code == 403
+
+
+# ── Work queue ───────────────────────────────────────────────────────────
+
+def _queue_fixture(db_session, analyst_user):
+    from app.models.alert import Alert
+    from app.models.customer import Customer
+
+    acme = Customer(full_name="Zzqueue Acme Ltd", email="zzqueue.acme@example.com", customer_type="CORPORATE", pep_flag=True)
+    other = Customer(full_name="Zzqueue Other Ltd", email="zzqueue.other@example.com", customer_type="CORPORATE")
+    db_session.add_all([acme, other])
+    db_session.flush()
+    alerts = [
+        Alert(customer_id=acme.id, risk_score=95, triggered_rules={"rules": ["RQ01", "RQ02"]}),
+        Alert(customer_id=acme.id, risk_score=65, triggered_rules={"rules": ["RQ01"]}, status="ASSIGNED", assigned_to=analyst_user.id),
+        Alert(customer_id=acme.id, risk_score=99, triggered_rules={"rules": ["RQ01"]}, status="RESOLVED"),
+        Alert(customer_id=other.id, risk_score=30, triggered_rules={"rules": ["RQ02"]}, status="ESCALATED"),
+    ]
+    db_session.add_all(alerts)
+    db_session.commit()
+    return acme, other, alerts
+
+
+def _queue(client, headers, **params):
+    resp = client.get("/api/v1/alerts/queue", params={"q": "Zzqueue", "page_size": 50, **params}, headers=headers)
+    assert resp.status_code == 200, resp.text
+    return resp.json()
+
+
+def test_queue_defaults_to_unresolved_highest_risk_first(client, auth_headers, analyst_user, db_session):
+    acme, other, alerts = _queue_fixture(db_session, analyst_user)
+    body = _queue(client, auth_headers)
+
+    assert body["total"] == 3  # the resolved alert is not in the default queue
+    assert [i["risk_score"] for i in body["items"]] == [95, 65, 30]
+    top = body["items"][0]
+    assert top["customer_name"] == "Zzqueue Acme Ltd" and top["customer_pep"] is True
+    assert top["customer_open_alerts"] == 2 and top["assigned_to_name"] is None
+    assert body["items"][1]["assigned_to_name"] == analyst_user.full_name
+
+
+def test_queue_filters(client, auth_headers, analyst_user, db_session):
+    acme, other, alerts = _queue_fixture(db_session, analyst_user)
+
+    assert [i["risk_score"] for i in _queue(client, auth_headers, risk="high")["items"]] == [95]
+    assert [i["risk_score"] for i in _queue(client, auth_headers, risk="low")["items"]] == [30]
+    assert sorted(i["risk_score"] for i in _queue(client, auth_headers, rule="RQ02")["items"]) == [30, 95]
+    assert [i["risk_score"] for i in _queue(client, auth_headers, assignment="mine")["items"]] == [65]
+    assert sorted(i["risk_score"] for i in _queue(client, auth_headers, assignment="unassigned")["items"]) == [30, 95]
+    assert [i["risk_score"] for i in _queue(client, auth_headers, status_filter="RESOLVED")["items"]] == [99]
+    assert _queue(client, auth_headers, status_filter="ALL")["total"] == 4
+    assert _queue(client, auth_headers, customer_id=str(other.id))["total"] == 1
+    assert client.get("/api/v1/alerts/queue", params={"risk": "extreme"}, headers=auth_headers).status_code == 422
+
+
+def test_queue_summary_and_assignees(client, auth_headers, analyst_user, db_session):
+    before = client.get("/api/v1/alerts/queue/summary", headers=auth_headers).json()
+    _queue_fixture(db_session, analyst_user)
+    after = client.get("/api/v1/alerts/queue/summary", headers=auth_headers).json()
+
+    assert after["unresolved"] == before["unresolved"] + 3
+    assert after["high_risk"] == before["high_risk"] + 1
+    assert after["unassigned"] == before["unassigned"] + 2
+    assert after["assigned_to_me"] == before["assigned_to_me"] + 1
+    assert after["escalated"] == before["escalated"] + 1
+    assert after["oldest_created_at"] is not None
+    assert {r["rule"]: r["alerts"] for r in after["by_rule"]}.get("RQ01") == 2
+
+    assignees = client.get("/api/v1/alerts/assignees", headers=auth_headers).json()
+    assert any(a["id"] == str(analyst_user.id) and a["role"] == "ANALYST" for a in assignees)

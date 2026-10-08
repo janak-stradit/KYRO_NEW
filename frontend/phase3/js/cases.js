@@ -1,77 +1,57 @@
 /**
- * KYRO Review Cases - Dashboard with Risk Analysis
- * Exactly matching the reference screenshot layout
+ * KYRO Review Cases - the compliance work queue.
+ * Highest-risk, oldest alerts first; filter by risk, rule, status and owner;
+ * assign, resolve and export from each row.
  */
 
 const Cases = {
-    currentFilters: {
-        search: '',
-        status: 'all',
-        riskLevel: 'all',
-        triggerType: 'all',
-        customer: null,
-        pattern: null
-    },
-    
-    charts: {
-        riskDistribution: null,
-        statusOverview: null
-    },
-    
+    // Server-side filters for the queue
+    filters: { q: '', status: 'UNRESOLVED', risk: '', rule: '', assignment: '', customerId: null, sort: 'priority' },
+    // Set when arriving from the Patterns page with a customer selected
+    currentFilters: { customer: null, pattern: null },
+
     casesData: [],
-    
+    totalCases: 0,
+    summary: null,
+    customerCodes: {},   // customer UUID -> display code (CUST-001)
+    customerIds: {},     // display code -> customer UUID
+
     // Pagination settings
     pagination: {
         currentPage: 1,
         pageSize: 10,
         pageSizeOptions: [10, 25, 50, 100]
     },
-    
-    init(params = {}) {
-        console.log("Initializing Review Cases dashboard...", params);
-        
-        // Each visit starts unfiltered (the page re-renders its controls as
-        // "All"); only a customer passed from the Patterns page carries over.
-        Object.assign(this.currentFilters, { search: '', status: 'all', riskLevel: 'all', triggerType: 'all', customer: null, pattern: null });
-        this.pagination.currentPage = 1;
 
-        // Apply filters from params if provided
-        if (params.customer) {
-            this.currentFilters.customer = params.customer;
-        }
-        if (params.pattern) {
-            this.currentFilters.pattern = params.pattern;
-        }
-        
+    init(params = {}) {
+        // Each visit starts on the default queue; only a customer passed from
+        // the Patterns page carries over.
+        this.filters = { q: '', status: 'UNRESOLVED', risk: '', rule: '', assignment: '', customerId: null, sort: 'priority' };
+        this.currentFilters = { customer: params.customer || null, pattern: params.pattern || null };
+        this.pagination.currentPage = 1;
         this.loadDashboard();
     },
-    
-    async loadDashboard() {
-        // Chip shown when arriving from the Patterns page with a customer filter
-        let filterInfo = '';
-        if (this.currentFilters.customer) {
-            const pattern = this.currentFilters.pattern
-                ? ` &middot; from pattern <strong>${escapeHtml(this.currentFilters.pattern.replace(/_/g, ' '))}</strong>`
-                : '';
-            filterInfo = `
-                <div class="rc-filter-chip" role="status">
-                    <i class="fas fa-filter"></i>
-                    <span>Showing cases for customer <strong>${escapeHtml(this.currentFilters.customer)}</strong>${pattern}</span>
-                    <button type="button" class="rc-filter-chip__clear" id="clearCustomerFilterBtn" aria-label="Show all customers">
-                        <i class="fas fa-xmark"></i>
-                    </button>
-                </div>
-            `;
-        }
 
-        const html = `
+    human(value) {
+        return value ? String(value).replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, c => c.toUpperCase()) : '—';
+    },
+
+    /** "3 h", "2 d": how long an alert has been waiting. */
+    age(dateString) {
+        const hours = (Date.now() - new Date(dateString).getTime()) / 3600000;
+        if (!isFinite(hours) || hours < 0) return '—';
+        if (hours < 1) return '< 1 h';
+        return hours < 48 ? `${Math.floor(hours)} h` : `${Math.floor(hours / 24)} d`;
+    },
+
+    async loadDashboard() {
+        $("#mainContent").html(`
             <div class="kyro-page">
-                <!-- Page Header -->
                 <div class="kyro-page-head">
                     <div>
                         <span class="kyro-kicker">Case Management</span>
                         <h1 class="kyro-page-title">Review Cases</h1>
-                        <p class="kyro-page-sub">Monitor and manage AML review cases with intelligent risk assessment.</p>
+                        <p class="kyro-page-sub">Your work queue: the highest-risk, longest-waiting alerts come first.</p>
                     </div>
                     <div class="kyro-page-actions">
                         <button class="btn btn-primary px-4" id="refreshCasesBtn">
@@ -79,223 +59,157 @@ const Cases = {
                         </button>
                     </div>
                 </div>
-                
-                <!-- Dashboard Grid - 3 Column Layout -->
-                <div class="row g-3 mb-4">
-                    <!-- Left: Risk Distribution with Stats -->
-                    <div class="col-md-4">
-                        <div class="card border-0 shadow-sm h-100">
-                            <div class="card-body p-4">
-                                <h6 class="mb-3" style="font-weight: 600; font-size: 14px;">Risk Distribution</h6>
-                                <div style="height: 160px; margin-bottom: 20px;">
-                                    <canvas id="riskDistributionChart"></canvas>
-                                </div>
-                                <div class="row text-center mt-3">
-                                    <div class="col-4">
-                                        <h3 class="mb-0" style="font-weight: 700; color: #ef4444;" id="highRiskCount">500</h3>
-                                        <div class="text-muted" style="font-size: 11px;">High Risk</div>
-                                        <div style="font-size: 10px; color: #ef4444;">92.4%</div>
-                                    </div>
-                                    <div class="col-4">
-                                        <h3 class="mb-0" style="font-weight: 700; color: #FF8D28;" id="mediumRiskCount">105</h3>
-                                        <div class="text-muted" style="font-size: 11px;">Pending Risk</div>
-                                        <div style="font-size: 10px; color: #FF8D28;">17.3%</div>
-                                    </div>
-                                    <div class="col-4">
-                                        <h3 class="mb-0" style="font-weight: 700; color: #22c55e;" id="lowRiskCount">2</h3>
-                                        <div class="text-muted" style="font-size: 11px;">Low Risk</div>
-                                        <div style="font-size: 10px; color: #22c55e;">0.3%</div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Center: Status Overview (Black Card) -->
-                    <div class="col-md-4">
-                        <div class="card border-0 shadow-sm h-100" style="background: #1a1a1a;">
-                            <div class="card-body p-4">
-                                <h6 class="mb-3" style="font-weight: 600; color: #FF8D28; font-size: 14px;">Status overview</h6>
-                                <div class="position-relative d-flex justify-content-center align-items-center" style="height: 180px;">
-                                    <canvas id="statusOverviewChart"></canvas>
-                                </div>
-                                <div class="mt-3">
-                                    <div class="d-flex justify-content-between align-items-center p-3 rounded" style="background: rgba(255,141,40,0.2);">
-                                        <div class="d-flex align-items-center">
-                                            <i class="fas fa-th me-2" style="color: #FF8D28; font-size: 14px;"></i>
-                                            <span style="font-size: 13px; color: #fff;">Open</span>
-                                        </div>
-                                        <strong style="color: #FF8D28; font-size: 14px;" id="openStatusPercent">136 (22%)</strong>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Right: Trigger Types -->
-                    <div class="col-md-4">
-                        <div class="card border-0 shadow-sm h-100">
-                            <div class="card-body p-4">
-                                <h6 class="mb-3" style="font-weight: 600; font-size: 14px;">Trigger Types</h6>
-                                <div class="d-flex flex-column gap-2">
-                                    <div class="d-flex justify-content-between align-items-center p-2 rounded" style="background-color: #e3f2fd;">
-                                        <div class="d-flex align-items-center">
-                                            <i class="fas fa-circle me-2" style="color: #2196f3; font-size: 8px;"></i>
-                                            <span style="font-size: 13px;">Time-Based</span>
-                                        </div>
-                                        <span class="fw-bold" style="font-size: 15px; color: #2196f3;" id="timeBasedCount">93</span>
-                                    </div>
-                                    <div class="d-flex justify-content-between align-items-center p-2 rounded" style="background-color: #e8f5e9;">
-                                        <div class="d-flex align-items-center">
-                                            <i class="fas fa-circle me-2" style="color: #4caf50; font-size: 8px;"></i>
-                                            <span style="font-size: 13px;">Behavior-Based</span>
-                                        </div>
-                                        <span class="fw-bold" style="font-size: 15px; color: #4caf50;" id="behaviorBasedCount">510</span>
-                                    </div>
-                                    <div class="d-flex justify-content-between align-items-center p-2 rounded" style="background-color: #fff3e0;">
-                                        <div class="d-flex align-items-center">
-                                            <i class="fas fa-circle me-2" style="color: #ff9800; font-size: 8px;"></i>
-                                            <span style="font-size: 13px;">Manual</span>
-                                        </div>
-                                        <span class="fw-bold" style="font-size: 15px; color: #ff9800;" id="manualCount">3</span>
-                                    </div>
-                                    <div class="d-flex justify-content-between align-items-center p-2 rounded" style="background-color: #ffebee;">
-                                        <div class="d-flex align-items-center">
-                                            <i class="fas fa-circle me-2" style="color: #f44336; font-size: 8px;"></i>
-                                            <span style="font-size: 13px;">Rule-based</span>
-                                        </div>
-                                        <span class="fw-bold" style="font-size: 15px; color: #f44336;" id="ruleBasedCount">1</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- False-positive baseline per rule (compliance officers and admins) -->
-                <div id="fpBaselineCard"></div>
 
-                <!-- Review Cases Table Section -->
+                <div id="customerFilterChip"></div>
+
+                <!-- What is waiting: each tile is also a one-click filter -->
+                <div class="rq-tiles" id="rqTiles" aria-label="Queue summary"></div>
+
+                <!-- Where the work concentrates -->
+                <div class="kd-grid kd-grid--halves mb-4">
+                    <section class="card kd-panel">
+                        <header class="kd-panel__head">
+                            <div>
+                                <h2>Customers with the most open alerts</h2>
+                                <p class="aml-subtitle">Reviewing one customer can clear many alerts at once</p>
+                            </div>
+                        </header>
+                        <ul class="kd-bars" id="rqTopCustomers"><li class="kd-skeleton"></li><li class="kd-skeleton"></li><li class="kd-skeleton"></li></ul>
+                    </section>
+                    <section class="card kd-panel">
+                        <header class="kd-panel__head">
+                            <div>
+                                <h2>Open alerts by rule</h2>
+                                <p class="aml-subtitle">Select a rule to see only its alerts</p>
+                            </div>
+                        </header>
+                        <ul class="kd-bars" id="rqByRule"><li class="kd-skeleton"></li><li class="kd-skeleton"></li><li class="kd-skeleton"></li></ul>
+                    </section>
+                </div>
+
+                <!-- The queue -->
                 <div class="card border-0 rc-table-card">
-                    <div class="card-body p-0">
-                        <div class="rc-toolbar">
-                            <div class="rc-toolbar__title">
-                                <h2>Review Cases</h2>
-                                <small class="text-muted" id="resultsCount">Showing 0 cases</small>
-                            </div>
-                            <div class="rc-toolbar__controls">
-                                <div class="rc-search">
-                                    <i class="fas fa-magnifying-glass" aria-hidden="true"></i>
-                                    <input type="search" class="form-control" id="caseSearch" placeholder="Search customer or case ID" aria-label="Search cases" autocomplete="off">
-                                </div>
-                                <select class="form-select" id="filterStatus" aria-label="Filter by status">
-                                    <option value="all">All statuses</option>
-                                    <option value="OPEN">Open</option>
-                                    <option value="ASSIGNED">Assigned</option>
-                                    <option value="IN_REVIEW">In Review</option>
-                                    <option value="ESCALATED">Escalated</option>
-                                    <option value="RESOLVED">Resolved</option>
-                                </select>
-                                <select class="form-select" id="filterRiskLevel" aria-label="Filter by risk level">
-                                    <option value="all">All risk levels</option>
-                                    <option value="HIGH">High</option>
-                                    <option value="MEDIUM">Medium</option>
-                                    <option value="LOW">Low</option>
-                                </select>
-                                <select class="form-select" id="filterTriggerType" aria-label="Filter by trigger type">
-                                    <option value="all">All triggers</option>
-                                    <option value="BEHAVIOR BASED">Behavior Based</option>
-                                    <option value="TIME BASED">Time Based</option>
-                                    <option value="RULE BASED">Rule Based</option>
-                                    <option value="MANUAL">Manual</option>
-                                </select>
-                                <button type="button" class="btn rc-clear d-none" id="clearFiltersBtn">
-                                    <i class="fas fa-xmark me-1"></i>Clear
-                                </button>
-                            </div>
+                    <div class="rc-toolbar">
+                        <div class="rc-toolbar__title">
+                            <h2>Work queue</h2>
+                            <small class="text-muted" id="resultsCount">&nbsp;</small>
                         </div>
-                        ${filterInfo}
-                        <div class="table-responsive">
-                            <table class="table table-hover align-middle mb-0" style="font-size: 13px;">
-                                <thead>
-                                    <tr>
-                                        <th class="px-3 py-3">
-                                            Customer
-                                        </th>
-                                        <th class="px-3 py-3">
-                                            Trigger Type
-                                        </th>
-                                        <th class="px-3 py-3">
-                                            Priority
-                                        </th>
-                                        <th class="px-3 py-3">
-                                            Risk Assessment
-                                        </th>
-                                        <th class="px-3 py-3">
-                                            Status
-                                        </th>
-                                        <th class="px-3 py-3">
-                                            Created At
-                                        </th>
-                                        <th class="px-3 py-3">
-                                            Assigned To
-                                        </th>
-                                        <th class="px-3 py-3">
-                                            <span class="visually-hidden">Actions</span>
-                                        </th>
-                                    </tr>
-                                </thead>
-                                <tbody id="casesTableBody">
-                                    <tr>
-                                        <td colspan="8" class="text-center py-5">
-                                            <div class="spinner-border text-primary" role="status">
-                                                <span class="visually-hidden">Loading...</span>
-                                            </div>
-                                            <p class="mt-2 text-muted">Loading cases...</p>
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                        
-                        <!-- Pagination Controls -->
-                        <div class="d-flex justify-content-between align-items-center p-3" style="border-top: 1px solid #f0f0f0;">
-                            <div class="d-flex align-items-center gap-2">
-                                <span class="text-muted" style="font-size: 13px;">Rows per page:</span>
-                                <select class="form-select form-select-sm" id="pageSizeSelect" style="width: 80px; font-size: 13px;">
-                                    <option value="10">10</option>
-                                    <option value="25">25</option>
-                                    <option value="50">50</option>
-                                    <option value="100">100</option>
-                                </select>
-                                <span class="text-muted ms-3" id="paginationInfo" style="font-size: 13px;">1-10 of 50</span>
+                        <div class="rc-toolbar__controls">
+                            <div class="rc-search">
+                                <i class="fas fa-search"></i>
+                                <input type="search" class="form-control" id="caseSearch" placeholder="Search customer name" aria-label="Search customer name">
                             </div>
-                            <nav aria-label="Table pagination">
-                                <ul class="pagination pagination-sm mb-0" id="paginationControls">
-                                    <li class="page-item disabled">
-                                        <a class="page-link" href="#" id="prevPage">
-                                            <i class="fas fa-chevron-left"></i>
-                                        </a>
-                                    </li>
-                                    <li class="page-item active"><a class="page-link" href="#">1</a></li>
-                                    <li class="page-item">
-                                        <a class="page-link" href="#" id="nextPage">
-                                            <i class="fas fa-chevron-right"></i>
-                                        </a>
-                                    </li>
-                                </ul>
-                            </nav>
+                            <select class="form-select" id="filterStatus" aria-label="Filter by status">
+                                <option value="UNRESOLVED">Unresolved</option>
+                                <option value="OPEN">Open</option>
+                                <option value="ASSIGNED">Assigned</option>
+                                <option value="IN_REVIEW">In review</option>
+                                <option value="ESCALATED">Escalated</option>
+                                <option value="RESOLVED">Resolved</option>
+                                <option value="ALL">All statuses</option>
+                            </select>
+                            <select class="form-select" id="filterRisk" aria-label="Filter by risk">
+                                <option value="">All risk levels</option>
+                                <option value="high">High (80+)</option>
+                                <option value="medium">Medium (60–79)</option>
+                                <option value="low">Low (under 60)</option>
+                            </select>
+                            <select class="form-select" id="filterRule" aria-label="Filter by rule">
+                                <option value="">All rules</option>
+                                ${Object.entries(this.RULES).map(([code, r]) => `<option value="${code}">${code} ${escapeHtml(r[0])}</option>`).join('')}
+                            </select>
+                            <select class="form-select" id="filterAssignment" aria-label="Filter by owner">
+                                <option value="">Any owner</option>
+                                <option value="unassigned">Unassigned</option>
+                                <option value="mine">Assigned to me</option>
+                            </select>
+                            <select class="form-select" id="filterSort" aria-label="Sort order">
+                                <option value="priority">Highest risk first</option>
+                                <option value="oldest">Oldest first</option>
+                                <option value="newest">Newest first</option>
+                            </select>
+                            <button type="button" class="btn rc-clear d-none" id="clearFiltersBtn">
+                                <i class="fas fa-xmark me-1"></i>Clear
+                            </button>
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0 rq-table">
+                            <thead>
+                                <tr>
+                                    <th class="px-3 py-3">Risk</th>
+                                    <th class="px-3 py-3">Customer</th>
+                                    <th class="px-3 py-3">Why it was flagged</th>
+                                    <th class="px-3 py-3">Status</th>
+                                    <th class="px-3 py-3">Waiting</th>
+                                    <th class="px-3 py-3">Owner</th>
+                                    <th class="px-3 py-3"><span class="visually-hidden">Actions</span></th>
+                                </tr>
+                            </thead>
+                            <tbody id="casesTableBody">
+                                <tr><td colspan="7" class="rc-empty">Loading the queue...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center p-3" style="border-top: 1px solid #f0f0f0;">
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="text-muted" style="font-size: 13px;">Rows per page:</span>
+                            <select class="form-select form-select-sm" id="pageSizeSelect" style="width: 80px; font-size: 13px;">
+                                ${this.pagination.pageSizeOptions.map(n => `<option value="${n}">${n}</option>`).join('')}
+                            </select>
+                            <span class="text-muted ms-3" id="paginationInfo" style="font-size: 13px;"></span>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button type="button" class="btn btn-sm btn-outline-primary" id="prevPage">Previous</button>
+                            <button type="button" class="btn btn-sm btn-outline-primary" id="nextPage">Next</button>
                         </div>
                     </div>
                 </div>
+
+                <!-- False-positive baseline per rule (compliance officers and admins) -->
+                <div id="fpBaselineCard" class="mt-4"></div>
             </div>
-        `;
-        
-        $("#mainContent").html(html);
-        await this.fetchCasesData();
-        this.initCharts();
+        `);
+
         this.setupEventListeners();
+        await this.loadCustomerCodes();
+        this.applyCustomerFromPatterns();
+        await Promise.all([this.loadSummary(), this.fetchCasesData()]);
         this.loadBaseline();
+    },
+
+    /** Display codes (CUST-001) follow the customer list order, as on the Patterns page. */
+    async loadCustomerCodes() {
+        if (Object.keys(this.customerCodes).length) return;
+        try {
+            const response = await API.get("/customers", { page_size: 10000 });
+            (response.items || []).forEach((c, idx) => {
+                const code = `CUST-${String(idx + 1).padStart(3, '0')}`;
+                this.customerCodes[c.id] = code;
+                this.customerIds[code] = c.id;
+            });
+        } catch (err) {
+            console.warn("Could not load customer codes:", err);
+        }
+    },
+
+    applyCustomerFromPatterns() {
+        const code = this.currentFilters.customer;
+        if (!code) { $("#customerFilterChip").empty(); return; }
+        this.filters.customerId = this.customerIds[code] || null;
+        this.renderCustomerChip(code, this.currentFilters.pattern);
+    },
+
+    renderCustomerChip(label, pattern) {
+        const from = pattern ? ` &middot; from pattern <strong>${escapeHtml(String(pattern).replace(/_/g, ' '))}</strong>` : '';
+        $("#customerFilterChip").html(`
+            <div class="rc-filter-chip" role="status">
+                <i class="fas fa-filter"></i>
+                <span>Showing cases for customer <strong>${escapeHtml(label)}</strong>${from}</span>
+                <button type="button" class="rc-filter-chip__clear" id="clearCustomerFilterBtn" aria-label="Show all customers">
+                    <i class="fas fa-xmark"></i>
+                </button>
+            </div>`);
     },
 
     // False-positive rate and time-to-disposition per rule, from recorded outcomes
@@ -368,403 +282,189 @@ const Cases = {
         `);
     },
     
-    async fetchCasesData() {
+    async loadSummary() {
+        let s;
         try {
-            // Build customer map to convert UUIDs to clean CUST-XXX IDs
-            let customerMap = {};
-            const customerNames = {};
-            try {
-                const custResponse = await API.get("/customers", { page_size: 10000 });
-                if (custResponse && custResponse.items) {
-                    custResponse.items.forEach((c, idx) => {
-                        const code = `CUST-${String(idx + 1).padStart(3, '0')}`;
-                        customerMap[c.id] = code;
-                        customerNames[c.id] = c.full_name || '';
-                    });
-                }
-            } catch (err) {
-                console.warn("Could not fetch customer lookup map for cases:", err);
-            }
-
-            const data = await API.get("/alerts", { page_size: 100 });
-            const alerts = data.items || data;
-            
-            // If no alerts from API, generate mock data for demo
-            if (!alerts || alerts.length === 0) {
-                console.log("No alerts in database - generating mock data for demo");
-                this.generateMockCases();
-                return;
-            }
-            
-            this.totalCases = data.total || alerts.length;
-
-            // Map DB alert_type → UI trigger type labels
-            const triggerTypeMap = {
-                'BEHAVIORAL_ANOMALY': 'BEHAVIOR BASED',
-                'HIGH_RISK_CUSTOMER': 'RULE BASED',
-                'LARGE_AMOUNT':       'RULE BASED',
-                'WIRE_TRANSFER':      'BEHAVIOR BASED',
-                'TIME_BASED':         'TIME BASED',
-                'MANUAL':             'MANUAL'
-            };
-
-            this.casesData = alerts.map((alert, idx) => {
-                let riskLevel = 'LOW';
-                let priority = 'LOW';
-                if (alert.risk_score >= 80)      { riskLevel = 'HIGH';   priority = 'URGENT'; }
-                else if (alert.risk_score >= 60) { riskLevel = 'MEDIUM'; priority = 'HIGH'; }
-
-                const triggerType = triggerTypeMap[alert.alert_type] || 'BEHAVIOR BASED';
-
-                let displayCustId = customerMap[alert.customer_id];
-                if (!displayCustId) {
-                    if (typeof alert.customer_id === 'string' && alert.customer_id.startsWith('CUST-')) {
-                        displayCustId = alert.customer_id;
-                    } else {
-                        displayCustId = `CUST-${String(idx + 1).padStart(3, '0')}`;
-                    }
-                }
-
-                return {
-                    caseId:        alert.id,
-                    customerId:    displayCustId,
-                    customerName:  customerNames[alert.customer_id] || '',
-                    rawCustomerId: alert.customer_id,
-                    triggerType,
-                    priority,
-                    riskLevel,
-                    status:        alert.status || 'OPEN',
-                    createdAt:     new Date(alert.created_at).toLocaleDateString(),
-                    assignedTo:    alert.assigned_to ? 'Assigned' : 'Unassigned',
-                    fullData:      alert
-                };
-            });
-
-            this.updateDashboard();
-            this.renderTable();
-
+            s = await API.get('/alerts/queue/summary');
         } catch (error) {
-            console.warn("Error fetching cases - using mock data:", error);
-            // Silently fall back to mock data - no error toast
-            this.casesData = [];
-            this.totalCases = 0;
-            this.generateMockCases();
-        }
-    },
-    
-    updateDashboard() {
-        const stats = {
-            high: this.casesData.filter(c => c.riskLevel && c.riskLevel.toUpperCase() === 'HIGH').length,
-            medium: this.casesData.filter(c => c.riskLevel && c.riskLevel.toUpperCase() === 'MEDIUM').length,
-            low: this.casesData.filter(c => c.riskLevel && c.riskLevel.toUpperCase() === 'LOW').length,
-            open: this.casesData.filter(c => c.status && c.status.toUpperCase() === 'OPEN').length,
-            timeBased: this.casesData.filter(c => c.triggerType && c.triggerType.toUpperCase().includes('TIME')).length,
-            behaviorBased: this.casesData.filter(c => c.triggerType && c.triggerType.toUpperCase().includes('BEHAVIOR')).length,
-            manual: this.casesData.filter(c => c.triggerType && c.triggerType.toUpperCase() === 'MANUAL').length,
-            ruleBased: this.casesData.filter(c => c.triggerType && c.triggerType.toUpperCase().includes('RULE')).length
-        };
-        
-        const total = this.casesData.length || 1;
-        const highPercent = ((stats.high / total) * 100).toFixed(1);
-        const mediumPercent = ((stats.medium / total) * 100).toFixed(1);
-        const lowPercent = ((stats.low / total) * 100).toFixed(1);
-        
-        $("#highRiskCount").text(stats.high);
-        $("#mediumRiskCount").text(stats.medium);
-        $("#lowRiskCount").text(stats.low);
-        
-        // Update percentages
-        $("#highRiskCount").next().next().text(`${highPercent}%`);
-        $("#mediumRiskCount").next().next().text(`${mediumPercent}%`);
-        $("#lowRiskCount").next().next().text(`${lowPercent}%`);
-        
-        const openPercent = this.casesData.length > 0 ? Math.round(stats.open / this.casesData.length * 100) : 0;
-        $("#openStatusPercent").text(`${stats.open} (${openPercent}%)`);
-        
-        $("#timeBasedCount").text(stats.timeBased);
-        $("#behaviorBasedCount").text(stats.behaviorBased);
-        $("#manualCount").text(stats.manual);
-        $("#ruleBasedCount").text(stats.ruleBased);
-        
-        if (this.charts.riskDistribution) {
-            this.charts.riskDistribution.data.datasets[0].data = [stats.high, stats.medium, stats.low];
-            this.charts.riskDistribution.update();
-        }
-        
-        if (this.charts.statusOverview) {
-            const total = this.casesData.length;
-            this.charts.statusOverview.data.datasets[0].data = [stats.open, total - stats.open];
-            this.charts.statusOverview.update();
-        }
-    },
-    
-    initCharts() {
-        // Risk Distribution - Vertical Bar Chart
-        const riskCtx = document.getElementById('riskDistributionChart');
-        if (riskCtx) {
-            this.charts.riskDistribution = new Chart(riskCtx, {
-                type: 'bar',
-                data: {
-                    labels: ['High', 'Medium', 'Low'],
-                    datasets: [{
-                        data: [500, 105, 2],
-                        backgroundColor: ['#ef4444', '#FF8D28', '#22c55e'],
-                        borderRadius: 6,
-                        barThickness: 50
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
-                    scales: {
-                        x: { 
-                            grid: { display: false },
-                            ticks: { font: { size: 11 } }
-                        },
-                        y: {
-                            beginAtZero: true,
-                            max: 600,
-                            ticks: { 
-                                stepSize: 150,
-                                font: { size: 11 }
-                            },
-                            grid: { color: 'rgba(0,0,0,0.05)' }
-                        }
-                    }
-                }
-            });
-        }
-        
-        // Status Overview - Donut Chart (Black background with orange segment)
-        const statusCtx = document.getElementById('statusOverviewChart');
-        if (statusCtx) {
-            this.charts.statusOverview = new Chart(statusCtx, {
-                type: 'doughnut',
-                data: {
-                    datasets: [{
-                        data: [22, 78],
-                        backgroundColor: ['#FF8D28', '#2a2a2a'],
-                        borderWidth: 0
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    cutout: '75%',
-                    plugins: { 
-                        legend: { display: false },
-                        tooltip: { enabled: false }
-                    }
-                }
-            });
-        }
-    },
-    renderTable() {
-        const filtered = this.getFilteredCases();
-        const total = filtered.length;
-        
-        // Calculate pagination
-        const startIdx = (this.pagination.currentPage - 1) * this.pagination.pageSize;
-        const endIdx = Math.min(startIdx + this.pagination.pageSize, total);
-        const paginatedCases = filtered.slice(startIdx, endIdx);
-        
-        // Update counts
-        $("#resultsCount").text(total ? `Showing ${startIdx + 1}-${endIdx} of ${total} cases` : "No matching cases");
-        $("#resultsCountTop").text(`${total} Result${total !== 1 ? 's' : ''}`);
-        
-        if (paginatedCases.length === 0) {
-            $("#casesTableBody").html(`
-                <tr><td colspan="8" class="rc-empty"><i class="fas fa-folder-open"></i><strong>No cases match these filters</strong><span>Try clearing the search or filters.</span></td></tr>
-            `);
-            this.renderPaginationControls(0, 0);
+            $("#rqTiles").html('<div class="kd-empty kd-empty--error"><i class="fas fa-triangle-exclamation"></i>Could not load the queue summary.</div>');
+            $("#rqTopCustomers, #rqByRule").empty();
             return;
         }
-        
-        const rows = paginatedCases.map(c => {
-            // Priority badge colors matching screenshot
-            const priorityColors = { 
-                'URGENT': { bg: '#fff5f5', text: '#dc2626', icon: '🔺' },
-                'HIGH': { bg: '#fff7ed', text: '#f59e0b', icon: '⚠️' },
-                'MEDIUM': { bg: '#fef9c3', text: '#d97706', icon: '●' }
+        this.summary = s;
+
+        const tile = (key, label, value, note, alertClass = '') => `
+            <button type="button" class="rq-tile ${alertClass}" data-tile="${key}">
+                <span class="rq-tile__label">${label}</span>
+                <strong class="rq-tile__value">${value}</strong>
+                <span class="rq-tile__note">${note}</span>
+            </button>`;
+        $("#rqTiles").html(
+            tile('all', 'Unresolved', s.unresolved.toLocaleString(), `across ${s.customers_with_alerts.toLocaleString()} customers`)
+            + tile('high', 'High risk', s.high_risk.toLocaleString(), 'risk score 80 or more', s.high_risk ? 'rq-tile--alert' : '')
+            + tile('unassigned', 'Unassigned', s.unassigned.toLocaleString(), 'no owner yet', s.unassigned ? 'rq-tile--warn' : '')
+            + tile('mine', 'Assigned to me', s.assigned_to_me.toLocaleString(), 'in your name')
+            + tile('escalated', 'Escalated', s.escalated.toLocaleString(), 'awaiting a senior decision')
+            + tile('oldest', 'Longest waiting', s.oldest_created_at ? this.age(s.oldest_created_at) : '—', 'oldest unresolved alert')
+        );
+
+        const bars = (items, attrs, label, value, max) => items.map(item => `
+            <li>
+                <button type="button" class="rq-bar" ${attrs(item)}>
+                    <div class="kd-bars__row"><span>${label(item)}</span><strong>${value(item).toLocaleString()}</strong></div>
+                    <div class="kd-bars__track"><span style="width: ${Math.max(2, Math.round((value(item) / max) * 100))}%"></span></div>
+                </button>
+            </li>`).join('');
+
+        const maxCustomer = Math.max(1, ...s.top_customers.map(c => c.open_alerts));
+        $("#rqTopCustomers").html(bars(
+            s.top_customers,
+            c => `data-customer="${escapeHtml(c.customer_id)}" data-name="${escapeHtml(c.customer_name)}"`,
+            c => `${escapeHtml(c.customer_name)} <small class="text-muted">highest score ${c.max_risk_score}</small>`,
+            c => c.open_alerts, maxCustomer
+        ) || '<li class="kd-empty">No open alerts.</li>');
+
+        const rules = s.by_rule.slice(0, 5);
+        const maxRule = Math.max(1, ...rules.map(r => r.alerts));
+        $("#rqByRule").html(bars(
+            rules,
+            r => `data-rule="${escapeHtml(r.rule)}"`,
+            r => `${escapeHtml(r.rule)} <small class="text-muted">${escapeHtml((this.RULES[r.rule] || [''])[0])}</small>`,
+            r => r.alerts, maxRule
+        ) || '<li class="kd-empty">No open alerts.</li>');
+    },
+
+    async fetchCasesData() {
+        const f = this.filters;
+        const params = { page: this.pagination.currentPage, page_size: this.pagination.pageSize, status_filter: f.status, sort: f.sort };
+        if (f.q) params.q = f.q;
+        if (f.risk) params.risk = f.risk;
+        if (f.rule) params.rule = f.rule;
+        if (f.assignment) params.assignment = f.assignment;
+        if (f.customerId) params.customer_id = f.customerId;
+
+        let data;
+        try {
+            data = await API.get('/alerts/queue', params);
+        } catch (error) {
+            // Never substitute sample data: an empty or wrong queue is worse than an honest error
+            this.casesData = [];
+            this.totalCases = 0;
+            $("#casesTableBody").html('<tr><td colspan="7" class="rc-empty"><i class="fas fa-triangle-exclamation"></i><strong>Could not load the queue</strong><span>Check your connection and select Refresh.</span></td></tr>');
+            $("#resultsCount").text('');
+            this.renderPaginationControls();
+            return;
+        }
+
+        this.totalCases = data.total;
+        this.casesData = data.items.map(alert => {
+            const score = Number(alert.risk_score);
+            const riskLevel = score >= 80 ? 'HIGH' : score >= 60 ? 'MEDIUM' : 'LOW';
+            return {
+                caseId: alert.id,
+                customerId: this.customerCodes[alert.customer_id] || '—',
+                customerName: alert.customer_name || '',
+                rawCustomerId: alert.customer_id,
+                triggerType: 'RULE BASED',
+                priority: riskLevel === 'HIGH' ? 'URGENT' : riskLevel === 'MEDIUM' ? 'HIGH' : 'LOW',
+                riskLevel,
+                status: alert.status || 'OPEN',
+                createdAt: new Date(alert.created_at).toLocaleDateString(),
+                assignedTo: alert.assigned_to_name || (alert.assigned_to ? 'Assigned' : 'Unassigned'),
+                fullData: alert
             };
-            
-            // Risk assessment colors
-            const riskColors = { 
-                'HIGH': { bg: '#fef2f2', text: '#dc2626' }, 
-                'MEDIUM': { bg: '#fef3c7', text: '#d97706' }
-            };
-            
-            const priority = priorityColors[c.priority] || priorityColors['MEDIUM'];
-            const risk = riskColors[c.riskLevel] || riskColors['MEDIUM'];
-            
-            const statusColors = {
-                'OPEN':      { bg: '#e0f2fe', text: '#0369a1' },
-                'ASSIGNED':  { bg: '#ede9fe', text: '#6d28d9' },
-                'IN_REVIEW': { bg: '#fef3c7', text: '#b45309' },
-                'ESCALATED': { bg: '#fee2e2', text: '#b91c1c' },
-                'RESOLVED':  { bg: '#dcfce7', text: '#15803d' }
-            };
-            const status = statusColors[c.status] || statusColors['OPEN'];
+        });
+        this.renderTable();
+    },
+
+    // Kept for callers that refresh the page after a change
+    updateDashboard() {
+        this.loadSummary();
+    },
+
+    renderTable() {
+        const total = this.totalCases;
+        const start = total ? (this.pagination.currentPage - 1) * this.pagination.pageSize + 1 : 0;
+        const end = Math.min(this.pagination.currentPage * this.pagination.pageSize, total);
+        $("#resultsCount").text(total ? `Showing ${start.toLocaleString()}–${end.toLocaleString()} of ${total.toLocaleString()} alerts` : 'No matching alerts');
+        this.renderPaginationControls();
+
+        if (!this.casesData.length) {
+            $("#casesTableBody").html('<tr><td colspan="7" class="rc-empty"><i class="fas fa-folder-open"></i><strong>No alerts match these filters</strong><span>Try clearing the search or filters.</span></td></tr>');
+            return;
+        }
+
+        const statusColors = {
+            OPEN: ['#e0f2fe', '#0369a1'], ASSIGNED: ['#ede9fe', '#6d28d9'], IN_REVIEW: ['#fef3c7', '#b45309'],
+            ESCALATED: ['#fee2e2', '#b91c1c'], RESOLVED: ['#dcfce7', '#15803d']
+        };
+        const canAct = (c) => c.status !== 'RESOLVED';
+
+        $("#casesTableBody").html(this.casesData.map(c => {
+            const a = c.fullData;
             const displayName = c.customerName || c.customerId;
-            const initials = displayName.split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
+            const initials = displayName.split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?';
+            const band = c.riskLevel.toLowerCase();
+            const codes = (a.triggered_rules && (a.triggered_rules.rules || a.triggered_rules)) || [];
+            const rules = (Array.isArray(codes) ? codes : []).map(code => ({ code, name: (this.RULES[code] || [code])[0] }));
+            const [statusBg, statusFg] = statusColors[c.status] || statusColors.OPEN;
+            const others = (a.customer_open_alerts || 0) - (canAct(c) ? 1 : 0);
 
             return `
                 <tr>
+                    <td class="px-3 py-3">
+                        <span class="rq-score rq-score--${band}" title="${escapeHtml(this.human(c.riskLevel))} risk">${isFinite(Number(a.risk_score)) ? Number(a.risk_score) : '—'}</span>
+                    </td>
                     <td class="px-3 py-3">
                         <div class="rc-customer">
                             <span class="rc-customer__avatar" aria-hidden="true">${escapeHtml(initials)}</span>
                             <span class="rc-customer__text">
                                 <strong>${escapeHtml(displayName)}</strong>
-                                <small>${escapeHtml(c.customerId)}</small>
+                                <small>${escapeHtml(c.customerId)}${a.customer_sanctions ? ' <span class="cd-chip cd-chip--high">Sanctions</span>' : ''}${a.customer_pep ? ' <span class="cd-chip cd-chip--medium">PEP</span>' : ''}</small>
+                                ${others > 0 ? `<button type="button" class="rq-more" data-customer="${escapeHtml(c.rawCustomerId)}" data-name="${escapeHtml(displayName)}">+${others.toLocaleString()} other open alert${others === 1 ? '' : 's'}</button>` : ''}
                             </span>
                         </div>
                     </td>
                     <td class="px-3 py-3">
-                        <span class="badge" style="background: #fff5e6; color: #FF8D28; font-size: 11px; font-weight: 600; padding: 5px 10px;">
-                            ${c.triggerType}
-                        </span>
+                        <div class="rq-rules">
+                            ${rules.slice(0, 3).map(r => `<span class="rq-rule" title="${escapeHtml(r.code)}">${escapeHtml(r.name)}</span>`).join('')}
+                            ${rules.length > 3 ? `<span class="rq-rule rq-rule--more">+${rules.length - 3}</span>` : ''}
+                            ${rules.length ? '' : '<span class="text-muted">No rule recorded</span>'}
+                        </div>
                     </td>
-                    <td class="px-3 py-3">
-                        <span class="badge" style="background: ${priority.bg}; color: ${priority.text}; font-size: 11px; font-weight: 600; padding: 5px 10px;">
-                            ${priority.icon} ${c.priority}
-                        </span>
-                    </td>
-                    <td class="px-3 py-3">
-                        <span class="badge" style="background: ${risk.bg}; color: ${risk.text}; font-size: 11px; font-weight: 600; padding: 5px 10px; text-transform: uppercase;">
-                            ${c.riskLevel}
-                        </span>
-                    </td>
-                    <td class="px-3 py-3">
-                        <span class="badge" style="background: ${status.bg}; color: ${status.text}; font-size: 11px; font-weight: 600; padding: 5px 10px;">
-                            ${c.status.replace(/_/g, ' ')}
-                        </span>
-                    </td>
-                    <td class="px-3 py-3 text-muted" style="font-size: 12px;">${c.createdAt}</td>
-                    <td class="px-3 py-3 text-muted" style="font-size: 12px;">${c.assignedTo}</td>
+                    <td class="px-3 py-3"><span class="badge" style="background:${statusBg};color:${statusFg};font-size:11px;font-weight:600;padding:5px 10px;">${escapeHtml(this.human(c.status))}</span></td>
+                    <td class="px-3 py-3 text-nowrap" title="Created ${escapeHtml(new Date(a.created_at).toLocaleString())}">${canAct(c) ? escapeHtml(this.age(a.created_at)) : '—'}</td>
+                    <td class="px-3 py-3 ${a.assigned_to ? '' : 'text-muted'}">${escapeHtml(c.assignedTo)}</td>
                     <td class="px-3 py-3">
                         <div class="rc-actions">
-                            <button type="button" class="btn btn-sm rc-actions__view view-case-btn" data-customer="${c.customerId}" data-case="${c.caseId}">
+                            <button type="button" class="btn btn-sm rc-actions__view view-case-btn" data-case="${escapeHtml(c.caseId)}">
                                 <i class="far fa-eye me-1"></i>View
                             </button>
-                            <button type="button" class="btn btn-sm rc-actions__icon assign-btn" data-customer="${c.customerId}" data-case="${c.caseId}" title="Assign case" aria-label="Assign case for ${escapeHtml(displayName)}">
+                            ${canAct(c) ? `
+                            <button type="button" class="btn btn-sm rc-actions__icon assign-btn" data-case="${escapeHtml(c.caseId)}" title="Assign" aria-label="Assign alert for ${escapeHtml(displayName)}">
                                 <i class="fas fa-user-plus"></i>
                             </button>
-                            ${c.status !== 'RESOLVED' && c.fullData ? `
-                            <button type="button" class="btn btn-sm rc-actions__icon resolve-btn" data-case="${c.caseId}" title="Resolve case" aria-label="Resolve case for ${escapeHtml(displayName)}">
+                            <button type="button" class="btn btn-sm rc-actions__icon resolve-btn" data-case="${escapeHtml(c.caseId)}" title="Resolve" aria-label="Resolve alert for ${escapeHtml(displayName)}">
                                 <i class="fas fa-check-double"></i>
                             </button>` : ''}
-                            <button type="button" class="btn btn-sm rc-actions__icon export-btn" data-customer="${c.customerId}" data-case="${c.caseId}" title="Export case report" aria-label="Export case report for ${escapeHtml(displayName)}">
+                            <button type="button" class="btn btn-sm rc-actions__icon export-btn" data-customer="${escapeHtml(c.customerId)}" data-case="${escapeHtml(c.caseId)}" title="Export case report" aria-label="Export case report for ${escapeHtml(displayName)}">
                                 <i class="fas fa-file-arrow-down"></i>
                             </button>
                         </div>
                     </td>
-                </tr>
-            `;
-        }).join('');
-        
-        $("#casesTableBody").html(rows);
-        this.renderPaginationControls(total, startIdx, endIdx);
+                </tr>`;
+        }).join(''));
     },
-    
-    renderPaginationControls(total, startIdx, endIdx) {
-        // Update pagination info
-        if (total === 0) {
-            $("#paginationInfo").text("0 cases");
-        } else {
-            $("#paginationInfo").text(`${startIdx + 1}-${endIdx} of ${total}`);
-        }
-        
-        // Update page size selector
+
+    renderPaginationControls() {
+        const total = this.totalCases;
+        const pages = Math.max(1, Math.ceil(total / this.pagination.pageSize));
         $("#pageSizeSelect").val(this.pagination.pageSize);
-        
-        // Calculate total pages
-        const totalPages = Math.ceil(total / this.pagination.pageSize);
-        
-        if (totalPages <= 1) {
-            $("#paginationControls").html(`
-                <li class="page-item disabled">
-                    <a class="page-link" href="#" id="prevPage">
-                        <i class="fas fa-chevron-left"></i>
-                    </a>
-                </li>
-                <li class="page-item active"><a class="page-link" href="#">1</a></li>
-                <li class="page-item disabled">
-                    <a class="page-link" href="#" id="nextPage">
-                        <i class="fas fa-chevron-right"></i>
-                    </a>
-                </li>
-            `);
-            return;
-        }
-        
-        // Build pagination buttons
-        let paginationHTML = '';
-        
-        // Previous button
-        paginationHTML += `
-            <li class="page-item ${this.pagination.currentPage === 1 ? 'disabled' : ''}">
-                <a class="page-link" href="#" id="prevPage" style="border-radius: 6px 0 0 6px;">
-                    <i class="fas fa-chevron-left"></i>
-                </a>
-            </li>
-        `;
-        
-        // Page numbers
-        const maxVisiblePages = 5;
-        let startPage = Math.max(1, this.pagination.currentPage - Math.floor(maxVisiblePages / 2));
-        let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
-        
-        // Adjust start if we're at the end
-        if (endPage - startPage < maxVisiblePages - 1) {
-            startPage = Math.max(1, endPage - maxVisiblePages + 1);
-        }
-        
-        // First page
-        if (startPage > 1) {
-            paginationHTML += `
-                <li class="page-item">
-                    <a class="page-link page-num-btn" href="#" data-page="1">1</a>
-                </li>
-            `;
-            if (startPage > 2) {
-                paginationHTML += `<li class="page-item disabled"><a class="page-link">...</a></li>`;
-            }
-        }
-        
-        // Page numbers
-        for (let i = startPage; i <= endPage; i++) {
-            paginationHTML += `
-                <li class="page-item ${i === this.pagination.currentPage ? 'active' : ''}">
-                    <a class="page-link page-num-btn" href="#" data-page="${i}">${i}</a>
-                </li>
-            `;
-        }
-        
-        // Last page
-        if (endPage < totalPages) {
-            if (endPage < totalPages - 1) {
-                paginationHTML += `<li class="page-item disabled"><a class="page-link">...</a></li>`;
-            }
-            paginationHTML += `
-                <li class="page-item">
-                    <a class="page-link page-num-btn" href="#" data-page="${totalPages}">${totalPages}</a>
-                </li>
-            `;
-        }
-        
-        // Next button
-        paginationHTML += `
-            <li class="page-item ${this.pagination.currentPage === totalPages ? 'disabled' : ''}">
-                <a class="page-link" href="#" id="nextPage" style="border-radius: 0 6px 6px 0;">
-                    <i class="fas fa-chevron-right"></i>
-                </a>
-            </li>
-        `;
-        
-        $("#paginationControls").html(paginationHTML);
+        $("#paginationInfo").text(total ? `Page ${this.pagination.currentPage.toLocaleString()} of ${pages.toLocaleString()}` : '');
+        $("#prevPage").prop("disabled", this.pagination.currentPage <= 1);
+        $("#nextPage").prop("disabled", this.pagination.currentPage >= pages);
     },
-    
+
     showCaseDetailsModal(caseData) {
         const alert = caseData.fullData || {};
         const score = Number(alert.risk_score);
@@ -987,8 +687,8 @@ const Cases = {
                 caseData.fullData = updated;
                 closeModalSafely(modalEl);
                 showToast('success', outcome === 'ESCALATED' ? 'Case escalated.' : 'Case resolved.');
-                this.updateDashboard();
-                this.renderTable();
+                this.loadSummary();
+                this.fetchCasesData();
                 this.loadBaseline();
             } catch (xhr) {
                 const detail = xhr && xhr.responseJSON && xhr.responseJSON.detail;
@@ -1004,324 +704,145 @@ const Cases = {
         });
     },
 
-    generateMockCases() {
-        // Generate mock cases with LIMITED customers (only 5 unique customers)
-        const triggerTypes = ['BEHAVIOR BASED', 'TIME BASED', 'RULE BASED', 'MANUAL'];
-        const statuses = ['OPEN', 'ASSIGNED', 'IN_REVIEW', 'ESCALATED'];
-        const priorities = ['URGENT', 'HIGH', 'MEDIUM', 'LOW'];
-        const riskLevels = ['HIGH', 'MEDIUM', 'LOW'];
-        
-        // Only 5 customers like patterns page
-        const customers = ['CUST-001', 'CUST-002', 'CUST-003', 'CUST-004', 'CUST-005'];
-        
-        this.casesData = [];
-        for (let i = 1; i <= 125; i++) {
-            const riskLevel = riskLevels[Math.floor(Math.random() * riskLevels.length)];
-            const priority = riskLevel === 'HIGH' ? 'URGENT' : riskLevel === 'MEDIUM' ? 'HIGH' : 'MEDIUM';
-            
-            // Pick random customer from the 5 customers
-            const customerId = customers[Math.floor(Math.random() * customers.length)];
-            
-            this.casesData.push({
-                caseId: `case-${String(i).padStart(4, '0')}`,
-                customerId: customerId,
-                triggerType: triggerTypes[Math.floor(Math.random() * triggerTypes.length)],
-                priority: priority,
-                riskLevel: riskLevel,
-                status: statuses[Math.floor(Math.random() * statuses.length)],
-                createdAt: new Date(Date.now() - Math.random() * 60 * 24 * 60 * 60 * 1000).toLocaleDateString(),
-                assignedTo: Math.random() > 0.3 ? 'Analyst' : 'Unassigned',
-                fullData: {
-                    risk_score: riskLevel === 'HIGH' ? 85 : riskLevel === 'MEDIUM' ? 65 : 35,
-                    alert_type: 'BEHAVIORAL_ANOMALY'
-                }
-            });
-        }
-        
-        this.totalCases = this.casesData.length;
-        this.updateDashboard();
-        this.renderTable();
+    /** Push the current filters into the controls, then reload page one. */
+    applyFilters() {
+        const f = this.filters;
+        $("#caseSearch").val(f.q);
+        $("#filterStatus").val(f.status);
+        $("#filterRisk").val(f.risk);
+        $("#filterRule").val(f.rule);
+        $("#filterAssignment").val(f.assignment);
+        $("#filterSort").val(f.sort);
+        const changed = f.q || f.risk || f.rule || f.assignment || f.status !== 'UNRESOLVED' || f.sort !== 'priority';
+        $("#clearFiltersBtn").toggleClass("d-none", !changed);
+        this.pagination.currentPage = 1;
+        this.fetchCasesData();
     },
-    
-    getFilteredCases() {
-        const q = (this.currentFilters.search || '').trim().toLowerCase();
-        return this.casesData.filter(c => {
-            if (this.currentFilters.customer && c.customerId !== this.currentFilters.customer) return false;
-            if (q) {
-                const haystack = `${c.customerName || ''} ${c.customerId} ${c.caseId}`.toLowerCase();
-                if (!haystack.includes(q)) return false;
-            }
-            if (this.currentFilters.riskLevel !== 'all' && c.riskLevel !== this.currentFilters.riskLevel) return false;
-            if (this.currentFilters.triggerType !== 'all' && c.triggerType !== this.currentFilters.triggerType) return false;
-            if (this.currentFilters.status !== 'all' && c.status !== this.currentFilters.status) return false;
-            return true;
-        });
+
+    resetFilters(overrides = {}) {
+        Object.assign(this.filters, { q: '', status: 'UNRESOLVED', risk: '', rule: '', assignment: '', sort: 'priority' }, overrides);
+        this.applyFilters();
     },
-    
+
     setupEventListeners() {
         const self = this;
-        
-        // Filter change handlers
-        const applyFilters = () => {
-            self.currentFilters.search = $("#caseSearch").val() || '';
-            self.currentFilters.riskLevel = $("#filterRiskLevel").val();
-            self.currentFilters.triggerType = $("#filterTriggerType").val();
-            self.currentFilters.status = $("#filterStatus").val();
-            const active = self.currentFilters.search.trim() !== '' ||
-                ['riskLevel', 'triggerType', 'status'].some(k => self.currentFilters[k] !== 'all');
-            $("#clearFiltersBtn").toggleClass("d-none", !active);
+        const find = (el) => self.casesData.find(c => c.caseId === $(el).data("case"));
 
-            // Reset to first page when filters change
+        let searchTimer;
+        $("#caseSearch").on("input", function() {
+            clearTimeout(searchTimer);
+            searchTimer = setTimeout(() => { self.filters.q = $(this).val().trim(); self.applyFilters(); }, 300);
+        });
+        $("#filterStatus, #filterRisk, #filterRule, #filterAssignment, #filterSort").on("change", () => {
+            Object.assign(self.filters, {
+                status: $("#filterStatus").val(), risk: $("#filterRisk").val(), rule: $("#filterRule").val(),
+                assignment: $("#filterAssignment").val(), sort: $("#filterSort").val()
+            });
+            self.applyFilters();
+        });
+        $("#clearFiltersBtn").on("click", () => self.resetFilters());
+
+        $("#refreshCasesBtn").on("click", () => { self.loadSummary(); self.fetchCasesData(); self.loadBaseline(); });
+
+        $("#pageSizeSelect").on("change", function() {
+            self.pagination.pageSize = parseInt($(this).val(), 10);
             self.pagination.currentPage = 1;
-            self.renderTable();
+            self.fetchCasesData();
+        });
+        $("#prevPage").on("click", () => { if (self.pagination.currentPage > 1) { self.pagination.currentPage--; self.fetchCasesData(); } });
+        $("#nextPage").on("click", () => { self.pagination.currentPage++; self.fetchCasesData(); });
+
+        const filterByCustomer = (el) => {
+            self.filters.customerId = $(el).data("customer");
+            self.renderCustomerChip($(el).data("name"), null);
+            self.resetFilters();
         };
-        $("#filterRiskLevel, #filterTriggerType, #filterStatus").on("change", applyFilters);
-        $("#caseSearch").on("input", debounce(applyFilters, 200));
 
-        // Refresh button
-        $("#refreshCasesBtn").on("click", () => this.fetchCasesData());
-        
-        // Page size selector
-        $("body").off("change", "#pageSizeSelect").on("change", "#pageSizeSelect", function(e) {
-            self.pagination.pageSize = parseInt($(this).val());
-            self.pagination.currentPage = 1; // Reset to first page
-            self.renderTable();
-        });
-        
-        // Previous page button
-        $("body").off("click", "#prevPage").on("click", "#prevPage", function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            
-            if (!$(this).parent().hasClass('disabled') && self.pagination.currentPage > 1) {
-                self.pagination.currentPage--;
-                self.renderTable();
-                
-                // Scroll to top of table
-                $(".table-responsive").get(0)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
-        });
-        
-        // Next page button
-        $("body").off("click", "#nextPage").on("click", "#nextPage", function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            
-            const filtered = self.getFilteredCases();
-            const totalPages = Math.ceil(filtered.length / self.pagination.pageSize);
-            
-            if (!$(this).parent().hasClass('disabled') && self.pagination.currentPage < totalPages) {
-                self.pagination.currentPage++;
-                self.renderTable();
-                
-                // Scroll to top of table
-                $(".table-responsive").get(0)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
-        });
-        
-        // Page number buttons
-        $("body").off("click", ".page-num-btn").on("click", ".page-num-btn", function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            
-            const page = parseInt($(this).data("page"));
-            if (page && page !== self.pagination.currentPage) {
-                self.pagination.currentPage = page;
-                self.renderTable();
-                
-                // Scroll to top of table
-                $(".table-responsive").get(0)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
-        });
-        
-        $("#selectAll").on("change", function() {
-            $(".case-checkbox").prop("checked", $(this).is(":checked"));
-        });
-        
-        // View Case button clicks - show modal
-        $("body").off("click", ".view-case-btn").on("click", ".view-case-btn", function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            
-            const customerId = $(this).data("customer");
-            const caseId = $(this).data("case");
-            
-            console.log("View Case clicked for:", customerId, caseId);
-            
-            // Find the case data
-            const caseData = self.casesData.find(c => c.caseId === caseId && c.customerId === customerId);
-            
-            if (caseData) {
-                self.showCaseDetailsModal(caseData);
-            }
-        });
-        
-        // Assign button clicks
-        $("body").off("click", ".assign-btn").on("click", ".assign-btn", function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            
-            const caseId = $(this).data("case");
-            const customerId = $(this).data("customer");
-            
-            console.log("Assign clicked for case:", caseId, "customer:", customerId);
-            
-            Cases.showAssignModal(caseId, customerId);
-        });
-        
-        // Resolve button clicks
-        $("body").off("click", ".resolve-btn").on("click", ".resolve-btn", function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            const caseData = self.casesData.find(c => c.caseId === $(this).data("case"));
-            if (caseData) self.showResolveModal(caseData);
-        });
-
-        // Export File button clicks
-        $("body").off("click", ".export-btn").on("click", ".export-btn", function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            
-            const caseId = $(this).data("case");
-            const customerId = $(this).data("customer");
-            
-            console.log("Export File clicked for case:", caseId, "customer:", customerId);
-            
-            Cases.showExportModal(caseId, customerId);
-        });
-        
-        // Clear search + dropdown filters
-        $("#clearFiltersBtn").on("click", () => {
-            $("#caseSearch").val('');
-            $("#filterRiskLevel, #filterTriggerType, #filterStatus").val('all');
-            applyFilters();
-            $("#caseSearch").trigger("focus");
-        });
-
-        // Drop the customer filter that came from the Patterns page
-        $("#clearCustomerFilterBtn").on("click", () => {
-            this.currentFilters.customer = null;
-            this.currentFilters.pattern = null;
-            $(".rc-filter-chip").remove();
-            this.pagination.currentPage = 1;
-            this.renderTable();
-        });
+        $("#mainContent").off("click.cases")
+            // Summary tiles are one-click filters
+            .on("click.cases", ".rq-tile", function() {
+                const presets = {
+                    all: {}, high: { risk: 'high' }, unassigned: { assignment: 'unassigned' }, mine: { assignment: 'mine' },
+                    escalated: { status: 'ESCALATED' }, oldest: { sort: 'oldest' }
+                };
+                self.resetFilters(presets[$(this).data("tile")] || {});
+            })
+            .on("click.cases", ".rq-bar[data-rule]", function() { self.resetFilters({ rule: $(this).data("rule") }); })
+            .on("click.cases", ".rq-bar[data-customer], .rq-more", function() { filterByCustomer(this); })
+            .on("click.cases", "#clearCustomerFilterBtn", () => {
+                self.filters.customerId = null;
+                self.currentFilters = { customer: null, pattern: null };
+                $("#customerFilterChip").empty();
+                self.applyFilters();
+            })
+            .on("click.cases", ".view-case-btn", function() { const c = find(this); if (c) self.showCaseDetailsModal(c); })
+            .on("click.cases", ".assign-btn", function() { const c = find(this); if (c) self.showAssignModal(c); })
+            .on("click.cases", ".resolve-btn", function() { const c = find(this); if (c) self.showResolveModal(c); })
+            .on("click.cases", ".export-btn", function() { self.showExportModal($(this).data("case"), $(this).data("customer")); });
     },
-    
-    showAssignModal(caseId, customerId) {
-        // Create modal HTML
-        const modalHtml = `
-            <div class="modal fade" id="assignCaseModal" tabindex="-1" aria-labelledby="assignCaseModalLabel" aria-hidden="true">
+
+    /** Assign an alert to a real user (or to yourself). */
+    async showAssignModal(caseData) {
+        let assignees;
+        try {
+            assignees = await API.get('/alerts/assignees');
+        } catch (error) {
+            showToast('error', 'Could not load the list of users.');
+            return;
+        }
+        const me = Auth.getUser() || {};
+        const displayName = caseData.customerName || caseData.customerId;
+
+        $("#assignCaseModal").remove();
+        $("body").append(`
+            <div class="modal fade" id="assignCaseModal" tabindex="-1" aria-labelledby="assignCaseTitle" aria-hidden="true">
                 <div class="modal-dialog modal-dialog-centered">
-                    <div class="modal-content" style="border-radius: 14px; border: none;">
-                        <div class="modal-header" style="border-bottom: 1px solid #eceef2; padding: 20px 24px;">
-                            <h5 class="modal-title" id="assignCaseModalLabel" style="font-weight: 700; color: #1c2430;">
-                                <i class="fas fa-user-plus" style="color: #FF8D28; margin-right: 8px;"></i>
-                                Assign Case
-                            </h5>
+                    <div class="modal-content kx-modal">
+                        <div class="modal-header">
+                            <div>
+                                <h5 class="modal-title" id="assignCaseTitle">Assign alert</h5>
+                                <small class="text-muted">${escapeHtml(displayName)} &middot; risk score ${escapeHtml(String(caseData.fullData.risk_score))}</small>
+                            </div>
                             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                         </div>
-                        <div class="modal-body" style="padding: 24px;">
-                            <div class="mb-3">
-                                <label class="form-label" style="font-weight: 600; font-size: 13px; color: #1c2430;">Case ID</label>
-                                <input type="text" class="form-control" value="${caseId}" disabled style="background: #f7f8fa; border: 1px solid #eceef2; border-radius: 8px;">
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label" style="font-weight: 600; font-size: 13px; color: #1c2430;">Customer ID</label>
-                                <input type="text" class="form-control" value="${customerId}" disabled style="background: #f7f8fa; border: 1px solid #eceef2; border-radius: 8px;">
-                            </div>
-                            <div class="mb-3">
-                                <label for="assignToUser" class="form-label" style="font-weight: 600; font-size: 13px; color: #1c2430;">
-                                    Assign To <span style="color: #e53935;">*</span>
-                                </label>
-                                <select class="form-select" id="assignToUser" style="border: 1px solid #d1d5db; border-radius: 8px; padding: 10px 14px;">
-                                    <option value="">Select an analyst...</option>
-                                    <option value="analyst1">John Smith (Analyst)</option>
-                                    <option value="analyst2">Sarah Johnson (Senior Analyst)</option>
-                                    <option value="analyst3">Mike Chen (Analyst)</option>
-                                    <option value="analyst4">Emma Davis (Lead Analyst)</option>
-                                    <option value="analyst5">David Wilson (Analyst)</option>
-                                </select>
-                            </div>
-                            <div class="mb-3">
-                                <label for="assignmentNotes" class="form-label" style="font-weight: 600; font-size: 13px; color: #1c2430;">Notes (Optional)</label>
-                                <textarea class="form-control" id="assignmentNotes" rows="3" placeholder="Add any notes or instructions for this assignment..." style="border: 1px solid #d1d5db; border-radius: 8px; padding: 10px 14px; resize: vertical;"></textarea>
-                            </div>
-                            <div class="alert alert-info" style="background: #e7f3ff; border: 1px solid #b3d9ff; border-radius: 8px; padding: 12px; font-size: 13px; margin-bottom: 0;">
-                                <i class="fas fa-info-circle" style="color: #3b82f6; margin-right: 6px;"></i>
-                                The assigned analyst will be notified via email and in-app notification.
-                            </div>
+                        <div class="modal-body">
+                            <label class="kx-label" for="assignToUser">Owner</label>
+                            <select class="form-select" id="assignToUser">
+                                <option value="">Select a person...</option>
+                                ${assignees.map(u => `<option value="${escapeHtml(u.id)}" ${u.id === caseData.fullData.assigned_to ? 'selected' : ''}>${escapeHtml(u.name)} (${escapeHtml(this.human(u.role))})${u.id === me.id ? ' — me' : ''}</option>`).join('')}
+                            </select>
+                            <p class="kx-note">The owner is recorded on the alert and in the audit log.</p>
+                            <div class="text-danger small mt-2 d-none" id="assignError" role="alert"></div>
                         </div>
-                        <div class="modal-footer" style="border-top: 1px solid #eceef2; padding: 16px 24px; background: #f7f8fa;">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" style="border-radius: 8px; padding: 8px 20px; font-size: 14px; font-weight: 600;">
-                                Cancel
-                            </button>
-                            <button type="button" class="btn btn-primary" id="confirmAssignBtn" style="background: #FF8D28; border: none; border-radius: 8px; padding: 8px 20px; font-size: 14px; font-weight: 600;">
-                                <i class="fas fa-check"></i> Assign Case
-                            </button>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-outline-primary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="button" class="btn btn-primary" id="confirmAssignBtn">Assign</button>
                         </div>
                     </div>
                 </div>
-            </div>
-        `;
-        
-        // Remove existing modal if any
-        $('#assignCaseModal').remove();
-        
-        // Add modal to body
-        $('body').append(modalHtml);
-        
-        // Show modal
-        const modal = new bootstrap.Modal(document.getElementById('assignCaseModal'));
-        modal.show();
-        
-        // Handle confirm button
-        $('#confirmAssignBtn').off('click').on('click', function() {
-            const assignedTo = $('#assignToUser').val();
-            const notes = $('#assignmentNotes').val();
-            
-            if (!assignedTo) {
-                showToast('error', 'Please select an analyst to assign the case to');
-                return;
+            </div>`);
+        const modalEl = document.getElementById('assignCaseModal');
+        new bootstrap.Modal(modalEl).show();
+
+        $("#confirmAssignBtn").on("click", async () => {
+            const userId = $("#assignToUser").val();
+            if (!userId) { $("#assignError").text('Select who should own this alert.').removeClass("d-none"); return; }
+            const $btn = $("#confirmAssignBtn").prop("disabled", true);
+            try {
+                await API.put(`/alerts/${caseData.caseId}/assign`, { assigned_to: userId });
+                closeModalSafely(modalEl);
+                showToast('success', 'Alert assigned.');
+                this.loadSummary();
+                this.fetchCasesData();
+            } catch (xhr) {
+                const detail = xhr && xhr.responseJSON && xhr.responseJSON.detail;
+                $("#assignError").text(typeof detail === 'string' ? detail : 'Could not assign the alert.').removeClass("d-none");
+                $btn.prop("disabled", false);
             }
-            
-            // Show loading state
-            $(this).prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Assigning...');
-            
-            // Simulate API call
-            setTimeout(() => {
-                // Update the case in the data
-                const caseIndex = Cases.casesData.findIndex(c => c.caseId === caseId);
-                if (caseIndex !== -1) {
-                    const analystNames = {
-                        'analyst1': 'John Smith',
-                        'analyst2': 'Sarah Johnson',
-                        'analyst3': 'Mike Chen',
-                        'analyst4': 'Emma Davis',
-                        'analyst5': 'David Wilson'
-                    };
-                    Cases.casesData[caseIndex].assignedTo = analystNames[assignedTo];
-                    Cases.casesData[caseIndex].status = 'ASSIGNED';
-                }
-                
-                // Close modal
-                modal.hide();
-                
-                // Show success message
-                showToast('success', `Case ${caseId.substring(0, 8)}... assigned successfully`);
-                
-                // Refresh the table
-                Cases.renderTable();
-                Cases.updateStats();
-            }, 1000);
         });
-        
-        // Clean up modal on hide
-        $('#assignCaseModal').on('hidden.bs.modal', function() {
-            $(this).remove();
-        });
+        $(modalEl).on("hidden.bs.modal", function() { setTimeout(() => $(this).remove(), 0); });
     },
-    
+
     async showExportModal(caseId, customerId) {
         const caseData = this.casesData.find(c => c.caseId === caseId);
         const customerName = (caseData && caseData.customerName) || customerId;

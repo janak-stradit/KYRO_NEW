@@ -11,6 +11,7 @@ import json
 import jwt
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database import get_db, SessionLocal
@@ -166,6 +167,143 @@ async def stream_alerts(
             last_checked = now
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
+_UNRESOLVED = ("OPEN", "ASSIGNED", "IN_REVIEW", "ESCALATED")
+_RISK_BANDS = {"high": (80, 101), "medium": (60, 80), "low": (0, 60)}
+
+
+def _queue_filters(
+    db: Session,
+    user: User,
+    *,
+    status_filter: str,
+    risk: str | None,
+    rule: str | None,
+    assignment: str | None,
+    customer_id: uuid.UUID | None,
+    q: str | None,
+):
+    """Alerts joined to their customer, narrowed by the work-queue filters."""
+    query = db.query(AlertModel, Customer).join(Customer, AlertModel.customer_id == Customer.id)
+    if status_filter == "UNRESOLVED":
+        query = query.filter(AlertModel.status.in_(_UNRESOLVED))
+    elif status_filter != "ALL":
+        query = query.filter(AlertModel.status == status_filter)
+    if risk:
+        low, high = _RISK_BANDS[risk]
+        query = query.filter(AlertModel.risk_score >= low, AlertModel.risk_score < high)
+    if rule:
+        query = query.filter(AlertModel.triggered_rules["rules"].contains([rule]))
+    if assignment == "unassigned":
+        query = query.filter(AlertModel.assigned_to.is_(None))
+    elif assignment == "mine":
+        query = query.filter(AlertModel.assigned_to == user.id)
+    if customer_id:
+        query = query.filter(AlertModel.customer_id == customer_id)
+    if q:
+        query = query.filter(Customer.full_name.ilike(f"%{q.strip()}%"))
+    return query
+
+
+@router.get("/queue")
+def alert_queue(
+    pagination: PaginationParams = Depends(),
+    status_filter: str = Query("UNRESOLVED", pattern="^(UNRESOLVED|ALL|OPEN|ASSIGNED|IN_REVIEW|ESCALATED|RESOLVED)$"),
+    risk: str | None = Query(None, pattern="^(high|medium|low)$"),
+    rule: str | None = Query(None, max_length=20),
+    assignment: str | None = Query(None, pattern="^(unassigned|mine)$"),
+    customer_id: uuid.UUID | None = None,
+    q: str | None = Query(None, max_length=100),
+    sort: str = Query("priority", pattern="^(priority|newest|oldest)$"),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> dict:
+    """
+    The analyst work queue. Default order is highest risk first, then oldest,
+    so the alert that most needs attention is always at the top.
+    """
+    query = _queue_filters(
+        db, user, status_filter=status_filter, risk=risk, rule=rule, assignment=assignment, customer_id=customer_id, q=q
+    )
+    total = query.count()
+    order = {
+        "priority": (AlertModel.risk_score.desc(), AlertModel.created_at.asc(), AlertModel.id),
+        "newest": (AlertModel.created_at.desc(), AlertModel.id),
+        "oldest": (AlertModel.created_at.asc(), AlertModel.id),
+    }[sort]
+    rows = query.order_by(*order).offset(pagination.offset).limit(pagination.limit).all()
+
+    customer_ids = {customer.id for _, customer in rows}
+    open_per_customer = dict(
+        db.query(AlertModel.customer_id, func.count(AlertModel.id))
+        .filter(AlertModel.customer_id.in_(customer_ids), AlertModel.status.in_(_UNRESOLVED))
+        .group_by(AlertModel.customer_id)
+        .all()
+    ) if customer_ids else {}
+    assignee_ids = {alert.assigned_to for alert, _ in rows if alert.assigned_to}
+    assignees = {
+        u.id: u.full_name or u.username for u in db.query(User).filter(User.id.in_(assignee_ids))
+    } if assignee_ids else {}
+
+    items = []
+    for alert, customer in rows:
+        item = AlertOut.model_validate(alert).model_dump(mode="json")
+        item.update(
+            customer_name=customer.full_name,
+            customer_pep=customer.pep_flag,
+            customer_sanctions=customer.sanctions_flag,
+            customer_open_alerts=open_per_customer.get(customer.id, 0),
+            assigned_to_name=assignees.get(alert.assigned_to),
+        )
+        items.append(item)
+    return {"items": items, "total": total, "page": pagination.page, "page_size": pagination.page_size}
+
+
+@router.get("/queue/summary")
+def alert_queue_summary(db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> dict:
+    """Headline numbers for the work queue: what is waiting, how risky, how old, and where it concentrates."""
+    unresolved = db.query(AlertModel).filter(AlertModel.status.in_(_UNRESOLVED))
+
+    def count(*conditions) -> int:
+        return unresolved.filter(*conditions).count()
+
+    rule_counts: dict[str, int] = {}
+    for (rules,) in unresolved.with_entities(AlertModel.triggered_rules):
+        rules = rules.get("rules") if isinstance(rules, dict) else rules
+        for code in set(rules or []) if isinstance(rules, list) else ():
+            rule_counts[str(code)] = rule_counts.get(str(code), 0) + 1
+
+    top_customers = (
+        db.query(Customer.id, Customer.full_name, func.count(AlertModel.id), func.max(AlertModel.risk_score))
+        .join(AlertModel, AlertModel.customer_id == Customer.id)
+        .filter(AlertModel.status.in_(_UNRESOLVED))
+        .group_by(Customer.id, Customer.full_name)
+        .order_by(func.count(AlertModel.id).desc(), func.max(AlertModel.risk_score).desc())
+        .limit(5)
+        .all()
+    )
+    return {
+        "unresolved": count(),
+        "high_risk": count(AlertModel.risk_score >= 80),
+        "unassigned": count(AlertModel.assigned_to.is_(None)),
+        "assigned_to_me": count(AlertModel.assigned_to == user.id),
+        "escalated": count(AlertModel.status == "ESCALATED"),
+        "oldest_created_at": unresolved.with_entities(func.min(AlertModel.created_at)).scalar(),
+        "customers_with_alerts": unresolved.with_entities(func.count(func.distinct(AlertModel.customer_id))).scalar() or 0,
+        "by_rule": [{"rule": r, "alerts": n} for r, n in sorted(rule_counts.items(), key=lambda kv: (-kv[1], kv[0]))],
+        "top_customers": [
+            {"customer_id": str(cid), "customer_name": name, "open_alerts": n, "max_risk_score": top}
+            for cid, name, n, top in top_customers
+        ],
+    }
+
+
+@router.get("/assignees")
+def list_assignees(db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> list[dict]:
+    """Active users an alert can be assigned to."""
+    users = db.query(User).filter(User.is_active.is_(True)).order_by(User.full_name, User.username).all()
+    return [{"id": str(u.id), "name": u.full_name or u.username, "role": u.role} for u in users]
 
 
 @router.get("/resolution-options", response_model=ResolutionOptions)
