@@ -769,9 +769,20 @@ const Cases = {
                                             <span class="cd-chip cd-chip--${severityClass(r.severity)}">${escapeHtml(r.severity)}</span>
                                         </li>`).join('')}
                                 </ul>` : `<p class="cd-explanation text-muted">No rule triggers recorded.</p>`}
+
+                            ${alert.resolution_outcome ? `
+                                <h6 class="cd-heading">Disposition</h6>
+                                <p class="cd-explanation">
+                                    <strong>${escapeHtml(human(alert.resolution_outcome))}</strong>${(alert.resolution_reasons || []).length ? ` &middot; ${escapeHtml(alert.resolution_reasons.map(human).join(', '))}` : ''}${alert.sar_reference ? ` &middot; Ref ${escapeHtml(alert.sar_reference)}` : ''}
+                                    ${alert.resolution_notes ? `<br>${escapeHtml(alert.resolution_notes)}` : ''}
+                                </p>` : ''}
                         </div>
                         <div class="modal-footer">
                             <button type="button" class="btn btn-outline-primary" data-bs-dismiss="modal">Close</button>
+                            ${caseData.status !== 'RESOLVED' && alert.id ? `
+                                <button type="button" class="btn btn-outline-primary" id="caseDetailsResolveBtn">
+                                    <i class="fas fa-check-double me-2"></i>Resolve
+                                </button>` : ''}
                             <button type="button" class="btn btn-primary" id="caseDetailsExportBtn">
                                 <i class="fas fa-file-arrow-down me-2"></i>Export report
                             </button>
@@ -791,6 +802,122 @@ const Cases = {
         $("#caseDetailsExportBtn").on("click", () => {
             $(modalEl).one("hidden.bs.modal", () => this.showExportModal(caseData.caseId, caseData.customerId));
             modal.hide();
+        });
+
+        $("#caseDetailsResolveBtn").on("click", () => {
+            $(modalEl).one("hidden.bs.modal", () => this.showResolveModal(caseData));
+            modal.hide();
+        });
+
+        $(modalEl).on("hidden.bs.modal", function() {
+            setTimeout(() => $(this).remove(), 0);
+        });
+    },
+
+    // Records the disposition (outcome + reason codes + notes) for a case.
+    // "Escalated" goes to /escalate; the other outcomes close the alert.
+    async showResolveModal(caseData) {
+        let options;
+        try {
+            options = await API.get('/alerts/resolution-options');
+        } catch (error) {
+            showToast('error', 'Could not load resolution options. Please try again.');
+            return;
+        }
+        const reasonLabels = Object.fromEntries(options.reasons.map(r => [r.code, r.label]));
+        const human = (v) => String(v).replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+        const displayName = caseData.customerName || caseData.customerId;
+
+        const modalHtml = `
+            <div class="modal fade" id="resolveCaseModal" tabindex="-1" aria-labelledby="resolveCaseTitle" aria-hidden="true">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content kx-modal">
+                        <div class="modal-header">
+                            <div>
+                                <h5 class="modal-title" id="resolveCaseTitle">Resolve case</h5>
+                                <small class="text-muted">${escapeHtml(displayName)} &middot; Case ${escapeHtml(caseData.caseId)}</small>
+                            </div>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <label class="kx-label" for="resolveOutcome">Outcome</label>
+                            <select class="form-select mb-1" id="resolveOutcome">
+                                <option value="">Select an outcome...</option>
+                                ${options.outcomes.map(o => `<option value="${escapeHtml(o.code)}">${escapeHtml(human(o.code))}</option>`).join('')}
+                            </select>
+                            <p class="kx-note mt-0 mb-3" id="resolveOutcomeHelp"></p>
+
+                            <div class="kx-label">Reasons</div>
+                            <div class="kx-sections mb-3" id="resolveReasons">
+                                <p class="kx-note my-2">Select an outcome to see its reasons.</p>
+                            </div>
+
+                            <div class="mb-3 d-none" id="resolveSarGroup">
+                                <label class="kx-label" for="resolveSarReference">SAR/STR filing reference</label>
+                                <input type="text" class="form-control" id="resolveSarReference" maxlength="100">
+                            </div>
+
+                            <label class="kx-label" for="resolveNotes">Notes</label>
+                            <textarea class="form-control" id="resolveNotes" rows="4" placeholder="What was checked and why this outcome was chosen"></textarea>
+                            <div class="text-danger small mt-2 d-none" id="resolveError" role="alert"></div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-outline-primary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="button" class="btn btn-primary" id="confirmResolveBtn">Save disposition</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        $("#resolveCaseModal").remove();
+        $("body").append(modalHtml);
+        const modalEl = document.getElementById('resolveCaseModal');
+        const modal = new bootstrap.Modal(modalEl);
+        modal.show();
+
+        $("#resolveOutcome").on("change", function() {
+            const outcome = options.outcomes.find(o => o.code === $(this).val());
+            $("#resolveOutcomeHelp").text(outcome ? outcome.label : '');
+            $("#resolveSarGroup").toggleClass("d-none", !outcome || outcome.code !== 'SAR_FILED');
+            $("#resolveReasons").html(outcome ? outcome.reasons.map(code => `
+                <label class="form-check">
+                    <input class="form-check-input resolve-reason" type="checkbox" value="${escapeHtml(code)}">
+                    <span class="form-check-label">${escapeHtml(reasonLabels[code] || human(code))}</span>
+                </label>`).join('') : '<p class="kx-note my-2">Select an outcome to see its reasons.</p>');
+        });
+
+        const showError = (message) => $("#resolveError").text(message).removeClass("d-none");
+
+        $("#confirmResolveBtn").on("click", async () => {
+            const outcome = $("#resolveOutcome").val();
+            const reasons = $(".resolve-reason:checked").map((_, el) => el.value).get();
+            const notes = $("#resolveNotes").val().trim();
+            if (!outcome) return showError('Select an outcome.');
+            if (!reasons.length) return showError('Select at least one reason.');
+            if (!notes) return showError('Notes are required.');
+
+            const $btn = $("#confirmResolveBtn").prop("disabled", true);
+            try {
+                const updated = outcome === 'ESCALATED'
+                    ? await API.put(`/alerts/${caseData.caseId}/escalate`, { resolution_notes: notes, reasons })
+                    : await API.put(`/alerts/${caseData.caseId}/resolve`, {
+                        outcome, reasons, resolution_notes: notes,
+                        sar_reference: $("#resolveSarReference").val().trim() || null
+                    });
+                caseData.status = updated.status;
+                caseData.fullData = updated;
+                modal.hide();
+                showToast('success', outcome === 'ESCALATED' ? 'Case escalated.' : 'Case resolved.');
+                this.updateDashboard();
+                this.renderTable();
+            } catch (xhr) {
+                const detail = xhr && xhr.responseJSON && xhr.responseJSON.detail;
+                showError(xhr && xhr.status === 403
+                    ? 'Only a compliance officer or admin can resolve a case. Analysts can escalate it.'
+                    : (typeof detail === 'string' ? detail : 'Could not save the disposition. Please try again.'));
+                $btn.prop("disabled", false);
+            }
         });
 
         $(modalEl).on("hidden.bs.modal", function() {

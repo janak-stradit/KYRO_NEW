@@ -9,6 +9,8 @@ from app.models.ml_score import MLScore
 from app.models.watchlist import WatchlistSource, WatchlistEntity, WatchlistIngestionRun
 from app.models.rule_config import RuleConfig
 from app.models.beneficial_ownership import BeneficialOwner
+from app.models.ai_interaction import AIInteraction
+from app.models.knowledge_chunk import KnowledgeChunk
 
 __all__ = [
     "Base",
@@ -32,4 +34,6 @@ __all__ = [
     "WatchlistIngestionRun",
     "RuleConfig",
     "BeneficialOwner",
+    "AIInteraction",
+    "KnowledgeChunk",
 ]

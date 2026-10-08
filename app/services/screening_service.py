@@ -74,7 +74,7 @@ def _candidate_entities(db: Session, normalized_name: str) -> list[WatchlistEnti
     # set_limit() scopes the % operator's similarity floor to this session,
     # rather than depending on Postgres's (possibly reconfigured) default
     # pg_trgm.similarity_threshold GUC.
-    db.execute(text("SELECT set_limit(:floor)"), {"floor": _TRIGRAM_SIMILARITY_FLOOR})
+    db.execute(text("SELECT set_limit(CAST(:floor AS real))"), {"floor": _TRIGRAM_SIMILARITY_FLOOR})
     ids = db.execute(
         text(
             """

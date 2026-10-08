@@ -1,0 +1,61 @@
+{
+  "description": "Short paraphrased summaries written for testing retrieval. They are NOT regulatory text and must not be loaded as a source; the real corpus is ingested from the official sources in Phase 11.3.",
+  "version": "eval-1",
+  "corpus": [
+    {
+      "source_type": "REGULATION",
+      "source_ref": "31 CFR 1023.320",
+      "title": "Reports by brokers or dealers in securities of suspicious transactions",
+      "text": "A broker-dealer must file a suspicious activity report (SAR) for a transaction conducted through it that involves funds or assets of at least $5,000 when it knows, suspects or has reason to suspect the transaction involves illegal activity, is designed to evade reporting requirements, has no business or apparent lawful purpose, or uses the broker-dealer to facilitate criminal activity.\n\nThe SAR must be filed no later than 30 calendar days after the date of initial detection of the facts that form the basis for filing. If no suspect is identified, filing may be delayed a further 30 calendar days. Supporting documentation must be retained for five years. The filing is confidential and the subject must not be notified."
+    },
+    {
+      "source_type": "REGULATION",
+      "source_ref": "31 CFR 1023.220",
+      "title": "Customer identification programs for broker-dealers",
+      "text": "A broker-dealer must maintain a written customer identification program (CIP). Before opening an account it must obtain, at a minimum, the customer's name, date of birth for an individual, address and an identification number such as a taxpayer identification number or passport number.\n\nThe program must include risk-based procedures to verify the identity of each customer within a reasonable time, through documents or non-documentary methods, keep records of the information obtained, and check whether the customer appears on designated government lists."
+    },
+    {
+      "source_type": "REGULATION",
+      "source_ref": "31 CFR 1010.230",
+      "title": "Beneficial ownership requirements for legal entity customers",
+      "text": "Covered financial institutions must identify and verify the beneficial owners of legal entity customers when a new account is opened. Beneficial owners are each individual who owns, directly or indirectly, 25 percent or more of the equity interests of the legal entity, and one individual with significant responsibility to control or manage the entity, such as a chief executive officer or managing member."
+    },
+    {
+      "source_type": "REGULATION",
+      "source_ref": "31 CFR 1010.311",
+      "title": "Filing obligations for reports of transactions in currency",
+      "text": "A financial institution must file a currency transaction report (CTR) for each deposit, withdrawal, exchange of currency or other payment or transfer by, through or to the institution that involves a transaction in currency of more than $10,000. Multiple currency transactions are treated as one if the institution knows they are by or on behalf of the same person and total more than $10,000 in a single business day."
+    },
+    {
+      "source_type": "REGULATION",
+      "source_ref": "FINRA Rule 3310",
+      "title": "Anti-Money Laundering Compliance Program",
+      "text": "Each member firm must develop and implement a written anti-money laundering program approved in writing by senior management. The program must establish policies and internal controls to detect and report suspicious transactions, provide for independent testing of the program, designate an AML compliance person responsible for day-to-day operation, and provide ongoing training for appropriate personnel."
+    },
+    {
+      "source_type": "POLICY",
+      "source_ref": "Internal Policy AML-07",
+      "title": "Periodic KYC review cycles",
+      "text": "High-risk customers are re-reviewed every 12 months, medium-risk customers every 24 months and low-risk customers every 36 months. A review is also triggered by a material change in ownership, a sanctions or PEP screening hit, or an escalated alert. Reviews that are overdue by more than 30 days are reported to the MLRO."
+    }
+  ],
+  "questions": [
+    {"q": "When must a broker-dealer file a SAR after detecting suspicious activity?", "expected": "31 CFR 1023.320"},
+    {"q": "What is the dollar threshold for suspicious transaction reporting by brokers?", "expected": "31 CFR 1023.320"},
+    {"q": "§ 1023.320", "expected": "31 CFR 1023.320"},
+    {"q": "What information must be collected to identify a customer before opening an account?", "expected": "31 CFR 1023.220"},
+    {"q": "customer identification program verification procedures", "expected": "31 CFR 1023.220"},
+    {"q": "Who counts as a beneficial owner of a legal entity?", "expected": "31 CFR 1010.230"},
+    {"q": "What ownership percentage makes someone a beneficial owner?", "expected": "31 CFR 1010.230"},
+    {"q": "When is a currency transaction report required?", "expected": "31 CFR 1010.311"},
+    {"q": "cash deposits over $10,000 in a single business day", "expected": "31 CFR 1010.311"},
+    {"q": "Rule 3310", "expected": "FINRA Rule 3310"},
+    {"q": "Does the AML program need independent testing and a designated compliance person?", "expected": "FINRA Rule 3310"},
+    {"q": "How often are high-risk customers re-reviewed?", "expected": "Internal Policy AML-07"},
+    {"q": "What triggers a KYC review outside the normal cycle?", "expected": "Internal Policy AML-07"}
+  ],
+  "out_of_corpus": [
+    "cryptocurrency staking yield taxation",
+    "quarterly marketing newsletter approval"
+  ]
+}

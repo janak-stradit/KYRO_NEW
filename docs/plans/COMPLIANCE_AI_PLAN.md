@@ -235,6 +235,16 @@ Recommended first client-visible milestone: **Resolve flow + FP baseline, then t
 copilot** (steps 2 and 4). The Resolve flow should ship first because the FP model needs 4–8 weeks
 of recorded outcomes before it can be trained.
 
+### Implementation status (8 Oct 2026)
+
+| Item | Status |
+|---|---|
+| 11.0.1–11.0.4 AI gateway, prompt registry, PII redaction, `ai_interactions` log | Done (`app/ai/`, `app/routers/ai.py`, migration `0006`); mock mode, no real provider configured |
+| 11.0.5 Retrieval store | Done as full-text search (`knowledge_chunks`, `app/ai/retrieval.py`, `GET /ai/search`, migration `0008`); vector/hybrid search waits for the embeddings decision (§9.2). Store is empty until 11.3 ingestion |
+| 11.0.6 Evaluation harness | Done (`tests/ai_eval/`: redaction and retrieval golden sets, run in CI); extraction, Q&A and FP-model sets are added with those features |
+| 11.2 step 0 Resolve flow with outcome + reason codes (§9.6) | Done (`/alerts/{id}/resolve`, `/alerts/resolution-options`, Resolve in Case Details, migration `0007`); second reviewer for `FALSE_POSITIVE` + `OTHER` waits for maker-checker (11.5) |
+| 11.2 steps 1–2 FP baseline per rule | API done (`GET /alerts/disposition-baseline`: FP rate, volumes, time-to-disposition, reasons per rule and rule combination); no dashboard view yet, and numbers are empty until alerts are resolved |
+
 ## 8. Testing & governance
 
 - Unit/API tests per workstream in `tests/api`; AI components tested with the provider mocked.

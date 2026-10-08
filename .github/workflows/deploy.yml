@@ -47,6 +47,9 @@ jobs:
       - name: Run API test suite
         run: pytest tests/api --cov=app
 
+      - name: Run AI evaluation harness
+        run: pytest tests/ai_eval --no-cov
+
   build-and-push:
     needs: test
     runs-on: ubuntu-latest

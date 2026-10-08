@@ -1,0 +1,47 @@
+{
+  "description": "Synthetic text containing personal data. After redaction none of the must_not_leak strings may remain, and restore() must return the original text.",
+  "cases": [
+    {
+      "id": "alert-summary",
+      "known": {"Maria Gonzalez": "PERSON", "CUST-0412": "CUSTOMER_ID"},
+      "text": "Maria Gonzalez (CUST-0412) sent three wires on 2026-08-03 from account 400912345678. Contact: maria.gonzalez@example.com, +1 (212) 555-0147.",
+      "must_not_leak": ["Maria Gonzalez", "CUST-0412", "2026-08-03", "400912345678", "maria.gonzalez@example.com", "555-0147"]
+    },
+    {
+      "id": "name-case-variants",
+      "known": {"Oluwaseun Adeyemi": "PERSON"},
+      "text": "OLUWASEUN ADEYEMI opened the account. oluwaseun adeyemi later confirmed the transfer.",
+      "must_not_leak": ["OLUWASEUN ADEYEMI", "oluwaseun adeyemi"]
+    },
+    {
+      "id": "overlapping-names",
+      "known": {"John James": "PERSON", "John James Smith": "PERSON"},
+      "text": "John James Smith is the father of John James.",
+      "must_not_leak": ["John James", "Smith"]
+    },
+    {
+      "id": "iban-and-card",
+      "known": {},
+      "text": "Funds moved from GB29 NWBK 6016 1331 9268 19 to card 4111111111111111 and IBAN DE89370400440532013000.",
+      "must_not_leak": ["GB29 NWBK 6016 1331 9268 19", "4111111111111111", "DE89370400440532013000"]
+    },
+    {
+      "id": "dates-of-birth",
+      "known": {"Chen Wei": "PERSON"},
+      "text": "Chen Wei, born 14/03/1985, passport renewed 2.11.2024.",
+      "must_not_leak": ["Chen Wei", "14/03/1985", "2.11.2024"]
+    },
+    {
+      "id": "corporate-with-ubo",
+      "known": {"Northwind Trading Ltd": "ORGANISATION", "Priya Raman": "PERSON", "REG-88213377": "REGISTRATION"},
+      "text": "Northwind Trading Ltd (REG-88213377) lists Priya Raman as 40% owner; registry contact ops@northwind-trading.example, tel 020 7946 0321.",
+      "must_not_leak": ["Northwind Trading Ltd", "REG-88213377", "Priya Raman", "ops@northwind-trading.example", "7946 0321"]
+    },
+    {
+      "id": "nothing-to-redact",
+      "known": {},
+      "text": "Rule R001 triggered because the amount exceeded the threshold for this jurisdiction.",
+      "must_not_leak": []
+    }
+  ]
+}

@@ -21,6 +21,7 @@ from app.config import get_settings
 from app.rate_limit import limiter
 from app.routers import (
     accounts,
+    ai,
     alerts,
     auth,
     beneficial_owners,
@@ -103,6 +104,7 @@ app.add_middleware(
 )
 
 app.include_router(auth.router)
+app.include_router(ai.router)
 app.include_router(dashboard.router)
 app.include_router(customers.router)
 app.include_router(beneficial_owners.router)

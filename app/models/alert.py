@@ -26,6 +26,11 @@ class Alert(Base, UUIDPrimaryKeyMixin):
             "status IN ('OPEN','ASSIGNED','IN_REVIEW','RESOLVED','ESCALATED')",
             name="chk_alert_status",
         ),
+        CheckConstraint(
+            "resolution_outcome IS NULL OR resolution_outcome IN "
+            "('SAR_FILED','ESCALATED','TRUE_POSITIVE_NO_SAR','FALSE_POSITIVE')",
+            name="chk_alert_resolution_outcome",
+        ),
         {"schema": SCHEMA},
     )
 
@@ -45,4 +50,8 @@ class Alert(Base, UUIDPrimaryKeyMixin):
     resolved_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     resolution_notes: Mapped[str | None] = mapped_column(Text)
     is_false_positive: Mapped[bool | None] = mapped_column(Boolean)
+    # Disposition taxonomy (schemas/alert.py): one outcome, one or more reason codes
+    resolution_outcome: Mapped[str | None] = mapped_column(String(30), index=True)
+    resolution_reasons: Mapped[list | None] = mapped_column(JSONB)
+    sar_reference: Mapped[str | None] = mapped_column(String(100))
     ml_version: Mapped[str | None] = mapped_column(String(20))

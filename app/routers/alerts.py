@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 import asyncio
 import json
 import jwt
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -18,8 +18,18 @@ from app.deps import PaginationParams, get_current_user, require_role
 from app.models.alert import Alert as AlertModel
 from app.models.customer import Customer
 from app.models.user import User
-from app.schemas.alert import AlertAssign, AlertEscalate, AlertOut, AlertResolve
+from app.schemas.alert import (
+    OUTCOME_REASONS,
+    RESOLUTION_OUTCOMES,
+    RESOLUTION_REASONS,
+    AlertAssign,
+    AlertEscalate,
+    AlertOut,
+    AlertResolve,
+    ResolutionOptions,
+)
 from app.schemas.common import Page
+from app.services import feedback_service
 from app.services.audit_service import log_action
 from app.utils.security import decode_token
 
@@ -158,6 +168,28 @@ async def stream_alerts(
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
+@router.get("/resolution-options", response_model=ResolutionOptions)
+def resolution_options(user: User = Depends(get_current_user)) -> dict:
+    """Outcome and reason codes for the Resolve dialog."""
+    return {
+        "outcomes": [
+            {"code": code, "label": label, "reasons": list(OUTCOME_REASONS[code])}
+            for code, label in RESOLUTION_OUTCOMES.items()
+        ],
+        "reasons": [{"code": code, "label": label} for code, label in RESOLUTION_REASONS.items()],
+    }
+
+
+@router.get("/disposition-baseline")
+def disposition_baseline(
+    days: int = Query(90, ge=1, le=730),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_role("COMPLIANCE_OFFICER", "ADMIN")),
+) -> dict:
+    """False-positive rate, volumes and time-to-disposition, overall and per rule."""
+    return feedback_service.disposition_baseline(db, days=days)
+
+
 @router.get("/{alert_id}", response_model=AlertOut)
 def get_alert(alert_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> AlertModel:
     return _get_alert_or_404(db, alert_id)
@@ -187,19 +219,29 @@ def resolve(
     user: User = Depends(require_role("COMPLIANCE_OFFICER", "ADMIN")),
 ) -> AlertModel:
     alert = _get_alert_or_404(db, alert_id)
+    if alert.status == "RESOLVED":
+        raise HTTPException(status.HTTP_409_CONFLICT, "Alert is already resolved")
     alert.status = "RESOLVED"
     alert.resolution_notes = data.resolution_notes
     alert.resolved_at = datetime.now(timezone.utc)
     alert.resolved_by = user.id
-    if data.is_false_positive is not None:
-        alert.is_false_positive = data.is_false_positive
+    alert.resolution_outcome = data.outcome
+    alert.resolution_reasons = data.reasons
+    alert.sar_reference = data.sar_reference
+    alert.is_false_positive = data.outcome == "FALSE_POSITIVE"
     log_action(
         db,
         entity_type="ALERT",
         entity_id=alert.id,
         action="APPROVE",
         performed_by=user.id,
-        new_values={"resolution_notes": data.resolution_notes, "is_false_positive": data.is_false_positive},
+        new_values={
+            "resolution_outcome": data.outcome,
+            "resolution_reasons": data.reasons,
+            "resolution_notes": data.resolution_notes,
+            "sar_reference": data.sar_reference,
+            "is_false_positive": alert.is_false_positive,
+        },
     )
     db.commit()
     db.refresh(alert)
@@ -214,10 +256,21 @@ def escalate(
     user: User = Depends(require_role("ANALYST", "COMPLIANCE_OFFICER", "ADMIN")),
 ) -> AlertModel:
     alert = _get_alert_or_404(db, alert_id)
+    if alert.status == "RESOLVED":
+        raise HTTPException(status.HTTP_409_CONFLICT, "Alert is already resolved")
     alert.status = "ESCALATED"
+    alert.resolution_outcome = "ESCALATED"
+    alert.resolution_reasons = data.reasons or None
     if data.resolution_notes:
         alert.resolution_notes = data.resolution_notes
-    log_action(db, entity_type="ALERT", entity_id=alert.id, action="UPDATE", performed_by=user.id, new_values={"status": "ESCALATED"})
+    log_action(
+        db,
+        entity_type="ALERT",
+        entity_id=alert.id,
+        action="UPDATE",
+        performed_by=user.id,
+        new_values={"status": "ESCALATED", "resolution_reasons": data.reasons},
+    )
     db.commit()
     db.refresh(alert)
     return alert

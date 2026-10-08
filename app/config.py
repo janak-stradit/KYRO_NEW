@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -54,6 +55,16 @@ class Settings(BaseSettings):
     performance_threshold: float = 0.85
     training_data_days: int = 365
     shap_explanation_top_k: int = 5
+
+    # ── Compliance AI (Phase 11, docs/plans/COMPLIANCE_AI_PLAN.md) ──
+    # Off and mocked by default: nothing is sent to an LLM until both
+    # KYRO_AI_ENABLED=true and KYRO_LLM_MOCK=false are set explicitly.
+    kyro_ai_enabled: bool = False
+    kyro_llm_mock: bool = True
+    kyro_llm_base_url: str = ""
+    kyro_llm_api_key: SecretStr = SecretStr("")
+    kyro_llm_model: str = "claude-haiku-4-5-20251001"
+    kyro_llm_timeout_seconds: int = 30
 
     # ── Watchlist screening (Phase 4.1) ─────────────────────────────
     watchlist_confirmed_match_score: float = 92.0
