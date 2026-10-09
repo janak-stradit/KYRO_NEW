@@ -72,6 +72,11 @@ class Settings(BaseSettings):
     # Users are created by an administrator. Turn this on only for a demo
     # environment where anyone may register themselves as an analyst.
     allow_self_registration: bool = False
+    # Days a case may stay open before the case page marks it overdue, by risk band.
+    # Placeholders: set them to the firm's own policy.
+    case_target_days_high: int = 5
+    case_target_days_medium: int = 10
+    case_target_days_low: int = 20
 
     # Where uploaded KYC documents are kept (local disk in development; use
     # encrypted object storage in production). Never inside the repository tree.

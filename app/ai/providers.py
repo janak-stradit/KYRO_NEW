@@ -173,6 +173,22 @@ def _mock_document_fields(user: str) -> list[dict]:
     return fields[:40]
 
 
+def _mock_narrative(facts: str) -> str:
+    """Arrange the labelled case facts under the narrative headings. Adds nothing to them."""
+    headings = ["Who", "What", "When", "Where", "Why it was flagged", "What was done"]
+    grouped: dict[str, list[str]] = {h: [] for h in headings}
+    for line in facts.strip().splitlines():
+        label, _, rest = line.partition(":")
+        if label.strip() in grouped and rest.strip():
+            grouped[label.strip()].append(rest.strip())
+    parts = []
+    for heading in headings:
+        body = grouped[heading]
+        sentences = [s[0].upper() + s[1:] + ("" if s.endswith(".") else ".") for s in body]
+        parts.append(heading + chr(10) + (chr(10).join(sentences) if sentences else "Not recorded in the case."))
+    return (chr(10) * 2).join(parts)
+
+
 class MockProvider:
     name = "mock"
 
@@ -188,6 +204,8 @@ class MockProvider:
             text = json.dumps({"obligations": _mock_obligations(user.split("Section text:", 1)[1])})
         elif "Document text:" in user and "Fields to extract:" in user:
             text = json.dumps({"fields": _mock_document_fields(user)})
+        elif "Case facts:" in user:
+            text = _mock_narrative(user.split("Case facts:", 1)[1])
         elif "Control catalogue:" in user:
             text = json.dumps({"mappings": _mock_mappings(user.split("Control catalogue:", 1)[0])})
         elif "JSON" in system or "json" in system:

@@ -70,6 +70,7 @@ const CaseDetail = {
         };
         Cases.casesData = [this.caseData];  // the shared export dialog looks the case up here
 
+        this.transactions = (transactions && transactions.items) || [];
         this.render({ alert, customer, profile: profile || [], transactions: (transactions && transactions.items) || [],
                       screening: screening || [], reviews: reviews || [], others: others || { items: [], total: 0 } });
     },
@@ -89,12 +90,16 @@ const CaseDetail = {
         this.loadTimeline(alert.id);
         this.loadHistory(alert);
         this.loadActivity(alert.customer_id);
+        this.loadCounterparties(alert.customer_id);
+        this.loadAccounts(alert.customer_id);
+        this.loadScreening(alert.customer_id);
+        this.loadRequests(alert.id);
         if (customer.customer_type && customer.customer_type !== 'INDIVIDUAL') this.loadOwners(alert.customer_id);
     },
 
     TIMELINE_ICONS: {
         created: 'fa-bell', note: 'fa-pen', assigned: 'fa-user-plus', escalated: 'fa-arrow-up', resolved: 'fa-check-double',
-        qa: 'fa-clipboard-check', document: 'fa-file-lines', updated: 'fa-rotate'
+        qa: 'fa-clipboard-check', document: 'fa-file-lines', request: 'fa-envelope', updated: 'fa-rotate'
     },
 
     async loadTimeline(alertId) {
@@ -106,6 +111,7 @@ const CaseDetail = {
             return;
         }
         if (this.id !== alertId) return;  // the user has moved to another case
+        if (data.clock) this.renderClock(data.clock);
         $("#cpTimelineCount").text(`${data.note_count} note${data.note_count === 1 ? '' : 's'}, ${data.events.length - data.note_count} event${data.events.length - data.note_count === 1 ? '' : 's'}`);
         $("#cpTimeline").html(`<ol class="cp-tl">${data.events.map(e => `
             <li class="cp-tl__item cp-tl__item--${escapeHtml(e.kind)}">
@@ -290,6 +296,368 @@ const CaseDetail = {
         }
     },
 
+    // ── Case clock (filled from the timeline response) ─────────────────────
+    renderClock(clock) {
+        const days = (n) => `${n} day${n === 1 ? '' : 's'}`;
+        const sinceDays = (iso) => Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 86400000));
+        const chips = [];
+        if (clock.closed_at) {
+            chips.push(`<span class="cd-chip cd-chip--muted" title="Target for ${clock.risk_band}-risk cases: ${days(clock.target_days)}">Closed after ${days(clock.age_days)}</span>`);
+        } else {
+            chips.push(`<span class="cd-chip cd-chip--${clock.overdue ? 'high' : 'muted'}" title="Target for ${clock.risk_band}-risk cases: ${days(clock.target_days)}">${clock.overdue ? 'Overdue: open' : 'Open'} ${days(clock.age_days)} &middot; target ${clock.target_days}</span>`);
+            if (clock.assigned_at) {
+                const n = sinceDays(clock.assigned_at);
+                chips.push(`<span class="cd-chip cd-chip--muted">Assigned ${n ? `${days(n)} ago` : 'today'}</span>`);
+            }
+        }
+        $("#cpClock").html(chips.join(' '));
+    },
+
+    // ── Why each rule exists ───────────────────────────────────────────────
+    async loadBasis(alertId, codes) {
+        if (!codes.length) return;
+        let basis;
+        try {
+            basis = await API.get('/controls/basis', { codes: codes.join(',') });
+        } catch (error) { return; }
+        if (this.id !== alertId) return;
+        const withBasis = codes.filter(code => (basis[code] || []).length);
+        const body = withBasis.length ? withBasis.map(code => `
+            <li>
+                <span class="cd-rules__code">${escapeHtml(code)}</span>
+                <span class="cp-basis__text">${basis[code].slice(0, 3).map(b => `<span><strong>${escapeHtml(b.citation)}</strong> ${escapeHtml(b.who)} must ${escapeHtml(b.action)}${b.deadline ? ` (${escapeHtml(b.deadline)})` : ''}</span>`).join('')}${basis[code].length > 3 ? `<span class="kx-note">and ${basis[code].length - 3} more</span>` : ''}</span>
+            </li>`).join('')
+            : '';
+        $("#cpBasis").html(`
+            <div class="kx-label mt-3">Regulatory basis</div>
+            ${body ? `<ul class="cp-basis">${body}</ul>` : ''}
+            ${withBasis.length < codes.length ? `<p class="kx-note mb-0">${withBasis.length ? 'The other rules have' : 'These rules have'} no confirmed obligation mapped to them yet. Mappings are confirmed on the Regulations page.</p>` : ''}
+        `);
+    },
+
+    // ── Accounts ───────────────────────────────────────────────────────────
+    async loadAccounts(customerId) {
+        let page;
+        try {
+            page = await API.get('/accounts', { customer_id: customerId, page_size: 50 });
+        } catch (error) {
+            $("#cpAccounts").html(this.empty('Accounts could not be loaded.'));
+            return;
+        }
+        if (!this.caseData || this.caseData.rawCustomerId !== customerId) return;
+        const statusChip = { ACTIVE: 'low', FROZEN: 'high', CLOSED: 'muted', SUSPENDED: 'medium' };
+        $("#cpAccounts").html(page.items.length ? `<ul class="kd-list">${page.items.map(a => `
+            <li>
+                <span>${escapeHtml(this.human(a.account_type))} &middot; ${escapeHtml(a.currency || '')}${a.opened_date ? ` <small class="text-muted">opened ${escapeHtml(formatDate(a.opened_date))}</small>` : ''}
+                    <span class="cd-chip cd-chip--${statusChip[a.account_status] || 'muted'}">${escapeHtml(this.human(a.account_status))}</span></span>
+                <strong>${Number(a.balance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${escapeHtml(a.currency || '')}</strong>
+            </li>`).join('')}</ul>` : this.empty('No accounts on record.'));
+    },
+
+    // ── Counterparties and countries ───────────────────────────────────────
+    async loadCounterparties(customerId) {
+        let d;
+        try {
+            d = await API.get(`/customers/${customerId}/counterparties`);
+        } catch (error) {
+            $("#cpCounterparties").html(this.empty('Counterparties could not be loaded.'));
+            return;
+        }
+        if (!this.caseData || this.caseData.rawCustomerId !== customerId) return;
+        if (!d.transactions) {
+            $("#cpCounterparties").html(this.empty(`No transactions in the last ${d.days} days.`));
+            return;
+        }
+        const totals = (g) => g.totals.slice(0, 2).map(t => `${Number(t.amount).toLocaleString(undefined, { maximumFractionDigits: 0 })} ${escapeHtml(t.currency)}`).join(', ');
+        const chips = (g) => `${g.new ? '<span class="cd-chip cd-chip--medium">New</span>' : ''}${g.high_risk ? '<span class="cd-chip cd-chip--high">High-risk</span>' : ''}`;
+        const list = (items, sub) => `<ul class="cp-parties">${items.map(g => `
+            <li>
+                <span class="cp-parties__name"><strong>${escapeHtml(g.name)}</strong>${sub(g)} ${chips(g)}</span>
+                <span class="cp-parties__n">${g.transactions} txn${g.transactions === 1 ? '' : 's'}</span>
+                <span class="cp-parties__amt">${totals(g)}</span>
+            </li>`).join('')}</ul>`;
+        $("#cpCounterpartiesSub").text(`Last ${d.days} days. "New" means first seen in the last ${d.new_since_days} days.`);
+        $("#cpCounterparties").html(`
+            <div class="cp-act">
+                <div>
+                    <div class="kx-label">Counterparties${d.counterparty_count > d.counterparties.length ? ` (top ${d.counterparties.length} of ${d.counterparty_count})` : ''}</div>
+                    ${d.counterparties.length ? list(d.counterparties, g => (g.countries.length ? ` <small class="text-muted">${escapeHtml(g.countries.join(', '))}</small>` : '')) : this.empty('No counterparty is recorded on these transactions.')}
+                </div>
+                <div>
+                    <div class="kx-label">Countries${d.country_count > d.countries.length ? ` (top ${d.countries.length} of ${d.country_count})` : ''}</div>
+                    ${d.countries.length ? list(d.countries, () => '') : this.empty('No country is recorded on these transactions.')}
+                </div>
+            </div>
+        `);
+    },
+
+    // ── Screening matches ──────────────────────────────────────────────────
+    async loadScreening(customerId) {
+        let matches;
+        try {
+            matches = await API.get(`/customers/${customerId}/screening-matches`);
+        } catch (error) {
+            $("#cpScreening").html(this.empty('Screening results could not be loaded.'));
+            return;
+        }
+        if (!this.caseData || this.caseData.rawCustomerId !== customerId) return;
+        if (!matches.length) {
+            $("#cpScreening").html(this.empty('No possible or confirmed watchlist matches on record.'));
+            return;
+        }
+        const mayDecide = Auth.can('screening.run');
+        const resolution = { CLEARED: ['low', 'Not the same person'], CONFIRMED: ['high', 'Confirmed match'], ESCALATED: ['medium', 'Escalated'] };
+        const cell = (v) => (v == null || v === '' ? '<span class="text-muted">—</span>' : escapeHtml(String(v)));
+        $("#cpScreening").html(matches.map(m => {
+            const done = resolution[m.resolution];
+            return `
+            <article class="cp-match" data-id="${escapeHtml(m.id)}">
+                <header class="cp-match__head">
+                    <span><strong>${escapeHtml(this.human(m.screening_type))}</strong>${m.match_score != null ? ` &middot; match score ${Number(m.match_score).toFixed(0)}` : ''}${m.listed.still_listed === false ? ' &middot; <span class="text-muted">no longer listed</span>' : ''}</span>
+                    <span class="cd-chip cd-chip--${done ? done[0] : (m.match_status === 'CONFIRMED_MATCH' ? 'high' : 'medium')}">${done ? done[1] : escapeHtml(this.human(m.match_status))}</span>
+                </header>
+                <table class="cp-match__table">
+                    <thead><tr><th></th><th>${escapeHtml(m.subject.kind)}</th><th>List entry</th></tr></thead>
+                    <tbody>
+                        <tr><th>Name</th><td>${cell(m.subject.name)}</td><td>${cell(m.listed.name)}${m.listed.aka_names.length ? `<br><small class="text-muted">also ${escapeHtml(m.listed.aka_names.join('; '))}</small>` : ''}</td></tr>
+                        <tr><th>Date of birth</th><td>${cell(m.subject.date_of_birth && formatDate(m.subject.date_of_birth))}</td><td>${cell(m.listed.date_of_birth && formatDate(m.listed.date_of_birth))}${m.dob_match === true ? ' <span class="cd-chip cd-chip--high">Same</span>' : ''}</td></tr>
+                        <tr><th>Country</th><td>${cell(m.subject.country)}</td><td>${cell(m.listed.nationalities.join(', '))}</td></tr>
+                        <tr><th>List</th><td></td><td>${cell(m.listed.list)}${m.listed.programs.length ? `<br><small class="text-muted">${escapeHtml(m.listed.programs.join(', '))}</small>` : ''}</td></tr>
+                    </tbody>
+                </table>
+                ${m.listed.remarks ? `<p class="kx-note mb-2">${escapeHtml(m.listed.remarks.length > 220 ? m.listed.remarks.slice(0, 217) + '...' : m.listed.remarks)}</p>` : ''}
+                ${m.resolution ? `
+                <p class="cp-match__decision">${escapeHtml(m.resolution_notes || '')}<br><small class="text-muted">${escapeHtml(m.resolved_by_name || 'Unknown user')} &middot; ${escapeHtml(formatDateTime(m.resolved_at))}</small></p>`
+                : mayDecide ? `
+                <label class="visually-hidden" for="cpMatchNotes-${escapeHtml(m.id)}">Reason for the decision</label>
+                <textarea class="form-control mb-2 cp-match__notes" id="cpMatchNotes-${escapeHtml(m.id)}" rows="2" maxlength="2000" placeholder="Reason for the decision (required)"></textarea>
+                <div class="cp-match__actions">
+                    <button type="button" class="btn btn-sm btn-outline-primary cp-match-decide" data-decision="CLEARED">Not the same person</button>
+                    <button type="button" class="btn btn-sm btn-outline-primary cp-match-decide" data-decision="ESCALATED">Escalate</button>
+                    <button type="button" class="btn btn-sm btn-outline-primary cp-match-decide" data-decision="CONFIRMED">Confirmed match</button>
+                </div>` : '<p class="kx-note mb-0">Awaiting a decision.</p>'}
+            </article>`;
+        }).join(''));
+        $("#cpScreening").off("click.match").on("click.match", ".cp-match-decide", (e) => this.decideMatch($(e.currentTarget)));
+    },
+
+    async decideMatch($button) {
+        const $match = $button.closest(".cp-match");
+        const $notes = $match.find(".cp-match__notes");
+        const notes = ($notes.val() || '').trim();
+        if (!notes) {
+            showToast('error', 'Give the reason for the decision.');
+            $notes.trigger("focus");
+            return;
+        }
+        $match.find(".cp-match-decide").prop("disabled", true);
+        try {
+            await API.put(`/screening/${$match.data("id")}/decision`, { decision: $button.data("decision"), notes });
+            showToast('success', 'Screening decision recorded.');
+            await this.load();  // a confirmed match changes the customer's flags and rating
+        } catch (xhr) {
+            $match.find(".cp-match-decide").prop("disabled", false);
+        }
+    },
+
+    // ── Transactions: flagged or all, filtered, exportable ─────────────────
+    txFilters: { scope: 'flagged', type: '', from: '', to: '', min: '', shown: 25 },
+
+    isFlagged(t) {
+        return ((t.risk_flags && t.risk_flags.triggered_rules) || []).length > 0;
+    },
+
+    filteredTransactions() {
+        const f = this.txFilters;
+        const from = f.from ? new Date(`${f.from}T00:00:00`) : null;
+        const to = f.to ? new Date(`${f.to}T23:59:59`) : null;
+        const min = f.min === '' ? null : Number(f.min);
+        return (this.transactions || [])
+            .filter(t => (f.scope === 'all' || this.isFlagged(t))
+                && (!f.type || t.transaction_type === f.type)
+                && (!from || new Date(t.transaction_date) >= from)
+                && (!to || new Date(t.transaction_date) <= to)
+                && (min == null || isNaN(min) || Number(t.amount) >= min))
+            .sort((a, b) => new Date(b.transaction_date) - new Date(a.transaction_date));
+    },
+
+    renderTransactions() {
+        const rows = this.filteredTransactions();
+        const f = this.txFilters;
+        const total = (this.transactions || []).length;
+        const flaggedCount = (this.transactions || []).filter(t => this.isFlagged(t)).length;
+        $("#cpTxCount").text(`${Math.min(f.shown, rows.length)} of ${rows.length.toLocaleString()} shown · ${flaggedCount} flagged of ${total} loaded${total >= 500 ? ' (the most recent 500)' : ''}`);
+        $("#cpTxBody").html(rows.slice(0, f.shown).map(t => {
+            const codes = (t.risk_flags && t.risk_flags.triggered_rules) || [];
+            return `
+            <tr>
+                <td class="px-3 py-2 text-nowrap">${escapeHtml(formatDateTime(t.transaction_date))}</td>
+                <td class="px-3 py-2">${escapeHtml(this.human(t.transaction_type))}</td>
+                <td class="px-3 py-2 text-end text-nowrap">${Number(t.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${escapeHtml(t.currency || '')}</td>
+                <td class="px-3 py-2">${escapeHtml(t.meta_counterparty || '—')}${t.meta_country ? ` <small class="text-muted">${escapeHtml(t.meta_country)}</small>` : ''}</td>
+                <td class="px-3 py-2">${codes.length ? `<div class="rq-rules">${codes.map(code => `<span class="rq-rule" title="${escapeHtml(code)}">${escapeHtml((Cases.RULES[code] || [code])[0])}</span>`).join('')}</div>` : '<span class="text-muted">None</span>'}</td>
+                <td class="px-3 py-2 text-end">${t.risk_score == null ? '—' : t.risk_score}</td>
+            </tr>`;
+        }).join('') || `<tr><td colspan="6" class="rc-empty">${total ? 'No transactions match these filters.' : 'No transactions on record for this customer.'}</td></tr>`);
+        $("#cpTxMore").toggleClass("d-none", rows.length <= f.shown).text(`Show ${Math.min(25, rows.length - f.shown)} more`);
+        $("#cpTxExport").prop("disabled", !rows.length);
+    },
+
+    setupTransactions() {
+        this.txFilters = { scope: 'flagged', type: '', from: '', to: '', min: '', shown: 25 };
+        const types = [...new Set((this.transactions || []).map(t => t.transaction_type).filter(Boolean))].sort();
+        $("#cpTxType").append(types.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(this.human(t))}</option>`).join(''));
+        const change = (key, value) => { this.txFilters[key] = value; this.txFilters.shown = 25; this.renderTransactions(); };
+        $(".cp-tx-scope").on("click", (e) => {
+            $(".cp-tx-scope").removeClass("is-active").attr("aria-pressed", "false");
+            $(e.currentTarget).addClass("is-active").attr("aria-pressed", "true");
+            change('scope', $(e.currentTarget).data("scope"));
+        });
+        $("#cpTxType").on("change", (e) => change('type', $(e.currentTarget).val()));
+        $("#cpTxFrom").on("change", (e) => change('from', $(e.currentTarget).val()));
+        $("#cpTxTo").on("change", (e) => change('to', $(e.currentTarget).val()));
+        $("#cpTxMin").on("input", (e) => change('min', $(e.currentTarget).val()));
+        $("#cpTxMore").on("click", () => { this.txFilters.shown += 25; this.renderTransactions(); });
+        $("#cpTxExport").on("click", () => this.exportTransactions());
+        this.renderTransactions();
+    },
+
+    exportTransactions() {
+        // A leading =, +, - or @ would be run as a formula by a spreadsheet
+        const cell = (value) => {
+            let text = value == null ? '' : String(value);
+            if (/^[=+\-@]/.test(text) && isNaN(Number(text))) text = `'${text}`;
+            return `"${text.replace(/"/g, '""')}"`;
+        };
+        const lines = [['Date', 'Type', 'Amount', 'Currency', 'Counterparty', 'Country', 'Rules fired', 'Risk score'].map(cell).join(',')];
+        this.filteredTransactions().forEach(t => lines.push([
+            new Date(t.transaction_date).toISOString(), t.transaction_type, Number(t.amount).toFixed(2), t.currency, t.meta_counterparty, t.meta_country,
+            ((t.risk_flags && t.risk_flags.triggered_rules) || []).join(' '), t.risk_score
+        ].map(cell).join(',')));
+        const url = URL.createObjectURL(new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' }));
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `transactions-${(this.caseData.customerId || 'customer').replace(/[^A-Za-z0-9-]/g, '')}-${new Date().toISOString().slice(0, 10)}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+    },
+
+    // ── Requests for information ───────────────────────────────────────────
+    async loadRequests(alertId) {
+        let requests;
+        try {
+            requests = await API.get(`/alerts/${alertId}/requests`);
+        } catch (error) {
+            $("#cpRequests").html(this.empty('Requests could not be loaded.'));
+            return;
+        }
+        if (this.id !== alertId) return;
+        const mayEdit = Auth.can('alerts.escalate');
+        const chip = (r) => (r.status === 'RECEIVED' ? ['low', 'Received'] : r.status === 'CANCELLED' ? ['muted', 'Withdrawn'] : r.overdue ? ['high', 'Overdue'] : ['medium', 'Waiting']);
+        $("#cpRequests").html(requests.length ? `<ul class="cp-requests">${requests.map(r => `
+            <li class="cp-request" data-id="${escapeHtml(r.id)}">
+                <div class="cp-request__head">
+                    <strong>${escapeHtml(r.requested_from)}</strong>
+                    <span class="cd-chip cd-chip--${chip(r)[0]}">${chip(r)[1]}</span>
+                </div>
+                <p class="cp-request__subject">${escapeHtml(r.subject)}</p>
+                <p class="cp-tl__meta">Asked by ${escapeHtml(r.requested_by_name)} on ${escapeHtml(formatDate(r.created_at))} &middot; due ${escapeHtml(formatDate(r.due_date))}</p>
+                ${r.response_note ? `<p class="cp-request__answer">${escapeHtml(r.response_note)}<br><small class="text-muted">${escapeHtml(r.closed_by_name || '')} &middot; ${escapeHtml(formatDate(r.closed_at))}</small></p>` : ''}
+                ${r.status === 'OPEN' && mayEdit ? `
+                <div class="cp-request__close">
+                    <label class="visually-hidden" for="cpReqNote-${escapeHtml(r.id)}">What was received</label>
+                    <input type="text" class="form-control form-control-sm cp-request__note" id="cpReqNote-${escapeHtml(r.id)}" maxlength="2000" placeholder="What was received">
+                    <button type="button" class="btn btn-sm btn-outline-primary cp-request-close" data-status="RECEIVED">Mark received</button>
+                    <button type="button" class="btn btn-sm rc-actions__icon cp-request-close" data-status="CANCELLED" title="Withdraw this request" aria-label="Withdraw this request"><i class="fas fa-xmark"></i></button>
+                </div>` : ''}
+            </li>`).join('')}</ul>` : this.empty('Nothing has been requested on this case.'));
+        $("#cpRequests").off("click.req").on("click.req", ".cp-request-close", (e) => this.closeRequest($(e.currentTarget)));
+    },
+
+    async addRequest(alertId) {
+        const body = { requested_from: $("#cpReqFrom").val().trim(), subject: $("#cpReqSubject").val().trim(), due_date: $("#cpReqDue").val() };
+        if (!body.requested_from || !body.subject || !body.due_date) {
+            showToast('error', 'Say who was asked, what for, and by when.');
+            return;
+        }
+        const $button = $("#cpReqAdd").prop("disabled", true);
+        try {
+            await API.post(`/alerts/${alertId}/requests`, body);
+            $("#cpReqSubject").val('');
+            await Promise.all([this.loadRequests(alertId), this.loadTimeline(alertId)]);
+        } catch (xhr) { /* reported by the API layer */ }
+        $button.prop("disabled", false);
+    },
+
+    async closeRequest($button) {
+        const $request = $button.closest(".cp-request");
+        const status = $button.data("status");
+        const note = ($request.find(".cp-request__note").val() || '').trim();
+        if (status === 'RECEIVED' && !note) {
+            showToast('error', 'Say what was received.');
+            $request.find(".cp-request__note").trigger("focus");
+            return;
+        }
+        $request.find("button").prop("disabled", true);
+        try {
+            await API.put(`/alerts/requests/${$request.data("id")}`, { status, response_note: note || null });
+            await Promise.all([this.loadRequests(this.id), this.loadTimeline(this.id)]);
+        } catch (xhr) {
+            $request.find("button").prop("disabled", false);
+        }
+    },
+
+    // ── Draft narrative ────────────────────────────────────────────────────
+    async draftNarrative(alertId) {
+        const $button = $("#cpNarrativeDraft").prop("disabled", true).text('Drafting...');
+        let result;
+        try {
+            result = await API.post(`/alerts/${alertId}/draft-narrative`, {});
+        } catch (xhr) {
+            $button.prop("disabled", false).text('Draft narrative');
+            return;
+        }
+        if (this.id !== alertId) return;
+        $button.prop("disabled", false).text('Draft again');
+        $("#cpNarrative").html(`
+            <p class="cp-narrative__source">${result.mock
+                ? 'Arranged from the facts on file by the built-in template. It is not written by an AI model and adds nothing to the facts.'
+                : 'Drafted by the AI model from the facts on file, with names removed before sending. Check every statement before using it.'}</p>
+            <label class="visually-hidden" for="cpNarrativeText">Draft narrative</label>
+            <textarea class="form-control cp-narrative__text" id="cpNarrativeText" rows="14">${escapeHtml(result.narrative)}</textarea>
+            <div class="cp-note__foot">
+                <span class="kx-note">Edit the draft, then copy it or keep it on the case as a note.</span>
+                <span>
+                    <button type="button" class="btn btn-sm btn-outline-primary" id="cpNarrativeCopy">Copy</button>
+                    <button type="button" class="btn btn-sm btn-primary" id="cpNarrativeSave">Save as note</button>
+                </span>
+            </div>
+        `);
+        $("#cpNarrativeCopy").on("click", async () => {
+            try {
+                await navigator.clipboard.writeText($("#cpNarrativeText").val());
+                showToast('success', 'Draft copied.');
+            } catch (error) {
+                $("#cpNarrativeText").trigger("select");
+                showToast('error', 'Copying is blocked by the browser. The text is selected: press Ctrl+C.');
+            }
+        });
+        $("#cpNarrativeSave").on("click", async () => {
+            const text = ($("#cpNarrativeText").val() || '').trim();
+            if (!text) return;
+            if (text.length > 4000) { showToast('error', 'A note can hold 4,000 characters. Shorten the draft first.'); return; }
+            $("#cpNarrativeSave").prop("disabled", true);
+            try {
+                await API.post(`/alerts/${alertId}/notes`, { body: text });
+                showToast('success', 'Draft saved as a note.');
+                await this.loadTimeline(alertId);
+            } catch (xhr) { /* reported by the API layer */ }
+            $("#cpNarrativeSave").prop("disabled", false);
+        });
+    },
+
     /** Quality check on a resolved case: the recorded result, and the form for those who may check it. */
     qaBlock(alert) {
         if (alert.status !== 'RESOLVED') return '';
@@ -350,21 +718,6 @@ const CaseDetail = {
         const displayName = c.customerName || c.customerId;
         const kv = (label, value) => `<div><label>${label}</label><strong>${value}</strong></div>`;
 
-        // Flagged transactions first, newest first
-        const flagged = d.transactions
-            .filter(t => ((t.risk_flags && t.risk_flags.triggered_rules) || []).length)
-            .sort((a, b) => new Date(b.transaction_date) - new Date(a.transaction_date));
-        const txRows = flagged.slice(0, 10).map(t => `
-            <tr>
-                <td class="px-3 py-2 text-nowrap">${escapeHtml(formatDateTime(t.transaction_date))}</td>
-                <td class="px-3 py-2">${escapeHtml(this.human(t.transaction_type))}</td>
-                <td class="px-3 py-2 text-end text-nowrap">${Number(t.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${escapeHtml(t.currency || '')}</td>
-                <td class="px-3 py-2">${escapeHtml(t.meta_counterparty || '—')}${t.meta_country ? ` <small class="text-muted">${escapeHtml(t.meta_country)}</small>` : ''}</td>
-                <td class="px-3 py-2"><div class="rq-rules">${t.risk_flags.triggered_rules.map(code => `<span class="rq-rule" title="${escapeHtml(code)}">${escapeHtml((Cases.RULES[code] || [code])[0])}</span>`).join('')}</div></td>
-                <td class="px-3 py-2 text-end">${t.risk_score}</td>
-            </tr>`).join('');
-
-        const hits = d.screening.filter(s => s.match_status && s.match_status !== 'NO_MATCH');
         const otherAlerts = d.others.items.filter(a => a.id !== alert.id);
         const otherCount = Math.max(0, d.others.total - (open ? 1 : 0));
 
@@ -382,6 +735,7 @@ const CaseDetail = {
                                 <span class="badge" style="background:${statusBg};color:${statusFg};">${escapeHtml(this.human(c.status))}</span>
                                 ${customer.sanctions_flag ? '<span class="cd-chip cd-chip--high">Sanctions</span>' : ''}
                                 ${customer.pep_flag ? '<span class="cd-chip cd-chip--medium">PEP</span>' : ''}
+                                <span id="cpClock"></span>
                             </p>
                         </div>
                     </div>
@@ -416,6 +770,7 @@ const CaseDetail = {
                                     <span class="cd-chip cd-chip--${sev(r.severity)}">${escapeHtml(r.severity)}</span>
                                 </li>`).join('')}
                         </ul>` : this.empty('No rule triggers were recorded for this alert.')}
+                        <div id="cpBasis"></div>
                         ${alert.resolution_outcome ? `
                         <div class="cp-disposition">
                             <div class="kx-label">Disposition</div>
@@ -480,19 +835,70 @@ const CaseDetail = {
                     <div id="cpActivity"><div class="kd-skeleton"></div></div>
                 </section>
 
+                <section class="card kd-panel mb-4">
+                    <header class="kd-panel__head"><div><h2>Counterparties and countries</h2><p class="aml-subtitle" id="cpCounterpartiesSub">Who and where this customer deals with</p></div></header>
+                    <div id="cpCounterparties"><div class="kd-skeleton"></div></div>
+                </section>
+
                 <section class="card border-0 rc-table-card mb-4">
-                    <div class="rc-toolbar"><div class="rc-toolbar__title"><h2>Flagged transactions</h2>
-                        <small class="text-muted">${flagged.length ? `${Math.min(10, flagged.length)} most recent of ${flagged.length} flagged, out of ${d.transactions.length} loaded` : `${d.transactions.length} transactions loaded, none flagged`}</small></div></div>
+                    <div class="rc-toolbar">
+                        <div class="rc-toolbar__title"><h2>Transactions</h2><small class="text-muted" id="cpTxCount"></small></div>
+                        <div class="rc-toolbar__controls cp-tx-controls">
+                            <div class="cp-seg" role="group" aria-label="Which transactions to show">
+                                <button type="button" class="cp-tx-scope is-active" data-scope="flagged" aria-pressed="true">Flagged</button>
+                                <button type="button" class="cp-tx-scope" data-scope="all" aria-pressed="false">All</button>
+                            </div>
+                            <select class="form-select form-select-sm" id="cpTxType" aria-label="Transaction type"><option value="">All types</option></select>
+                            <input type="date" class="form-control form-control-sm" id="cpTxFrom" aria-label="From date" title="From date">
+                            <input type="date" class="form-control form-control-sm" id="cpTxTo" aria-label="To date" title="To date">
+                            <input type="number" class="form-control form-control-sm" id="cpTxMin" min="0" step="any" placeholder="Min amount" aria-label="Minimum amount">
+                            <button type="button" class="btn btn-sm rc-actions__view" id="cpTxExport"><i class="fas fa-file-csv me-1"></i>Export CSV</button>
+                        </div>
+                    </div>
                     <div class="table-responsive">
                         <table class="table table-hover mb-0 fp-table">
                             <thead><tr>
                                 <th class="px-3 py-2">Date</th><th class="px-3 py-2">Type</th><th class="px-3 py-2 text-end">Amount</th>
                                 <th class="px-3 py-2">Counterparty</th><th class="px-3 py-2">Rules fired</th><th class="px-3 py-2 text-end">Score</th>
                             </tr></thead>
-                            <tbody>${txRows || '<tr><td colspan="6" class="rc-empty">No flagged transactions for this customer.</td></tr>'}</tbody>
+                            <tbody id="cpTxBody"></tbody>
                         </table>
                     </div>
+                    <div class="cp-tx-more"><button type="button" class="btn btn-sm rc-actions__view d-none" id="cpTxMore">Show more</button></div>
                 </section>
+
+                <div class="cp-grid">
+                    <section class="card kd-panel">
+                        <header class="kd-panel__head"><div><h2>Requests for information</h2><p class="aml-subtitle">What has been asked for, from whom, and whether it arrived</p></div></header>
+                        <div id="cpRequests"><div class="kd-skeleton"></div></div>
+                        ${open && Auth.can('alerts.escalate') ? `
+                        <form class="cp-request-form" id="cpReqForm">
+                            <div class="kx-label mt-3">Record a new request</div>
+                            <div class="cp-request-form__row">
+                                <label class="visually-hidden" for="cpReqFrom">Asked from</label>
+                                <input type="text" class="form-control form-control-sm" id="cpReqFrom" list="cpReqFromList" maxlength="150" placeholder="Asked from">
+                                <datalist id="cpReqFromList"><option value="Customer"><option value="Relationship manager"><option value="Counterparty bank"><option value="Internal team"></datalist>
+                                <label class="visually-hidden" for="cpReqDue">Due date</label>
+                                <input type="date" class="form-control form-control-sm" id="cpReqDue" title="Due date" min="${new Date().toISOString().slice(0, 10)}" value="${new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)}">
+                            </div>
+                            <label class="visually-hidden" for="cpReqSubject">What was asked for</label>
+                            <input type="text" class="form-control form-control-sm mt-2" id="cpReqSubject" maxlength="2000" placeholder="What was asked for, e.g. source of funds for the 12 Sep transfer">
+                            <div class="cp-note__foot">
+                                <span class="kx-note">KYRO records the request; it does not send it.</span>
+                                <button type="submit" class="btn btn-sm btn-primary" id="cpReqAdd">Record request</button>
+                            </div>
+                        </form>` : ''}
+                    </section>
+
+                    <section class="card kd-panel">
+                        <header class="kd-panel__head"><div><h2>Draft narrative</h2><p class="aml-subtitle">Who, what, when, where and why, from the facts on this case</p></div>
+                            ${Auth.can('alerts.escalate') ? '<button type="button" class="btn btn-sm rc-actions__view" id="cpNarrativeDraft">Draft narrative</button>' : ''}</header>
+                        <div id="cpNarrative">${this.empty(Auth.can('alerts.escalate')
+                            ? 'Select "Draft narrative" to assemble a first draft from the customer, the alert, the flagged transactions, your notes and requests.'
+                            : 'Your role cannot draft a narrative.')}</div>
+                    </section>
+                </div>
+
 
                 ${customer.customer_type && customer.customer_type !== 'INDIVIDUAL' ? `
                 <section class="card border-0 rc-table-card mb-4">
@@ -518,11 +924,12 @@ const CaseDetail = {
 
                     <div class="cp-stack">
                         <section class="card kd-panel">
-                            <header class="kd-panel__head"><div><h2>Screening</h2><p class="aml-subtitle">Sanctions and PEP watchlist results</p></div></header>
-                            ${hits.length ? `<ul class="kd-list">${hits.slice(0, 6).map(s => `
-                                <li><span>${escapeHtml(this.human(s.screening_type))} &middot; ${escapeHtml((s.match_details && (s.match_details.matched_name || s.match_details.primary_name)) || 'match')}</span>
-                                    <strong>${escapeHtml(this.human(s.match_status))}${s.match_score != null ? ` (${Number(s.match_score).toFixed(0)})` : ''}</strong></li>`).join('')}</ul>`
-                                : this.empty(d.screening.length ? 'Screened, no matches.' : 'No screening results recorded.')}
+                            <header class="kd-panel__head"><div><h2>Accounts</h2><p class="aml-subtitle">Accounts held by this customer</p></div></header>
+                            <div id="cpAccounts"><div class="kd-skeleton"></div></div>
+                        </section>
+                        <section class="card kd-panel">
+                            <header class="kd-panel__head"><div><h2>Screening matches</h2><p class="aml-subtitle">The watchlist entry beside the customer${customer.last_screened_at ? `; last screened ${escapeHtml(formatDate(customer.last_screened_at))}` : ''}</p></div></header>
+                            <div id="cpScreening"><div class="kd-skeleton"></div></div>
                         </section>
                         <section class="card kd-panel">
                             <header class="kd-panel__head"><div><h2>KYC reviews</h2><p class="aml-subtitle">Scheduled and completed reviews</p></div></header>
@@ -539,7 +946,11 @@ const CaseDetail = {
         $("#cpBack").on("click", () => App.navigateTo('cases'));
         $("#cpAssign").on("click", () => Cases.showAssignModal(c));
         $("#cpNoteForm").on("submit", (e) => { e.preventDefault(); this.addNote(alert.id); });
+        $("#cpReqForm").on("submit", (e) => { e.preventDefault(); this.addRequest(alert.id); });
+        $("#cpNarrativeDraft").on("click", () => this.draftNarrative(alert.id));
+        this.setupTransactions();
         this.loadCaseFile(alert, customer);
+        this.loadBasis(alert.id, rules.map(r => r.code));
         $(".cp-qa-btn").on("click", (e) => this.recordQA(alert.id, $(e.currentTarget).data("result")));
         $("#cpResolve").on("click", () => Cases.showResolveModal(c));
         $("#cpExport").on("click", () => Cases.showExportModal(c.caseId, c.customerId));

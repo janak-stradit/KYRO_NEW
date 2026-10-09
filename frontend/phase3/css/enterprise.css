@@ -353,3 +353,49 @@ a, .kd-link, .rq-more, .cp-back, .doc-field__page, .kc-link { color: #B54708; }
 .cp-findings .cd-chip { flex: 0 0 auto; }
 .cp-owners-note { margin: 0; padding: 10px 16px; border-top: 1px solid var(--kt-border); background: #FFFAEB; color: #93370D; font-size: 13px; }
 .cp-other .cd-chip { flex: 0 0 auto; }
+
+/* ── Case page: working panels ──────────────────────────────────────────── */
+#cpClock .cd-chip { margin-left: 4px; }
+.cp-basis { list-style: none; margin: 0 0 6px; padding: 0; }
+.cp-basis li { display: flex; gap: 10px; padding: 6px 0; font-size: 13px; color: var(--kt-ink); }
+.cp-basis__text { display: grid; gap: 4px; min-width: 0; }
+.cp-parties { list-style: none; margin: 0; padding: 0; }
+.cp-parties li { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(110px, auto); gap: 12px; align-items: baseline; padding: 7px 0; font-size: 13.5px; border-bottom: 1px solid var(--kt-border-soft); }
+.cp-parties li:last-child { border-bottom: 0; }
+.cp-parties__name { min-width: 0; overflow-wrap: anywhere; color: var(--kt-ink); }
+.cp-parties__name .cd-chip { margin-left: 4px; }
+.cp-parties__n { color: #475467; white-space: nowrap; }
+.cp-parties__amt { text-align: right; color: var(--kt-ink); font-variant-numeric: tabular-nums; }
+.cp-match { padding: 12px 0; border-bottom: 1px solid var(--kt-border); }
+.cp-match:first-child { padding-top: 0; }
+.cp-match:last-child { border-bottom: 0; padding-bottom: 0; }
+.cp-match__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; font-size: 13.5px; color: var(--kt-ink); }
+.cp-match__table { width: 100%; margin-bottom: 8px; font-size: 13px; border-collapse: collapse; }
+.cp-match__table th, .cp-match__table td { padding: 5px 8px 5px 0; vertical-align: top; text-align: left; border-top: 1px solid var(--kt-border-soft); color: var(--kt-ink); }
+.cp-match__table thead th { border-top: 0; font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; color: #667085; }
+.cp-match__table tbody th { width: 96px; font-weight: 500; color: #475467; }
+.cp-match__decision { margin: 0; padding: 8px 10px; border-radius: 8px; background: var(--kt-page); font-size: 13.5px; color: var(--kt-ink); }
+.cp-match__actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.cp-tx-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.cp-tx-controls .form-select, .cp-tx-controls .form-control { width: auto; }
+.cp-tx-controls #cpTxMin { width: 120px; }
+.cp-seg { display: inline-flex; border: 1px solid #CFD4DC; border-radius: 6px; overflow: hidden; }
+.cp-seg button { padding: 4px 12px; border: 0; background: #fff; color: #475467; font-size: 13px; font-weight: 600; cursor: pointer; }
+.cp-seg button + button { border-left: 1px solid #CFD4DC; }
+.cp-seg button.is-active { background: var(--kt-ink); color: #fff; }
+.cp-seg button:focus-visible { outline: 2px solid var(--kt-accent); outline-offset: -2px; }
+.cp-tx-more { padding: 10px 16px; text-align: center; }
+.cp-tx-more:has(.d-none) { display: none; }
+.cp-requests { list-style: none; margin: 0; padding: 0; }
+.cp-request { padding: 10px 0; border-bottom: 1px solid var(--kt-border-soft); }
+.cp-request:first-child { padding-top: 0; }
+.cp-request:last-child { border-bottom: 0; }
+.cp-request__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13.5px; color: var(--kt-ink); }
+.cp-request__subject { margin: 2px 0; font-size: 13.5px; color: var(--kt-ink); overflow-wrap: anywhere; }
+.cp-request__answer { margin: 6px 0 0; padding: 8px 10px; border-radius: 8px; background: var(--kt-page); font-size: 13.5px; color: var(--kt-ink); }
+.cp-request__close { display: flex; gap: 6px; margin-top: 8px; }
+.cp-request__close .form-control { flex: 1; min-width: 0; }
+.cp-request-form__row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+.cp-narrative__source { margin: 0 0 8px; padding: 8px 10px; border-radius: 8px; background: var(--kt-tint); font-size: 12.5px; color: #475467; }
+.cp-narrative__text { font-size: 13.5px; line-height: 1.5; }
+.kd-panel__head { gap: 12px; }
