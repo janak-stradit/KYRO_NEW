@@ -278,3 +278,15 @@ def test_audit_log_is_filtered_and_names_the_actor(client, admin_headers, admin_
     assert data["total"] == 1
     entry = data["items"][0]
     assert entry["action"] == "CREATE" and entry["performed_by_name"] == admin_user.full_name
+
+
+def test_self_registration_is_off_unless_enabled(client, monkeypatch):
+    from app.config import get_settings
+
+    body = {"username": "walk.in", "email": "walk.in@example.com", "password": "Str0ngPass!123", "role": "ADMIN"}
+    refused = client.post("/api/v1/auth/register", json=body)
+    assert refused.status_code == 403 and "administrator" in refused.json()["detail"]
+
+    monkeypatch.setattr(get_settings(), "allow_self_registration", True)
+    created = client.post("/api/v1/auth/register", json=body)
+    assert created.status_code == 201 and created.json()["role"] == "ANALYST"  # never the role that was asked for

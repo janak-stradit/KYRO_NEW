@@ -69,6 +69,9 @@ class Settings(BaseSettings):
     # When true, PUT /rule-configs is refused and rule thresholds can only
     # change through an approved change request (/changes/rules).
     rule_changes_require_approval: bool = False
+    # Users are created by an administrator. Turn this on only for a demo
+    # environment where anyone may register themselves as an analyst.
+    allow_self_registration: bool = False
 
     # Where uploaded KYC documents are kept (local disk in development; use
     # encrypted object storage in production). Never inside the repository tree.

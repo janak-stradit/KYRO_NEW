@@ -17,7 +17,7 @@ from app.utils.security import decode_token
 
 oauth2_scheme = OAuth2PasswordBearer(
     tokenUrl="/api/v1/auth/login",
-    description="Click Authorize and enter a username/password (register one first via POST /api/v1/auth/register).",
+    description="Click Authorize and enter a username/password. Accounts are created by an administrator (POST /api/v1/users).",
 )
 
 _SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}

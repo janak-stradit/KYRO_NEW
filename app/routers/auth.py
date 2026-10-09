@@ -25,6 +25,8 @@ router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
 @router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
 def register(data: UserCreate, db: Session = Depends(get_db)) -> User:
+    if not get_settings().allow_self_registration:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Self-registration is turned off. Ask an administrator for an account.")
     if db.query(User).filter(User.username == data.username).first() is not None:
         raise HTTPException(status.HTTP_409_CONFLICT, "Username already taken")
     if db.query(User).filter(User.email == data.email).first() is not None:

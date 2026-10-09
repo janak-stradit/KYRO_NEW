@@ -255,7 +255,9 @@ of recorded outcomes before it can be trained.
 | 11.4 step 4 Data-feed field mapping | Done, rule-based (no model): CSV preview with suggested column mappings from names and sample values, saved mappings, dry-run check with per-row errors, and loading customers (by email), accounts and transactions (by account reference) through the normal screening, rules and audit paths (`feed_mappings`, `feed_runs`, migration `0016`, `/feeds/*`, Data Feeds page). Mappings are stored in the database rather than as files in `pipeline/`. Not yet: Excel files, and loading into the pipeline warehouse |
 | Case page | Case Details is a full page (`/case?id=`) with the alert, customer and rating factors, flagged transactions, documents, screening and reviews |
 | Customer risk rating | Rule-based and explainable (`customer_risk_service`, migration `0012`); recalculated when alerts open or close |
-| UI | Dashboard, Review Cases, Patterns, Periodic Reviews and Kyro Chat show live data only; sample and simulated content removed |
+| UI | Dashboard, Review Cases, Patterns and Periodic Reviews show live data only; sample and simulated content removed. Kyro Chat is a floating assistant on every page |
+| Roles and permissions | `app/permissions.py` (migration `0017`): endpoints check permissions; roles are Admin, MLRO, Team Lead, L1 Analyst, L2 Investigator, KYC Analyst, QA Reviewer, Rules Owner, Auditor (read-only) and Executive Viewer (totals only), plus the two earlier roles. Only MLRO/Admin/Compliance Officer record a SAR or approve a rule change. Administration page for users, role definitions and the audit log. Self-registration is off unless `ALLOW_SELF_REGISTRATION=true` |
+| Case quality check | A resolved case is marked pass/fail by someone other than its resolver (`PUT /alerts/{id}/qa`); queue filters for awaiting and failed checks |
 | Known limits | Search is keyword-only, so the best passage is not always ranked first (hybrid search, §9.2). AI answers need a real provider; until then Kyro Chat shows the source passages |
 
 ## 8. Testing & governance
