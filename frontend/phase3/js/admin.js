@@ -242,7 +242,7 @@ const Admin = {
             $submit.prop("disabled", false);
             return;
         }
-        closeModalSafely(modalSelector.slice(1));
+        closeModalSafely(document.querySelector(modalSelector));
         showToast("success", successMessage);
         await this.loadUsers();
     },
