@@ -37,6 +37,7 @@ from app.routers import (
     transactions,
     tts,
     users,
+    case_file,
     watchlists,
 )
 
@@ -125,6 +126,7 @@ app.include_router(change_management.router)
 app.include_router(documents.router)
 app.include_router(feeds.router)
 app.include_router(users.router)
+app.include_router(case_file.router)
 try:
     app.include_router(importlib.import_module("app.routers.ml").router)
 except ImportError as exc:

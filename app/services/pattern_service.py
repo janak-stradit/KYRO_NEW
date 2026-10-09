@@ -245,3 +245,84 @@ def pattern_activity(db: Session, *, now: datetime | None = None) -> dict[str, A
         ],
         "customer_rows": customer_rows,
     }
+
+
+ACTIVITY_BUCKET_DAYS = 10   # WINDOW_DAYS and BASELINE_DAYS are both whole numbers of these
+
+
+def customer_activity(db: Session, customer_id: uuid.UUID, *, now: datetime | None = None) -> dict[str, Any]:
+    """
+    One customer's last 30 days beside their own previous 90: transaction
+    counts in 10-day periods, a like-for-like comparison, and the same
+    pattern findings the Patterns page reports.
+    """
+    now = now or datetime.now(timezone.utc)
+    window_start = now - timedelta(days=WINDOW_DAYS)
+    baseline_start = window_start - timedelta(days=BASELINE_DAYS)
+
+    rows = [
+        tuple(r) for r in db.query(
+            Transaction.transaction_date, Transaction.amount, Transaction.currency,
+            Transaction.meta_counterparty, Transaction.meta_country, Transaction.transaction_type,
+        )
+        .filter(Transaction.customer_id == customer_id, Transaction.transaction_date >= baseline_start, Transaction.transaction_date <= now)
+        .order_by(Transaction.transaction_date)
+    ]
+    baseline = [t for t in rows if t[0] < window_start]
+    window = [t for t in rows if t[0] >= window_start]
+    earlier_count, last_before = db.query(func.count(Transaction.id), func.max(Transaction.transaction_date)).filter(
+        Transaction.customer_id == customer_id, Transaction.transaction_date < window_start
+    ).one()
+
+    from app.services.rules_engine import DEFAULTS  # avoids an import cycle
+
+    high_risk = {str(c).upper() for c in rule_config_service.get_effective_config(db, DEFAULTS, None)["HIGH_RISK_COUNTRIES"]}
+    findings = _detect(baseline, window, earlier_count or 0, last_before, high_risk)
+
+    # Oldest period first; the last WINDOW_DAYS / ACTIVITY_BUCKET_DAYS periods are the current window
+    periods = (WINDOW_DAYS + BASELINE_DAYS) // ACTIVITY_BUCKET_DAYS
+    buckets = [
+        {
+            "start": (baseline_start + timedelta(days=i * ACTIVITY_BUCKET_DAYS)).date().isoformat(),
+            "end": (baseline_start + timedelta(days=(i + 1) * ACTIVITY_BUCKET_DAYS)).date().isoformat(),
+            "current": i >= BASELINE_DAYS // ACTIVITY_BUCKET_DAYS,
+            "transactions": 0,
+        }
+        for i in range(periods)
+    ]
+    for t in rows:
+        index = min(periods - 1, int((t[0] - baseline_start).total_seconds() // (ACTIVITY_BUCKET_DAYS * 86400)))
+        buckets[index]["transactions"] += 1
+
+    def largest(txns: list) -> dict[str, float]:
+        top: dict[str, float] = {}
+        for _, amount, currency, *_ in txns:
+            top[currency or ""] = max(top.get(currency or "", 0.0), float(amount))
+        return top
+
+    known_counterparties = {t[3] for t in baseline if t[3]}
+    known_countries = {t[4] for t in baseline if t[4]}
+    largest_now, largest_before = largest(window), largest(baseline)
+    return {
+        "window_days": WINDOW_DAYS,
+        "baseline_days": BASELINE_DAYS,
+        "enough_history": len(baseline) >= MIN_BASELINE,
+        "min_baseline": MIN_BASELINE,
+        "buckets": buckets,
+        "comparison": {
+            "transactions": {"current": len(window), "usual": round(len(baseline) * WINDOW_DAYS / BASELINE_DAYS, 1)},
+            "largest_amount": [
+                {"currency": currency, "current": amount, "previous": largest_before.get(currency)}
+                for currency, amount in sorted(largest_now.items(), key=lambda kv: -kv[1])
+            ],
+            "new_counterparties": sorted({t[3] for t in window if t[3]} - known_counterparties),
+            "counterparties": len({t[3] for t in window if t[3]}),
+            "new_countries": sorted({t[4] for t in window if t[4]} - known_countries),
+            "high_risk_countries": sorted({t[4] for t in window if t[4] and t[4].upper() in high_risk}),
+        },
+        "findings": [
+            {"pattern": p["id"], "label": p["label"], "hits": findings[p["id"]]["hits"], "hit_unit": p["hit_unit"],
+             "evidence": findings[p["id"]]["evidence"]}
+            for p in PATTERNS if p["id"] in findings
+        ],
+    }

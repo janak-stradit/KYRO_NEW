@@ -15,7 +15,7 @@ from app.config import get_settings
 from app.database import get_db
 from app.deps import get_current_user
 from app.models.user import User
-from app.permissions import ROLES, permissions_for
+from app.permissions import ROLES, is_read_only, permissions_for
 from app.rate_limit import limiter
 from app.schemas.auth import CurrentUser, PasswordChange, RefreshRequest, Token, UserCreate, UserOut
 from app.services.audit_service import log_action
@@ -117,5 +117,6 @@ def me(user: User = Depends(get_current_user)) -> dict:
     return {
         **UserOut.model_validate(user).model_dump(),
         "role_label": definition.label if definition else user.role,
+        "read_only": is_read_only(user.role),
         "permissions": sorted(permissions_for(user.role)),
     }

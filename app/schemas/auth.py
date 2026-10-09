@@ -57,6 +57,7 @@ class UserOut(BaseModel):
 
 class CurrentUser(UserOut):
     role_label: str
+    read_only: bool
     permissions: list[str]
 
 

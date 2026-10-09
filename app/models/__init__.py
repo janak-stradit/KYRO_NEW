@@ -17,6 +17,7 @@ from app.models.obligation_mapping import ObligationMapping
 from app.models.change_management import RegulatoryChange, RuleConfigChange
 from app.models.document import Document, DocumentExtraction, DocumentPage
 from app.models.feed import FeedMapping, FeedRun
+from app.models.alert_note import AlertNote
 from app.models.regulatory import RegulatoryIngestionRun, RegulatorySection, RegulatorySource
 
 __all__ = [
