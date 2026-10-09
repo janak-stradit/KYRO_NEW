@@ -31,6 +31,10 @@ settings = get_settings()
 _DOB_MATCH_BOOST = 8.0
 _CANDIDATE_LIMIT = 25
 _TRIGRAM_SIMILARITY_FLOOR = 0.25
+_NAME_PART_FLOOR = 88.0    # two name parts count as the same person's name above this
+_EXTRA_PART_SCORE = 88.0   # every part of the shorter name found, plus one extra part (e.g. a middle name)
+_NAME_PART_MINIMUM = 60.0  # below this a name part has no counterpart in the other name
+_NOT_A_MATCH_CEILING = 70.0  # the most a name with an unmatched part can score (under the review floor)
 
 
 def normalize_name(name: str) -> str:
@@ -41,6 +45,38 @@ def normalize_name(name: str) -> str:
     stripped = stripped.replace("'", "")  # O'Brien -> OBrien, not "O BRIEN"
     stripped = re.sub(r"[^A-Za-z0-9 ]+", " ", stripped)
     return re.sub(r"\s+", " ", stripped).strip().upper()
+
+
+def name_score(a: str, b: str) -> float:
+    """
+    How alike two names are as whole names, 0-100, ignoring word order.
+
+    Deliberately not a substring match: "Jordan Mcdaniel" is not a match for a
+    list entry called "DANIEL", and sharing only a given name or only a
+    surname is not a match. Every part of the shorter name has to have a
+    counterpart in the other. A name that differs only by one extra part
+    ("John Smith" / "John Michael Smith") still scores as a possible match.
+    """
+    a, b = normalize_name(a), normalize_name(b)
+    if not a or not b:
+        return 0.0
+    score = float(max(fuzz.ratio(a, b), fuzz.token_sort_ratio(a, b)))
+
+    # Pair each part of the shorter name with its closest unused part of the longer one
+    short, long_ = sorted((a.split(), b.split()), key=len)
+    remaining = list(long_)
+    weakest = 100.0
+    for part in short:
+        best = max(remaining, key=lambda other: fuzz.ratio(part, other))
+        weakest = min(weakest, fuzz.ratio(part, best))
+        remaining.remove(best)
+
+    if weakest < _NAME_PART_MINIMUM or (len(short) == 1 and remaining):
+        # A part with no counterpart, or a one-word name against a longer one: not the same name
+        return min(score, _NOT_A_MATCH_CEILING)
+    if len(short) >= 2 and len(remaining) == 1 and weakest >= _NAME_PART_FLOOR:
+        score = max(score, _EXTRA_PART_SCORE)
+    return score
 
 
 @dataclass
@@ -58,7 +94,7 @@ def score_match(customer_name: str, customer_dob: date | None, entity: Watchlist
     best_name = entity.primary_name
     best_score = 0.0
     for candidate in candidates:
-        candidate_score = fuzz.WRatio(normalized_customer, normalize_name(candidate))
+        candidate_score = name_score(normalized_customer, candidate)
         if candidate_score > best_score:
             best_score = candidate_score
             best_name = candidate
