@@ -17,7 +17,8 @@ from app.deps import get_current_user
 from app.models.user import User
 from app.permissions import ROLES, permissions_for
 from app.rate_limit import limiter
-from app.schemas.auth import RefreshRequest, Token, UserCreate, UserOut, CurrentUser
+from app.schemas.auth import CurrentUser, PasswordChange, RefreshRequest, Token, UserCreate, UserOut
+from app.services.audit_service import log_action
 from app.utils.security import create_access_token, create_refresh_token, decode_token, hash_password, verify_password
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
@@ -91,6 +92,23 @@ def refresh(payload: RefreshRequest, db: Session = Depends(get_db)) -> Token:
         access_token=create_access_token(str(user.id), user.role),
         refresh_token=create_refresh_token(str(user.id), user.role),
     )
+
+
+@router.post("/change-password", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit(get_settings().rate_limit_login)
+def change_password(
+    request: Request, data: PasswordChange, db: Session = Depends(get_db), user: User = Depends(get_current_user)
+) -> None:
+    """Change your own password. Every role may do this, including the read-only ones."""
+    # 400 rather than 401: the session is valid, and the browser signs out on a 401
+    if not verify_password(data.current_password, user.hashed_password):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "The current password is not correct")
+    if data.new_password == data.current_password:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Choose a password different from the current one")
+    user.hashed_password = hash_password(data.new_password)
+    log_action(db, entity_type="USER", entity_id=user.id, action="UPDATE", performed_by=user.id,
+               new_values={"password": "changed by the user"})
+    db.commit()
 
 
 @router.get("/me", response_model=CurrentUser)

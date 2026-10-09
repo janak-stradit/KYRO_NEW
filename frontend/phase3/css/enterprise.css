@@ -306,3 +306,16 @@ a, .kd-link, .rq-more, .cp-back, .doc-field__page, .kc-link { color: #B54708; }
 .adm-yes { color: #067647; font-size: 12px; }
 .adm-no { color: #98A2B3; }
 .cp-qa-btn { margin-right: 6px; }
+
+/* Panels reset their margins (theme.css); restore the gap where one is stacked on another */
+#mainContent .kd-panel.mb-4 { margin-bottom: 16px !important; }
+#mainContent .kd-panel.mt-4 { margin-top: 16px !important; }
+#mainContent .kyro-page > .kd-panel { height: auto; }
+
+/* ── My profile (js/profile.js) ─────────────────────────────────────────── */
+.pf-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; align-items: start; }
+#mainContent .pf-grid .kd-panel { height: auto; }
+.pf-name { margin: 0; font-size: 16px; font-weight: 700; color: var(--kt-ink); }
+.pf-row { display: flex; justify-content: space-between; gap: 16px; padding: 8px 0; border-top: 1px solid var(--kt-border); font-size: 13.5px; }
+.pf-row span { color: #475467; }
+.pf-row strong { font-weight: 600; color: var(--kt-ink); text-align: right; overflow-wrap: anywhere; }

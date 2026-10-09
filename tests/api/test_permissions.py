@@ -290,3 +290,20 @@ def test_self_registration_is_off_unless_enabled(client, monkeypatch):
     monkeypatch.setattr(get_settings(), "allow_self_registration", True)
     created = client.post("/api/v1/auth/register", json=body)
     assert created.status_code == 201 and created.json()["role"] == "ANALYST"  # never the role that was asked for
+
+
+def test_users_change_their_own_password(client, db_session):
+    headers, user = _headers(client, db_session, "AUDITOR")  # read-only roles may still do this
+    url = "/api/v1/auth/change-password"
+    login = lambda password: client.post("/api/v1/auth/login", data={"username": user.username, "password": password})
+
+    wrong = client.post(url, json={"current_password": "not-it", "new_password": "An0ther!Passw0rd"}, headers=headers)
+    assert wrong.status_code == 400 and "current password" in wrong.json()["detail"]
+    assert client.post(url, json={"current_password": "Str0ngPass!123", "new_password": "short"}, headers=headers).status_code == 422
+    assert client.post(url, json={"current_password": "Str0ngPass!123", "new_password": "Str0ngPass!123"}, headers=headers).status_code == 400
+    assert client.post(url, json={"current_password": "x", "new_password": "An0ther!Passw0rd"}).status_code == 401  # not signed in
+
+    assert client.post(url, json={"current_password": "Str0ngPass!123", "new_password": "An0ther!Passw0rd"}, headers=headers).status_code == 204
+    assert login("Str0ngPass!123").status_code == 401 and login("An0ther!Passw0rd").status_code == 200
+    entry = db_session.query(AuditLog).filter_by(entity_type="USER", entity_id=user.id).one()
+    assert entry.performed_by == user.id and entry.new_values == {"password": "changed by the user"}

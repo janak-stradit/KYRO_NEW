@@ -32,6 +32,12 @@ const App = {
             this.navigateTo(page);
         });
         
+        // User menu
+        $(document).on("click", ".dropdown-item[data-page]", (e) => {
+            e.preventDefault();
+            this.navigateTo($(e.currentTarget).data("page"));
+        });
+
         // Sidebar navigation
         $(document).on("click", ".sidebar .nav-link", (e) => {
             e.preventDefault();
@@ -156,7 +162,8 @@ const App = {
             patterns: Patterns,
             regulations: Regulations,
             feeds: Feeds,
-            admin: Admin
+            admin: Admin,
+            profile: Profile
         };
     },
     
