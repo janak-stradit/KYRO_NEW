@@ -264,3 +264,40 @@ def test_queue_marks_overdue_cases_and_open_requests(client, auth_headers, db_se
     summary = client.get("/api/v1/alerts/queue/summary", headers=auth_headers).json()
     assert summary["overdue"] == 1 and summary["awaiting_information"] == 1 and summary["target_days"][band] == target
     assert client.get("/api/v1/alerts/queue", params={"attention": "nonsense"}, headers=auth_headers).status_code == 422
+
+
+# ── Case summary ─────────────────────────────────────────────────────────
+
+def test_case_summary_is_written_once_and_kept_on_the_alert(client, auth_headers, db_session, mock_ai):
+    alert = _create_alert_via_sanctions_hit(client, auth_headers, "summary@example.com")
+    url = f"/api/v1/alerts/{alert['id']}"
+    assert client.get(url, headers=auth_headers).json()["summary"] is None
+
+    resp = client.post(f"{url}/summary", headers=auth_headers)
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["mock"] is True and body["summary_provider"] == "mock" and body["summary_at"]
+    assert "Risky Corp" in body["summary"] and "R006" in body["summary"]
+    assert "Nothing has been recorded on the case yet." in body["summary"]
+    assert body["summary"].count(". ") <= 5  # a few sentences, not the whole file
+
+    stored = client.get(url, headers=auth_headers).json()
+    assert stored["summary"] == body["summary"] and stored["summary_provider"] == "mock"
+
+    # A note changes what a regenerated summary says
+    client.post(f"{url}/notes", json={"body": "Checked the invoices."}, headers=auth_headers)
+    again = client.post(f"{url}/summary", headers=auth_headers).json()
+    assert "1 action recorded on the case so far." in again["summary"]
+
+    log = db_session.query(AIInteraction).filter_by(prompt_id="cases.summary").first()
+    assert "Risky Corp" not in log.input_redacted
+
+
+def test_case_summary_needs_ai_and_a_working_role(client, auth_headers, db_session, monkeypatch):
+    alert = _create_alert_via_sanctions_hit(client, auth_headers, "summary.off@example.com")
+    url = f"/api/v1/alerts/{alert['id']}/summary"
+    qa = _login(client, _make_user(db_session, username="qa.summary", role="QA_REVIEWER").username)
+    assert client.post(url, headers=qa).status_code == 403
+    monkeypatch.setattr(get_settings(), "kyro_ai_enabled", False)
+    assert client.post(url, headers=auth_headers).status_code == 409
+    assert client.get(f"/api/v1/alerts/{alert['id']}", headers=auth_headers).json()["summary"] is None

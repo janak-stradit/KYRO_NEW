@@ -88,6 +88,9 @@ class AlertOut(BaseModel):
     qa_notes: str | None = None
     qa_by: uuid.UUID | None = None
     qa_at: datetime | None = None
+    summary: str | None = None
+    summary_at: datetime | None = None
+    summary_provider: str | None = None
     ml_version: str | None = None
 
 

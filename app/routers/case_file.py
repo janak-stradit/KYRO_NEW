@@ -600,3 +600,35 @@ def draft_narrative(
         "narrative": result.text.strip(), "provider": result.provider, "mock": result.provider == "mock",
         "interaction_id": str(result.interaction_id), "facts": facts,
     }
+
+
+@router.post("/alerts/{alert_id}/summary")
+def generate_summary(
+    alert_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission("alerts.escalate")),
+) -> dict[str, Any]:
+    """Write a short summary of the case from the facts on file and keep it on the alert."""
+    alert = _alert_or_404(db, alert_id)
+    customer = _customer_or_404(db, alert.customer_id)
+    try:
+        result = AIGateway(db).run(
+            "cases.summary", {"facts": _case_facts(db, alert, customer)}, sensitive=_sensitive_names(db, customer),
+            entity_type="ALERT", entity_id=alert.id, requested_by=user.id,
+        )
+    except AIDisabledError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from None
+    except AIProviderError as exc:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(exc)) from None
+    text = result.text.strip()
+    if not text:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, "The model returned an empty summary")
+    alert.summary = text
+    alert.summary_at = datetime.now(timezone.utc)
+    alert.summary_by = user.id
+    alert.summary_provider = result.provider
+    db.commit()
+    return {
+        "summary": alert.summary, "summary_at": alert.summary_at.isoformat(), "summary_provider": alert.summary_provider,
+        "mock": result.provider == "mock", "by": user.full_name or user.username,
+    }

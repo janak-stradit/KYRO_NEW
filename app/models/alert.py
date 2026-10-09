@@ -60,4 +60,9 @@ class Alert(Base, UUIDPrimaryKeyMixin):
     qa_notes: Mapped[str | None] = mapped_column(Text)
     qa_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     qa_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Generated case summary (routers/case_file.py); regenerated on request, never edited in place
+    summary: Mapped[str | None] = mapped_column(Text)
+    summary_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    summary_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    summary_provider: Mapped[str | None] = mapped_column(String(30))
     ml_version: Mapped[str | None] = mapped_column(String(20))

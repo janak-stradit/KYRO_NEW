@@ -112,6 +112,9 @@ const CaseDetail = {
         }
         if (this.id !== alertId) return;  // the user has moved to another case
         if (data.clock) this.renderClock(data.clock);
+        $("#cpGlanceNotes").text(data.note_count);
+        $("#cpGlanceNotesNote").text(`${data.events.length - data.note_count} other event${data.events.length - data.note_count === 1 ? '' : 's'} on the timeline`);
+        this.setInvestigationCount('notes', data.note_count);
         $("#cpTimelineCount").text(`${data.note_count} note${data.note_count === 1 ? '' : 's'}, ${data.events.length - data.note_count} event${data.events.length - data.note_count === 1 ? '' : 's'}`);
         $("#cpTimeline").html(`<ol class="cp-tl">${data.events.map(e => `
             <li class="cp-tl__item cp-tl__item--${escapeHtml(e.kind)}">
@@ -296,6 +299,32 @@ const CaseDetail = {
         }
     },
 
+    // ── Tabs ───────────────────────────────────────────────────────────────
+    TABS: ['overview', 'activity', 'investigation', 'file'],
+    tab: 'overview',
+    counts: {},
+
+    showTab(name, scroll = true) {
+        if (!this.TABS.includes(name)) name = 'overview';
+        this.tab = name;
+        this.TABS.forEach(t => {
+            $(`#cpTab-${t}`).toggleClass("is-active", t === name).attr({ "aria-selected": String(t === name), tabindex: t === name ? 0 : -1 });
+            $(`#cpPane-${t}`).prop("hidden", t !== name);
+        });
+        if (name === 'activity' && this.activityChart) this.activityChart.resize();
+        if (scroll) window.scrollTo({ top: 0 });
+    },
+
+    /** The small number on a tab: things waiting in that section. */
+    setCount(tab, n) {
+        $(`#cpCount-${tab}`).text(n ? Number(n).toLocaleString() : '').toggleClass("d-none", !n);
+    },
+
+    setInvestigationCount(part, n) {
+        this.counts[part] = n;
+        this.setCount('investigation', (this.counts.notes || 0) + (this.counts.requests || 0));
+    },
+
     // ── Case clock (filled from the timeline response) ─────────────────────
     renderClock(clock) {
         const days = (n) => `${n} day${n === 1 ? '' : 's'}`;
@@ -401,6 +430,10 @@ const CaseDetail = {
             return;
         }
         if (!this.caseData || this.caseData.rawCustomerId !== customerId) return;
+        const undecided = matches.filter(m => !m.resolution).length;
+        $("#cpGlanceMatches").text(matches.length).toggleClass("cp-glance__value--high", undecided > 0);
+        $("#cpGlanceMatchesNote").text(matches.length ? (undecided ? `${undecided} awaiting a decision` : 'all decided') : 'none on record');
+        this.setCount('file', undecided);
         if (!matches.length) {
             $("#cpScreening").html(this.empty('No possible or confirmed watchlist matches on record.'));
             return;
@@ -408,7 +441,10 @@ const CaseDetail = {
         const mayDecide = Auth.can('screening.run');
         const resolution = { CLEARED: ['low', 'Not the same person'], CONFIRMED: ['high', 'Confirmed match'], ESCALATED: ['medium', 'Escalated'] };
         const cell = (v) => (v == null || v === '' ? '<span class="text-muted">—</span>' : escapeHtml(String(v)));
-        $("#cpScreening").html(matches.map(m => {
+        const SHOWN = 3;
+        const showAll = this.showAllMatches === customerId;
+        const visible = showAll ? matches : matches.slice(0, SHOWN);
+        $("#cpScreening").html(visible.map(m => {
             const done = resolution[m.resolution];
             return `
             <article class="cp-match" data-id="${escapeHtml(m.id)}">
@@ -437,7 +473,8 @@ const CaseDetail = {
                     <button type="button" class="btn btn-sm btn-outline-primary cp-match-decide" data-decision="CONFIRMED">Confirmed match</button>
                 </div>` : '<p class="kx-note mb-0">Awaiting a decision.</p>'}
             </article>`;
-        }).join(''));
+        }).join('') + (matches.length > SHOWN ? `<button type="button" class="rq-more mt-2" id="cpMatchesToggle">${showAll ? `Show the first ${SHOWN} only` : `Show all ${matches.length} matches`}</button>` : ''));
+        $("#cpMatchesToggle").on("click", () => { this.showAllMatches = showAll ? null : customerId; this.loadScreening(customerId); });
         $("#cpScreening").off("click.match").on("click.match", ".cp-match-decide", (e) => this.decideMatch($(e.currentTarget)));
     },
 
@@ -554,6 +591,11 @@ const CaseDetail = {
             return;
         }
         if (this.id !== alertId) return;
+        const openRequests = requests.filter(r => r.status === 'OPEN');
+        const lateRequests = openRequests.filter(r => r.overdue).length;
+        $("#cpGlanceRequests").text(openRequests.length).toggleClass("cp-glance__value--high", lateRequests > 0);
+        $("#cpGlanceRequestsNote").text(lateRequests ? `${lateRequests} past the due date` : requests.length ? `${requests.length} recorded in all` : 'nothing asked for yet');
+        this.setInvestigationCount('requests', openRequests.length);
         const mayEdit = Auth.can('alerts.escalate');
         const chip = (r) => (r.status === 'RECEIVED' ? ['low', 'Received'] : r.status === 'CANCELLED' ? ['muted', 'Withdrawn'] : r.overdue ? ['high', 'Overdue'] : ['medium', 'Waiting']);
         $("#cpRequests").html(requests.length ? `<ul class="cp-requests">${requests.map(r => `
@@ -607,6 +649,40 @@ const CaseDetail = {
         } catch (xhr) {
             $request.find("button").prop("disabled", false);
         }
+    },
+
+    // ── Case summary ───────────────────────────────────────────────────────
+    renderSummary(alert) {
+        if (alert.summary) {
+            const mock = alert.summary_provider === 'mock';
+            $("#cpSummary").html(`<p class="cp-summary__text">${escapeHtml(alert.summary)}</p>`);
+            $("#cpSummaryMeta").text(`${mock ? 'Built by the template from the facts on file; an AI model is not connected' : 'Written by the AI model from the facts on file, names removed before sending'} · ${formatDateTime(alert.summary_at)}`);
+            return;
+        }
+        if (Auth.can('alerts.escalate')) {
+            this.generateSummary(alert.id);  // first visit to this case: write it once and keep it
+        } else {
+            $("#cpSummary").html(this.empty('No summary has been written for this case yet.'));
+        }
+    },
+
+    async generateSummary(alertId) {
+        const $button = $("#cpSummaryRefresh").prop("disabled", true);
+        $("#cpSummary").html('<div class="kd-skeleton"></div>');
+        let result;
+        try {
+            result = await API.post(`/alerts/${alertId}/summary`, {});
+        } catch (xhr) {
+            const off = xhr && xhr.status === 409;
+            if (this.id === alertId) {
+                $("#cpSummary").html(this.empty(off ? 'AI features are switched off, so no summary can be written.' : 'The summary could not be written. Select "Regenerate" to try again.'));
+            }
+            $button.prop("disabled", false);
+            return;
+        }
+        $button.prop("disabled", false);
+        if (this.id !== alertId) return;
+        this.renderSummary(result);
     },
 
     // ── Draft narrative ────────────────────────────────────────────────────
@@ -723,8 +799,8 @@ const CaseDetail = {
 
         $("#mainContent").html(`
             <div class="kyro-page cp">
+                <div class="cp-sticky">
                 <button type="button" class="cp-back" id="cpBack"><i class="fas fa-arrow-left"></i> Work queue</button>
-
                 <header class="cp-head">
                     <div class="rc-customer">
                         <span class="rc-customer__avatar cp-head__avatar" aria-hidden="true">${escapeHtml(displayName.split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?')}</span>
@@ -747,8 +823,31 @@ const CaseDetail = {
                         <button type="button" class="btn btn-outline-primary" id="cpExport"><i class="fas fa-file-arrow-down me-2"></i>Export report</button>
                     </div>
                 </header>
+                    <div class="cp-tabs" role="tablist" aria-label="Case sections">
+                        <button type="button" class="cp-tab" role="tab" id="cpTab-overview" data-tab="overview" aria-controls="cpPane-overview">Overview</button>
+                        <button type="button" class="cp-tab" role="tab" id="cpTab-activity" data-tab="activity" aria-controls="cpPane-activity">Activity <span class="cp-tab__count" id="cpCount-activity"></span></button>
+                        <button type="button" class="cp-tab" role="tab" id="cpTab-investigation" data-tab="investigation" aria-controls="cpPane-investigation">Investigation <span class="cp-tab__count" id="cpCount-investigation"></span></button>
+                        <button type="button" class="cp-tab" role="tab" id="cpTab-file" data-tab="file" aria-controls="cpPane-file">Customer file <span class="cp-tab__count" id="cpCount-file"></span></button>
+                    </div>
+                </div>
 
-                <div class="cp-grid">
+                <div class="cp-pane" id="cpPane-overview" role="tabpanel" aria-labelledby="cpTab-overview" data-pane="overview">
+                    <div class="cp-glance">
+                        <button type="button" class="cp-glance__tile" data-tab="overview"><span>Risk score</span><strong class="cp-glance__value--${band}">${isFinite(score) ? score : '—'}</strong><small>${escapeHtml(c.riskLevel.toLowerCase())} risk</small></button>
+                        <button type="button" class="cp-glance__tile" data-tab="activity"><span>Flagged transactions</span><strong id="cpGlanceFlagged">—</strong><small id="cpGlanceFlaggedNote">&nbsp;</small></button>
+                        <button type="button" class="cp-glance__tile" data-tab="overview"><span>Other open alerts</span><strong>${otherCount.toLocaleString()}</strong><small>on this customer</small></button>
+                        <button type="button" class="cp-glance__tile" data-tab="investigation"><span>Notes</span><strong id="cpGlanceNotes">—</strong><small id="cpGlanceNotesNote">&nbsp;</small></button>
+                        <button type="button" class="cp-glance__tile" data-tab="investigation"><span>Open requests</span><strong id="cpGlanceRequests">—</strong><small id="cpGlanceRequestsNote">&nbsp;</small></button>
+                        <button type="button" class="cp-glance__tile" data-tab="file"><span>Screening matches</span><strong id="cpGlanceMatches">—</strong><small id="cpGlanceMatchesNote">&nbsp;</small></button>
+                    </div>
+                    <section class="card kd-panel cp-summary mb-4" aria-live="polite">
+                        <header class="kd-panel__head">
+                            <div><h2><i class="fas fa-wand-magic-sparkles cp-summary__icon" aria-hidden="true"></i>Case summary</h2><p class="aml-subtitle" id="cpSummaryMeta">Written from the facts on this case</p></div>
+                            ${Auth.can('alerts.escalate') ? '<button type="button" class="btn btn-sm rc-actions__view" id="cpSummaryRefresh">Regenerate</button>' : ''}
+                        </header>
+                        <div id="cpSummary"><div class="kd-skeleton"></div></div>
+                    </section>
+                    <div class="cp-grid">
                     <section class="card kd-panel">
                         <header class="kd-panel__head"><div><h2>Why this case was flagged</h2><p class="aml-subtitle">Opened ${escapeHtml(formatDateTime(alert.created_at))}${open ? `, waiting ${escapeHtml(Cases.age(alert.created_at))}` : ''}</p></div></header>
                         <div class="cd-score cd-score--${band}">
@@ -780,7 +879,6 @@ const CaseDetail = {
                         </div>` : ''}
                         ${this.qaBlock(alert)}
                     </section>
-
                     <section class="card kd-panel">
                         <header class="kd-panel__head"><div><h2>Customer</h2><p class="aml-subtitle">${escapeHtml(this.human(customer.customer_type))}${customer.country ? ` &middot; ${escapeHtml(customer.country)}` : ''}</p></div></header>
                         <div class="cd-grid cp-kv">
@@ -794,7 +892,13 @@ const CaseDetail = {
                         <div class="kx-label">Why this rating</div>
                         ${d.profile.length ? `<ul class="cp-factors">${d.profile.map(f => `<li><span>${escapeHtml(f.risk_factor)}</span><strong>+${Number(f.risk_weight)}</strong></li>`).join('')}</ul>`
                             : this.empty('No risk factors apply to this customer.')}
-                        <div class="kx-label mt-3">Other open alerts for this customer</div>
+                    </section>
+                    </div>
+                    <section class="card kd-panel mb-4">
+                        <header class="kd-panel__head"><div><h2>Other cases for this customer</h2><p class="aml-subtitle">What else is open, and how earlier alerts ended</p></div></header>
+                        <div class="cp-act">
+                            <div>
+                        <div class="kx-label">Open now</div>
                         ${otherAlerts.length ? `
                         <ul class="cp-others">
                             ${otherAlerts.slice(0, 5).map(a => `
@@ -806,40 +910,21 @@ const CaseDetail = {
                         </ul>
                         ${otherCount > otherAlerts.slice(0, 5).length ? `<button type="button" class="rq-more" id="cpAllAlerts">See all ${otherCount.toLocaleString()} in the work queue</button>` : ''}`
                         : this.empty('None.')}
-                    </section>
-                </div>
-
-                <div class="cp-grid">
-                    <section class="card kd-panel">
-                        <header class="kd-panel__head"><div><h2>Notes and timeline</h2><p class="aml-subtitle" id="cpTimelineCount">What has been done on this case</p></div></header>
-                        ${Auth.can('cases.view') && !(Auth.getUser() || {}).read_only ? `
-                        <form class="cp-note" id="cpNoteForm">
-                            <label class="visually-hidden" for="cpNoteBody">Add a note</label>
-                            <textarea class="form-control" id="cpNoteBody" rows="2" maxlength="4000" placeholder="Add a note: what you checked, who you spoke to, what you found"></textarea>
-                            <div class="cp-note__foot">
-                                <span class="kx-note">Notes cannot be edited or removed once saved.</span>
-                                <button type="submit" class="btn btn-sm btn-primary" id="cpNoteAdd">Add note</button>
                             </div>
-                        </form>` : ''}
-                        <div id="cpTimeline"><div class="kd-skeleton"></div></div>
-                    </section>
-
-                    <section class="card kd-panel">
-                        <header class="kd-panel__head"><div><h2>Other cases for this customer</h2><p class="aml-subtitle">How this customer's other alerts ended</p></div></header>
-                        <div id="cpHistory"><div class="kd-skeleton"></div></div>
+                            <div id="cpHistory"><div class="kd-skeleton"></div></div>
+                        </div>
                     </section>
                 </div>
 
+                <div class="cp-pane" id="cpPane-activity" role="tabpanel" aria-labelledby="cpTab-activity" data-pane="activity" hidden>
                 <section class="card kd-panel mb-4">
                     <header class="kd-panel__head"><div><h2>Activity against the customer's own baseline</h2><p class="aml-subtitle">The last 30 days beside the 90 days before</p></div></header>
                     <div id="cpActivity"><div class="kd-skeleton"></div></div>
                 </section>
-
                 <section class="card kd-panel mb-4">
                     <header class="kd-panel__head"><div><h2>Counterparties and countries</h2><p class="aml-subtitle" id="cpCounterpartiesSub">Who and where this customer deals with</p></div></header>
                     <div id="cpCounterparties"><div class="kd-skeleton"></div></div>
                 </section>
-
                 <section class="card border-0 rc-table-card mb-4">
                     <div class="rc-toolbar">
                         <div class="rc-toolbar__title"><h2>Transactions</h2><small class="text-muted" id="cpTxCount"></small></div>
@@ -866,8 +951,23 @@ const CaseDetail = {
                     </div>
                     <div class="cp-tx-more"><button type="button" class="btn btn-sm rc-actions__view d-none" id="cpTxMore">Show more</button></div>
                 </section>
+                </div>
 
-                <div class="cp-grid">
+                <div class="cp-pane" id="cpPane-investigation" role="tabpanel" aria-labelledby="cpTab-investigation" data-pane="investigation" hidden>
+                    <div class="cp-grid">
+                    <section class="card kd-panel">
+                        <header class="kd-panel__head"><div><h2>Notes and timeline</h2><p class="aml-subtitle" id="cpTimelineCount">What has been done on this case</p></div></header>
+                        ${Auth.can('cases.view') && !(Auth.getUser() || {}).read_only ? `
+                        <form class="cp-note" id="cpNoteForm">
+                            <label class="visually-hidden" for="cpNoteBody">Add a note</label>
+                            <textarea class="form-control" id="cpNoteBody" rows="2" maxlength="4000" placeholder="Add a note: what you checked, who you spoke to, what you found"></textarea>
+                            <div class="cp-note__foot">
+                                <span class="kx-note">Notes cannot be edited or removed once saved.</span>
+                                <button type="submit" class="btn btn-sm btn-primary" id="cpNoteAdd">Add note</button>
+                            </div>
+                        </form>` : ''}
+                        <div id="cpTimeline"><div class="kd-skeleton"></div></div>
+                    </section>
                     <section class="card kd-panel">
                         <header class="kd-panel__head"><div><h2>Requests for information</h2><p class="aml-subtitle">What has been asked for, from whom, and whether it arrived</p></div></header>
                         <div id="cpRequests"><div class="kd-skeleton"></div></div>
@@ -889,7 +989,8 @@ const CaseDetail = {
                             </div>
                         </form>` : ''}
                     </section>
-
+                    </div>
+                    <div class="cp-grid">
                     <section class="card kd-panel">
                         <header class="kd-panel__head"><div><h2>Draft narrative</h2><p class="aml-subtitle">Who, what, when, where and why, from the facts on this case</p></div>
                             ${Auth.can('alerts.escalate') ? '<button type="button" class="btn btn-sm rc-actions__view" id="cpNarrativeDraft">Draft narrative</button>' : ''}</header>
@@ -897,9 +998,14 @@ const CaseDetail = {
                             ? 'Select "Draft narrative" to assemble a first draft from the customer, the alert, the flagged transactions, your notes and requests.'
                             : 'Your role cannot draft a narrative.')}</div>
                     </section>
+                    <section class="card kd-panel">
+                        <header class="kd-panel__head"><div><h2>Documents</h2><p class="aml-subtitle">Upload KYC documents and check what they say against the record</p></div></header>
+                        <div id="caseDocuments"></div>
+                    </section>
+                    </div>
                 </div>
 
-
+                <div class="cp-pane" id="cpPane-file" role="tabpanel" aria-labelledby="cpTab-file" data-pane="file" hidden>
                 ${customer.customer_type && customer.customer_type !== 'INDIVIDUAL' ? `
                 <section class="card border-0 rc-table-card mb-4">
                     <div class="rc-toolbar"><div class="rc-toolbar__title"><h2>Beneficial owners</h2>
@@ -915,21 +1021,15 @@ const CaseDetail = {
                     </div>
                     <p class="cp-owners-note d-none" id="cpOwnersNote"><i class="fas fa-triangle-exclamation me-1" aria-hidden="true"></i>Ownership checks are not complete for this customer: an owner is still awaiting verification or is flagged for sanctions.</p>
                 </section>` : ''}
-
-                <div class="cp-grid">
-                    <section class="card kd-panel">
-                        <header class="kd-panel__head"><div><h2>Documents</h2><p class="aml-subtitle">Upload KYC documents and check what they say against the record</p></div></header>
-                        <div id="caseDocuments"></div>
-                    </section>
-
-                    <div class="cp-stack">
-                        <section class="card kd-panel">
-                            <header class="kd-panel__head"><div><h2>Accounts</h2><p class="aml-subtitle">Accounts held by this customer</p></div></header>
-                            <div id="cpAccounts"><div class="kd-skeleton"></div></div>
-                        </section>
+                    <div class="cp-grid">
                         <section class="card kd-panel">
                             <header class="kd-panel__head"><div><h2>Screening matches</h2><p class="aml-subtitle">The watchlist entry beside the customer${customer.last_screened_at ? `; last screened ${escapeHtml(formatDate(customer.last_screened_at))}` : ''}</p></div></header>
                             <div id="cpScreening"><div class="kd-skeleton"></div></div>
+                        </section>
+                        <div class="cp-stack">
+                        <section class="card kd-panel">
+                            <header class="kd-panel__head"><div><h2>Accounts</h2><p class="aml-subtitle">Accounts held by this customer</p></div></header>
+                            <div id="cpAccounts"><div class="kd-skeleton"></div></div>
                         </section>
                         <section class="card kd-panel">
                             <header class="kd-panel__head"><div><h2>KYC reviews</h2><p class="aml-subtitle">Scheduled and completed reviews</p></div></header>
@@ -938,6 +1038,7 @@ const CaseDetail = {
                                     <strong>${escapeHtml(this.human(r.review_status))}</strong></li>`).join('')}</ul>`
                                 : this.empty('No reviews on record.')}
                         </section>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -945,10 +1046,26 @@ const CaseDetail = {
 
         $("#cpBack").on("click", () => App.navigateTo('cases'));
         $("#cpAssign").on("click", () => Cases.showAssignModal(c));
+        $(".cp-tab, .cp-glance__tile").on("click", (e) => this.showTab($(e.currentTarget).data("tab")));
+        $(".cp-tabs").on("keydown", (e) => {
+            if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+            const order = this.TABS;
+            const next = order[(order.indexOf(this.tab) + (e.key === 'ArrowRight' ? 1 : order.length - 1)) % order.length];
+            this.showTab(next);
+            $(`#cpTab-${next}`).trigger("focus");
+        });
+        if (this.tabFor !== alert.id) { this.tab = 'overview'; this.tabFor = alert.id; }
+        this.showTab(this.tab, false);
+        const flaggedCount = this.transactions.filter(t => this.isFlagged(t)).length;
+        $("#cpGlanceFlagged").text(flaggedCount.toLocaleString());
+        $("#cpGlanceFlaggedNote").text(`of ${this.transactions.length.toLocaleString()} loaded`);
+        this.setCount('activity', flaggedCount);
         $("#cpNoteForm").on("submit", (e) => { e.preventDefault(); this.addNote(alert.id); });
         $("#cpReqForm").on("submit", (e) => { e.preventDefault(); this.addRequest(alert.id); });
         $("#cpNarrativeDraft").on("click", () => this.draftNarrative(alert.id));
         this.setupTransactions();
+        $("#cpSummaryRefresh").on("click", () => this.generateSummary(alert.id));
+        this.renderSummary(alert);
         this.loadCaseFile(alert, customer);
         this.loadBasis(alert.id, rules.map(r => r.code));
         $(".cp-qa-btn").on("click", (e) => this.recordQA(alert.id, $(e.currentTarget).data("result")));

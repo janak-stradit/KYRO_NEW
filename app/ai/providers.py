@@ -189,6 +189,23 @@ def _mock_narrative(facts: str) -> str:
     return (chr(10) * 2).join(parts)
 
 
+def _mock_summary(facts: str) -> str:
+    """The first fact under each heading, as sentences, with a count of what was done. Adds nothing."""
+    first: dict[str, str] = {}
+    done = 0
+    for line in facts.strip().splitlines():
+        label, _, rest = line.partition(":")
+        label, rest = label.strip(), rest.strip()
+        if not rest:
+            continue
+        if label == "What was done":
+            done += 1
+        first.setdefault(label, rest)
+    sentences = [first[h] for h in ("Who", "Why it was flagged", "What", "When") if h in first]
+    sentences.append(f"{done} action{'' if done == 1 else 's'} recorded on the case so far" if done else "Nothing has been recorded on the case yet")
+    return " ".join(s[0].upper() + s[1:] + ("" if s.endswith(".") else ".") for s in sentences)
+
+
 class MockProvider:
     name = "mock"
 
@@ -204,6 +221,8 @@ class MockProvider:
             text = json.dumps({"obligations": _mock_obligations(user.split("Section text:", 1)[1])})
         elif "Document text:" in user and "Fields to extract:" in user:
             text = json.dumps({"fields": _mock_document_fields(user)})
+        elif "Case facts to summarise:" in user:
+            text = _mock_summary(user.split("Case facts to summarise:", 1)[1])
         elif "Case facts:" in user:
             text = _mock_narrative(user.split("Case facts:", 1)[1])
         elif "Control catalogue:" in user:
