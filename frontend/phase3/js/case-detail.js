@@ -833,12 +833,12 @@ const CaseDetail = {
 
                 <div class="cp-pane" id="cpPane-overview" role="tabpanel" aria-labelledby="cpTab-overview" data-pane="overview">
                     <div class="cp-glance">
-                        <button type="button" class="cp-glance__tile" data-tab="overview"><span>Risk score</span><strong class="cp-glance__value--${band}">${isFinite(score) ? score : '—'}</strong><small>${escapeHtml(c.riskLevel.toLowerCase())} risk</small></button>
-                        <button type="button" class="cp-glance__tile" data-tab="activity"><span>Flagged transactions</span><strong id="cpGlanceFlagged">—</strong><small id="cpGlanceFlaggedNote">&nbsp;</small></button>
-                        <button type="button" class="cp-glance__tile" data-tab="overview"><span>Other open alerts</span><strong>${otherCount.toLocaleString()}</strong><small>on this customer</small></button>
-                        <button type="button" class="cp-glance__tile" data-tab="investigation"><span>Notes</span><strong id="cpGlanceNotes">—</strong><small id="cpGlanceNotesNote">&nbsp;</small></button>
-                        <button type="button" class="cp-glance__tile" data-tab="investigation"><span>Open requests</span><strong id="cpGlanceRequests">—</strong><small id="cpGlanceRequestsNote">&nbsp;</small></button>
-                        <button type="button" class="cp-glance__tile" data-tab="file"><span>Screening matches</span><strong id="cpGlanceMatches">—</strong><small id="cpGlanceMatchesNote">&nbsp;</small></button>
+                        <button type="button" class="cp-glance__tile" data-tab="overview"><i class="fas fa-gauge-high" aria-hidden="true"></i><span>Risk score</span><strong class="cp-glance__value--${band}">${isFinite(score) ? score : '—'}</strong><small>${escapeHtml(c.riskLevel.toLowerCase())} risk</small></button>
+                        <button type="button" class="cp-glance__tile" data-tab="activity"><i class="fas fa-flag" aria-hidden="true"></i><span>Flagged transactions</span><strong id="cpGlanceFlagged">—</strong><small id="cpGlanceFlaggedNote">&nbsp;</small></button>
+                        <button type="button" class="cp-glance__tile" data-tab="overview"><i class="fas fa-bell" aria-hidden="true"></i><span>Other open alerts</span><strong>${otherCount.toLocaleString()}</strong><small>on this customer</small></button>
+                        <button type="button" class="cp-glance__tile" data-tab="investigation"><i class="fas fa-pen" aria-hidden="true"></i><span>Notes</span><strong id="cpGlanceNotes">—</strong><small id="cpGlanceNotesNote">&nbsp;</small></button>
+                        <button type="button" class="cp-glance__tile" data-tab="investigation"><i class="fas fa-envelope" aria-hidden="true"></i><span>Open requests</span><strong id="cpGlanceRequests">—</strong><small id="cpGlanceRequestsNote">&nbsp;</small></button>
+                        <button type="button" class="cp-glance__tile" data-tab="file"><i class="fas fa-user-shield" aria-hidden="true"></i><span>Screening matches</span><strong id="cpGlanceMatches">—</strong><small id="cpGlanceMatchesNote">&nbsp;</small></button>
                     </div>
                     <section class="card kd-panel cp-summary mb-4" aria-live="polite">
                         <header class="kd-panel__head">

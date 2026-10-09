@@ -440,3 +440,68 @@ body:not(.modal-open) { overflow-x: clip !important; overflow-y: visible !import
 #mainContent .cp-summary { border-left: 3px solid var(--kt-accent) !important; }
 .cp-summary__icon { margin-right: 8px; color: var(--kt-accent); font-size: 14px; }
 .cp-summary__text { margin: 0; font-size: 14.5px; line-height: 1.6; color: var(--kt-ink); max-width: 110ch; }
+
+/* ══ Cards and panels: one consistent treatment ═════════════════════════════
+   A panel is a white card with a header band, a body, and quiet section labels. */
+#mainContent .card.kd-panel, #mainContent .rc-table-card {
+    border: 1px solid var(--kt-border) !important; border-radius: 10px !important;
+    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04) !important; background: #fff;
+}
+#mainContent .kd-panel { padding: 0 18px 18px !important; overflow: hidden; }
+#mainContent .kd-panel > *:first-child:not(.kd-panel__head) { margin-top: 18px; }
+#mainContent .kd-panel > .kd-panel__head {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    margin: 0 -18px 16px; padding: 12px 18px; min-height: 58px;
+    background: #FCFCFD; border-bottom: 1px solid var(--kt-border-soft);
+}
+#mainContent .kd-panel__head h2, #mainContent .rc-toolbar__title h2 { font-size: 14.5px !important; font-weight: 700 !important; letter-spacing: -0.005em; margin: 0 0 1px !important; }
+#mainContent .kd-panel__head .aml-subtitle, #mainContent .rc-toolbar__title small { font-size: 12.5px !important; line-height: 1.35; }
+#mainContent .rc-table-card > .rc-toolbar { background: #FCFCFD; border-bottom: 1px solid var(--kt-border-soft); min-height: 58px; }
+
+/* Section labels inside a panel (the <div> ones; form <label>s keep their style) */
+#mainContent div.kx-label {
+    margin: 0 0 8px; font-size: 11.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: #667085;
+}
+#mainContent div.kx-label.mt-3 { margin-top: 20px !important; padding-top: 16px; border-top: 1px solid var(--kt-border-soft); }
+
+/* Empty states read as a deliberate "nothing here", not as missing content */
+#mainContent .cp-empty {
+    margin: 0; padding: 12px 14px; border: 1px dashed #D0D5DD; border-radius: 8px; background: var(--kt-page);
+    font-size: 13px; color: #667085;
+}
+#mainContent td.rc-empty { padding: 22px 16px !important; color: #667085; font-size: 13px; }
+
+/* Rows inside panels */
+#mainContent .cp-factors li, #mainContent .kd-list li { padding: 9px 0; font-size: 13.5px; }
+#mainContent .cp-factors li > span:first-child { color: #475467; }
+#mainContent .cp-factors li strong { color: var(--kt-ink); font-variant-numeric: tabular-nums; }
+#mainContent .cp-other { padding: 8px; }
+#mainContent .cp-other:hover { background: var(--kt-tint); }
+#mainContent .cd-rules { border-radius: 8px; border-color: var(--kt-border); }
+#mainContent .cd-score { background: var(--kt-page); border: 1px solid var(--kt-border-soft); }
+#mainContent .cd-grid { gap: 14px 20px; margin-bottom: 18px; }
+#mainContent .cd-grid strong { font-size: 14px; }
+
+/* Case page */
+.cp .cp-grid { align-items: stretch; }
+.cp .cp-grid > .kd-panel, .cp .cp-stack > .kd-panel { height: auto; }
+.cp .cp-grid > .cp-stack { align-content: start; }
+.cp-glance__tile { position: relative; padding: 14px 16px; border-radius: 10px; box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04); transition: border-color 0.15s ease, box-shadow 0.15s ease; }
+.cp-glance__tile:hover { border-color: #C4CAD4; box-shadow: 0 2px 6px rgba(16, 24, 40, 0.08); }
+.cp-glance__tile > i { position: absolute; top: 12px; right: 12px; width: 28px; height: 28px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; background: var(--kt-tint); color: #667085; font-size: 12.5px; }
+.cp-glance__tile strong { font-size: 24px; margin: 2px 0; }
+.cp-stat { border-radius: 8px; background: var(--kt-page); border-color: var(--kt-border-soft); }
+.cp-stat strong { font-variant-numeric: tabular-nums; }
+#mainContent .cp-summary { background: linear-gradient(0deg, #fff, #fff) padding-box; }
+#mainContent .cp-summary > .kd-panel__head { background: #FFF7ED; border-bottom-color: #FED7AA; }
+.cp-summary__text { font-size: 14px; line-height: 1.65; }
+.cp-tl__item--note .cp-tl__detail { border: 1px solid var(--kt-border-soft); }
+.cp-match { padding: 14px 0; }
+.cp-match__table { border: 1px solid var(--kt-border-soft); border-radius: 8px; border-collapse: separate; border-spacing: 0; overflow: hidden; }
+.cp-match__table th, .cp-match__table td { padding: 7px 10px; }
+.cp-match__table thead th { background: var(--kt-page); }
+.cp-match__table tbody tr:first-child th, .cp-match__table tbody tr:first-child td { border-top: 1px solid var(--kt-border-soft); }
+.cp-request { padding: 12px 0; }
+.cp-sticky .cp-head__title { font-size: 20px; }
+#mainContent .kd-panel--dark > .kd-panel__head { background: transparent; border-bottom-color: rgba(255, 255, 255, 0.12); }
+#mainContent .card.kd-panel.kd-panel--dark { background: var(--kt-dark); border-color: var(--kt-dark) !important; }
