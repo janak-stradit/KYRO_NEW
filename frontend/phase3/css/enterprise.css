@@ -230,3 +230,53 @@ a, .kd-link, .rq-more, .cp-back, .doc-field__page, .kc-link { color: #B54708; }
 #mainContent .aml-btn-primary:hover { background: var(--kt-accent-strong) !important; }
 #mainContent .aml-btn-secondary { background: #fff !important; border: 1px solid #CFD4DC !important; color: var(--kt-ink) !important; }
 #mainContent .aml-btn-secondary:hover { background: var(--kt-tint) !important; }
+
+/* ── Kyro chat widget (js/kyrochat.js): launcher + floating panel ───────── */
+.kw { position: fixed; right: 24px; bottom: 24px; z-index: 1040; display: flex; flex-direction: column; align-items: flex-end; gap: 12px; }
+.kw-launcher {
+    width: 52px; height: 52px; border: 0; border-radius: 50%; background: var(--kt-accent); color: #fff; font-size: 20px;
+    display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
+    box-shadow: 0 6px 18px rgba(16, 24, 40, 0.22); transition: background-color 0.15s ease, transform 0.15s ease;
+}
+.kw-launcher:hover { background: var(--kt-accent-strong); transform: translateY(-1px); }
+.kw-launcher:focus-visible { outline: 3px solid rgba(249, 115, 22, 0.4); outline-offset: 3px; }
+.kw-launcher.is-open { background: var(--kt-ink); }
+.kw-panel {
+    display: none; flex-direction: column; width: 400px; max-width: calc(100vw - 32px); height: min(620px, calc(100vh - 120px));
+    background: #fff; border: 1px solid var(--kt-border); border-radius: 12px; overflow: hidden;
+    box-shadow: 0 18px 48px rgba(16, 24, 40, 0.22);
+}
+.kw-panel.is-open { display: flex; }
+.kw-head { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--kt-dark); color: #fff; }
+.kw-head__avatar { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; background: #fff; }
+.kw-head__text { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
+.kw-head__text strong { font-size: 14px; }
+.kw-head__text small { font-size: 11.5px; color: #C4CAD4; }
+.kw-icon { width: 30px; height: 30px; border: 0; border-radius: 6px; background: transparent; color: #D0D5DD; font-size: 14px; cursor: pointer; }
+.kw-icon:hover, .kw-icon:focus-visible { background: rgba(255, 255, 255, 0.12); color: #fff; outline: none; }
+.kw-icon[aria-pressed="true"] { color: var(--kt-accent); }
+.kw-messages { flex: 1 1 auto; min-height: 0; max-height: none !important; height: auto !important; overflow-y: auto; padding: 14px 12px !important; background: var(--kt-page) !important; border: 0 !important; border-radius: 0 !important; margin: 0 !important; }
+.kw-messages .kc-msg { margin-bottom: 10px; gap: 8px; }
+.kw-messages .kc-msg-avatar { width: 26px; height: 26px; }
+.kw-messages .kc-bubble { max-width: 86%; padding: 9px 12px; border-radius: 10px; font-size: 13.5px; box-shadow: none; }
+.kw-messages .kc-bubble-bot { background: #fff; border: 1px solid var(--kt-border); color: var(--kt-ink); }
+.kw-messages .kc-bubble-user { background: var(--kt-accent); color: #fff; border: 0; }
+.kw-messages .kc-msg-text { font-size: 13.5px; line-height: 1.5; }
+.kw-messages .kc-msg-time { font-size: 10.5px; margin-top: 4px; opacity: 0.7; }
+.kw-messages .kc-case-details { margin-top: 8px; padding-top: 8px; }
+.kw-messages .kc-reg-source p { font-size: 12.5px; }
+.kw-composer { padding: 10px 12px 12px; border-top: 1px solid var(--kt-border); background: #fff; }
+.kw-suggestions { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 8px !important; padding: 0 !important; }
+.kw-suggestions.is-hidden { display: none; }
+.kw-suggestions .kc-suggestion { padding: 4px 10px; border: 1px solid #CFD4DC; border-radius: 999px; background: #fff; color: var(--kt-ink); font-size: 12px; cursor: pointer; }
+.kw-suggestions .kc-suggestion:hover { background: var(--kt-tint); }
+.kw-input { display: flex; align-items: center; gap: 8px; }
+.kw-input input { flex: 1; min-width: 0; height: 38px; padding: 0 12px; border: 1px solid #CFD4DC; border-radius: 8px; font-size: 13.5px; color: var(--kt-ink); background: #fff; }
+.kw-input input:focus { outline: none; border-color: var(--kt-accent); box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.15); }
+.kw-input button { flex: 0 0 38px; height: 38px; border: 0; border-radius: 8px; background: var(--kt-accent); color: #fff; cursor: pointer; }
+.kw-input button:hover { background: var(--kt-accent-strong); }
+@media (max-width: 575.98px) {
+    .kw { right: 12px; bottom: 12px; }
+    .kw-panel { width: calc(100vw - 24px); height: calc(100vh - 96px); }
+}
+@media print { .kw { display: none; } }

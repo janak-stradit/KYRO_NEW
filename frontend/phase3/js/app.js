@@ -151,8 +151,7 @@ const App = {
             case: CaseDetail,
             patterns: Patterns,
             regulations: Regulations,
-            feeds: Feeds,
-            kyrochat: KyroChat
+            feeds: Feeds
         };
     },
     

@@ -1,102 +1,119 @@
 /**
- * KYRO Chat - ask Kyro about the work queue, a customer, reviews, patterns
- * or the regulations. Every answer is read from KYRO's live data; when Kyro
- * has no data for a question it says so.
+ * KYRO Chat - a floating assistant available on every page. Ask Kyro about
+ * the work queue, a customer, reviews, patterns or the regulations; every
+ * answer is read from KYRO's live data, and when Kyro has no data for a
+ * question it says so.
  */
 
 const KyroChat = {
-    speechEnabled: true,
+    speechEnabled: false,
     currentUtterance: null,
     customerCodes: null,   // display code (CUST-001) -> customer UUID
+    mounted: false,
 
-    async init() {
-        this.speechEnabled = localStorage.getItem("kyro_speech_enabled") !== "false";
-        this.renderLayout();
-        this.setupListeners();
-        this.addMessage("assistant",
-            "Hi, I'm Kyro. Ask me what's waiting in the queue, about a customer (for example CUST-001), "
-            + "which reviews are overdue, which patterns are firing, or what a regulation requires. "
-            + "I answer from KYRO's live data and the loaded regulations.");
-    },
-
-    renderLayout() {
-        $("#mainContent").html(`
-            <div class="kc-wrapper bg-[#F9FBFF]">
-                <div class="kyro-page" style="padding-bottom: 0;">
-                    <div class="kyro-page-head kc-hero">
-                        <div class="kc-hero__avatar" id="kcHeroAvatar">
-                            <img src="assets/Kyro1.png" alt="" onerror="this.style.display='none'">
+    /** Add the launcher button and the (closed) chat panel to the page, once. */
+    mount() {
+        if (this.mounted || document.getElementById("kyroWidget")) return;
+        this.mounted = true;
+        // Reading answers aloud is opt-in: a chat panel that talks by default is intrusive
+        this.speechEnabled = localStorage.getItem("kyro_speech_enabled") === "true";
+        $("body").append(`
+            <div class="kw" id="kyroWidget">
+                <section class="kw-panel" id="kyroPanel" role="dialog" aria-label="Ask Kyro" aria-hidden="true">
+                    <header class="kw-head">
+                        <img src="assets/Kyro1.png" alt="" class="kw-head__avatar" onerror="this.style.display='none'">
+                        <div class="kw-head__text">
+                            <strong>Ask Kyro</strong>
+                            <small>Answers from KYRO's live data</small>
                         </div>
-                        <div class="kc-hero__body">
-                            <span class="kyro-kicker">Compliance Assistant</span>
-                            <h1 class="kyro-page-title">Ask Kyro</h1>
-                            <p class="kc-instruction">Answers come from the live work queue, customer records, review schedule and loaded regulations. Kyro reads and explains; decisions stay with you.</p>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="kc-layout kyro-page">
-                    <div class="kc-left-panel">
-                    <div class="kc-main-card">
-                        <div class="kc-messages" id="kcMessages"></div>
-
-                        <div class="kc-composer">
-                        <div class="kc-suggestions" id="kcSuggestions" aria-label="Suggested questions">
-                            <button type="button" class="kc-suggestion" data-prompt="What needs my attention today?">What needs my attention?</button>
-                            <button type="button" class="kc-suggestion" data-prompt="Which open cases are high risk?">High-risk cases</button>
-                            <button type="button" class="kc-suggestion" data-prompt="Which periodic reviews are overdue?">Overdue reviews</button>
-                            <button type="button" class="kc-suggestion" data-prompt="Which patterns are firing?">Patterns firing</button>
-                            <button type="button" class="kc-suggestion" data-prompt="What are the suspicious activity reporting requirements for broker-dealers?">SAR requirements</button>
-                        </div>
-
-                        <div class="kc-input-row">
-                            <input type="text" class="kc-input" id="kcInput" autocomplete="off"
-                                   aria-label="Message Kyro"
-                                   placeholder="Ask about the queue, a customer (e.g. CUST-001), reviews, patterns or a regulation...">
-                            <button class="kc-send-btn" id="sendBtn" aria-label="Send message">
-                                <i class="fas fa-paper-plane" aria-hidden="true"></i>
-                            </button>
-                        </div>
-                        <p class="kc-composer__hint">Press <kbd>Enter</kbd> to send</p>
+                        <button type="button" class="kw-icon" id="kwSpeech" aria-pressed="false" title="Read answers aloud"><i class="fas fa-volume-xmark"></i></button>
+                        <button type="button" class="kw-icon" id="kwClear" title="Start a new conversation" aria-label="Start a new conversation"><i class="fas fa-rotate-right"></i></button>
+                        <button type="button" class="kw-icon" id="kwClose" title="Close" aria-label="Close chat"><i class="fas fa-xmark"></i></button>
+                    </header>
+                    <div class="kc-messages kw-messages" id="kcMessages" aria-live="polite"></div>
+                    <div class="kw-composer">
+                        <div class="kc-suggestions kw-suggestions" id="kcSuggestions" aria-label="Suggested questions"></div>
+                        <div class="kw-input">
+                            <input type="text" id="kcInput" autocomplete="off" aria-label="Message Kyro" placeholder="Ask about the queue, a customer, a regulation...">
+                            <button type="button" id="sendBtn" aria-label="Send message"><i class="fas fa-paper-plane" aria-hidden="true"></i></button>
                         </div>
                     </div>
-                    </div>
-
-                    <div class="kc-right-panel">
-                        <div class="kc-video-card">
-                            <div class="kc-idle-pill" id="kcIdlePill">
-                                <span class="kc-idle-dot" id="kcIdleDot"></span>
-                                <span id="kcIdleText">IDLE</span>
-                            </div>
-                            <video class="kc-char-video" id="kyroCharVideo" muted loop playsinline preload="auto">
-                                <source src="assets/kyrochat.mp4" type="video/mp4">
-                            </video>
-                        </div>
-
-                        <div class="kc-side-card kc-capabilities">
-                            <h3>What you can ask</h3>
-                            <ul>
-                                <li><img src="assets/template/icons/investigation.svg" alt=""><span><strong>The work queue</strong>What is unresolved, high risk, unassigned or escalated.</span></li>
-                                <li><img src="assets/template/icons/review-checklist.svg" alt=""><span><strong>A customer</strong>Risk rating, screening flags and open alerts, by name or ID.</span></li>
-                                <li><img src="assets/template/icons/analytics-search.svg" alt=""><span><strong>Reviews, patterns and rules</strong>What is overdue, what is firing, and what the regulations say.</span></li>
-                            </ul>
-                        </div>
-                    </div>
-                </div>
+                </section>
+                <button type="button" class="kw-launcher" id="kyroLauncher" aria-expanded="false" aria-controls="kyroPanel" title="Ask Kyro">
+                    <i class="fas fa-comment-dots" aria-hidden="true"></i>
+                    <span class="visually-hidden">Ask Kyro</span>
+                </button>
             </div>
         `);
+        this.setupListeners();
+        this.reset();
+        this.syncSpeechButton();
+    },
+
+    SUGGESTIONS: [
+        ["What needs my attention today?", "What needs my attention?"],
+        ["Which open cases are high risk?", "High-risk cases"],
+        ["Which periodic reviews are overdue?", "Overdue reviews"],
+        ["Which patterns are firing?", "Patterns firing"],
+        ["What are the suspicious activity reporting requirements for broker-dealers?", "SAR requirements"]
+    ],
+
+    /** Start a new conversation. */
+    reset() {
+        this.stopSpeaking();
+        $("#kcMessages").empty();
+        $("#kcSuggestions").removeClass("is-hidden").html(this.SUGGESTIONS.map(([prompt, label]) =>
+            `<button type="button" class="kc-suggestion" data-prompt="${escapeHtml(prompt)}">${escapeHtml(label)}</button>`).join(''));
+        this.addMessage("assistant",
+            "Hi, I'm Kyro. Ask me what's waiting in the queue, about a customer (for example CUST-001), "
+            + "which reviews are overdue, which patterns are firing, or what a regulation requires.");
+    },
+
+    isOpen() {
+        return $("#kyroPanel").hasClass("is-open");
+    },
+
+    open() {
+        this.mount();
+        $("#kyroPanel").addClass("is-open").attr("aria-hidden", "false");
+        $("#kyroLauncher").attr("aria-expanded", "true").addClass("is-open").find("i").attr("class", "fas fa-chevron-down");
+        const el = document.getElementById("kcMessages");
+        if (el) el.scrollTop = el.scrollHeight;
+        setTimeout(() => $("#kcInput").trigger("focus"), 150);
+    },
+
+    close() {
+        $("#kyroPanel").removeClass("is-open").attr("aria-hidden", "true");
+        $("#kyroLauncher").attr("aria-expanded", "false").removeClass("is-open").find("i").attr("class", "fas fa-comment-dots");
+        this.stopSpeaking();
+    },
+
+    syncSpeechButton() {
+        $("#kwSpeech").attr("aria-pressed", String(this.speechEnabled))
+            .attr("title", this.speechEnabled ? "Stop reading answers aloud" : "Read answers aloud")
+            .find("i").attr("class", this.speechEnabled ? "fas fa-volume-high" : "fas fa-volume-xmark");
     },
 
     setupListeners() {
+        $("#kyroLauncher").on("click", () => (this.isOpen() ? this.close() : this.open()));
+        $("#kwClose").on("click", () => { this.close(); $("#kyroLauncher").trigger("focus"); });
+        $("#kwClear").on("click", () => this.reset());
+        $("#kwSpeech").on("click", () => {
+            this.speechEnabled = !this.speechEnabled;
+            localStorage.setItem("kyro_speech_enabled", String(this.speechEnabled));
+            if (!this.speechEnabled) this.stopSpeaking();
+            this.syncSpeechButton();
+        });
+        $("#kyroPanel").on("keydown", (e) => { if (e.key === "Escape") { this.close(); $("#kyroLauncher").trigger("focus"); } });
         $("#kcInput").on("keydown", (e) => {
             if (e.which === 13) { e.preventDefault(); this.sendMessage(); }
         });
         $("#sendBtn").on("click", () => this.sendMessage());
-        $(".kc-suggestion").on("click", (e) => {
+        $("#kcSuggestions").on("click", ".kc-suggestion", (e) => {
             $("#kcInput").val($(e.currentTarget).data("prompt"));
             this.sendMessage();
         });
-        // Links inside answers open the relevant page
+        // Links inside answers open the relevant page; the chat stays open beside it
         $("#kcMessages").on("click", ".kc-link", (e) => {
             const $link = $(e.currentTarget);
             const params = $link.data("customer") ? { customer: $link.data("customer") } : {};
@@ -540,27 +557,7 @@ const KyroChat = {
     },
 
     _setSpeakingState(speaking) {
-        const video    = document.getElementById("kyroCharVideo");
-        const pillDot  = document.getElementById("kcIdleDot");
-        const pillText = document.getElementById("kcIdleText");
-
-        if (speaking) {
-            // When speaking - play video
-            if (video) { 
-                video.currentTime = 0; 
-                video.play().catch(err => console.log("Video play error:", err)); 
-            }
-            if (pillDot)  pillDot.style.backgroundColor = "#06b6d4";
-            if (pillText) pillText.textContent = "SPEAKING";
-        } else {
-            // When not speaking - pause video and reset
-            if (video) { 
-                video.pause(); 
-                video.currentTime = 0; 
-            }
-            if (pillDot)  pillDot.style.backgroundColor = "#94a3b8";
-            if (pillText) pillText.textContent = "IDLE";
-        }
+        $("#kwSpeech").toggleClass("is-speaking", !!speaking);
     },
 
     _browserSpeak(text, resolveCallback) {
@@ -627,3 +624,10 @@ $(window).on("beforeunload", () => {
 });
 
 window.KyroChat = KyroChat;
+
+// The assistant is part of the application shell: available on every page once signed in
+$(document).ready(() => {
+    try {
+        if (localStorage.getItem("access_token")) KyroChat.mount();
+    } catch (e) { /* storage unavailable: no widget */ }
+});
