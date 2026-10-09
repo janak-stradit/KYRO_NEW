@@ -115,6 +115,9 @@ const Cases = {
                                 <option value="IN_REVIEW">In review</option>
                                 <option value="ESCALATED">Escalated</option>
                                 <option value="RESOLVED">Resolved</option>
+                                ${Auth.can('alerts.qa') ? `
+                                <option value="AWAITING_QA">Resolved, awaiting quality check</option>
+                                <option value="QA_FAILED">Failed quality check</option>` : ''}
                                 <option value="ALL">All statuses</option>
                             </select>
                             <select class="form-select" id="filterRisk" aria-label="Filter by risk">

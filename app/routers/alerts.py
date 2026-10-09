@@ -200,6 +200,10 @@ def _queue_filters(
     query = db.query(AlertModel, Customer).join(Customer, AlertModel.customer_id == Customer.id)
     if status_filter == "UNRESOLVED":
         query = query.filter(AlertModel.status.in_(_UNRESOLVED))
+    elif status_filter == "AWAITING_QA":
+        query = query.filter(AlertModel.status == "RESOLVED", AlertModel.qa_result.is_(None))
+    elif status_filter == "QA_FAILED":
+        query = query.filter(AlertModel.status == "RESOLVED", AlertModel.qa_result == "FAIL")
     elif status_filter != "ALL":
         query = query.filter(AlertModel.status == status_filter)
     if risk:
@@ -221,7 +225,7 @@ def _queue_filters(
 @router.get("/queue")
 def alert_queue(
     pagination: PaginationParams = Depends(),
-    status_filter: str = Query("UNRESOLVED", pattern="^(UNRESOLVED|ALL|OPEN|ASSIGNED|IN_REVIEW|ESCALATED|RESOLVED)$"),
+    status_filter: str = Query("UNRESOLVED", pattern="^(UNRESOLVED|ALL|OPEN|ASSIGNED|IN_REVIEW|ESCALATED|RESOLVED|AWAITING_QA|QA_FAILED)$"),
     risk: str | None = Query(None, pattern="^(high|medium|low)$"),
     rule: str | None = Query(None, max_length=20),
     assignment: str | None = Query(None, pattern="^(unassigned|mine)$"),

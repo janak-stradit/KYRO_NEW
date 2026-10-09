@@ -153,6 +153,8 @@ def test_quality_check_is_recorded_by_someone_else(client, auth_headers, db_sess
     body = failed.json()
     assert body["qa_result"] == "FAIL" and body["qa_by"] == str(qa_user.id) and body["qa_at"]
     assert body["resolution_outcome"] == "FALSE_POSITIVE" and body["status"] == "RESOLVED"  # the outcome is untouched
+    queue = lambda status: [a["id"] for a in client.get("/api/v1/alerts/queue", params={"status_filter": status}, headers=qa).json()["items"]]
+    assert queue("QA_FAILED") == [alert["id"]] and queue("AWAITING_QA") == []
     # The QA reviewer cannot change the outcome
     assert client.put(f"{url}/resolve", json=_FP_RESOLUTION, headers=qa).status_code == 403
 
@@ -205,6 +207,7 @@ def test_admin_creates_a_user_who_can_sign_in(client, admin_headers, admin_user,
     ({"password": "short"}, 422),
     ({"username": "has space"}, 422),
     ({"email": "not-an-email"}, 422),
+    ({"email": "new.mlro@kyro.local"}, 201),
 ])
 def test_invalid_users_are_rejected(client, admin_headers, change, status_code):
     assert client.post("/api/v1/users", json={**_NEW_USER, **change}, headers=admin_headers).status_code == status_code
