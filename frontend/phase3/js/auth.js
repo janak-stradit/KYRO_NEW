@@ -86,12 +86,15 @@ const Auth = {
      * the header and notify listeners via the "kyro:user" event.
      */
     async ensureUser() {
+        // Ask the server once per page load: an administrator may have changed
+        // this user's role since the profile was stored.
         const stored = this.getUser();
-        if (stored && stored.username) return stored;
-        if (!window.API || !API.get) return null;
+        if (this._userFresh && stored && stored.username) return stored;
+        if (!window.API || !API.get) return stored;
         try {
             const user = await API.get("/auth/me");
             if (user && user.username) {
+                this._userFresh = true;
                 localStorage.setItem(this.userKey, JSON.stringify(user));
                 this.updateUserDisplay(user);
                 $(document).trigger("kyro:user", [user]);
@@ -100,7 +103,7 @@ const Auth = {
         } catch (error) {
             console.warn("Could not load user profile:", error);
         }
-        return null;
+        return stored;
     },
     
     /**
@@ -282,7 +285,8 @@ const Auth = {
             // Update user details if dropdown elements exist
             $("#userDropdownName").text(user.full_name || user.username || "Compliance Analyst");
             $("#userDropdownEmail").text(user.email || "analyst@kyro.com");
-            $("#userDropdownRole").text((user.role || "ANALYST").toUpperCase());
+            $("#userDropdownRole").text(user.role_label || user.role || "");
+            this.applyNavPermissions();
             
             // Set initials
             const name = user.full_name || user.username || "A";
@@ -304,14 +308,36 @@ const Auth = {
         return user ? user.role : null;
     },
     
-    /**
-     * Check if user has permission
-     */
-    hasPermission(permission) {
+    /** True when the signed-in user's role holds any one of the given permissions. */
+    can(...permissions) {
         const user = this.getUser();
-        if (!user || !user.permissions) return false;
-        
-        return user.permissions.includes(permission) || user.role === 'admin';
+        const held = (user && user.permissions) || [];
+        return permissions.some(p => held.includes(p));
+    },
+
+    hasPermission(permission) {
+        return this.can(permission);
+    },
+
+    // Navigation entries that need a permission; the server enforces the same rules
+    NAV_PERMISSIONS: {
+        cases: ['cases.view'],
+        'periodic-reviews': ['cases.view'],
+        patterns: ['cases.view'],
+        feeds: ['feeds.load'],
+        admin: ['users.manage', 'audit.read'],
+        case: ['cases.view']
+    },
+
+    canOpen(page) {
+        const needed = this.NAV_PERMISSIONS[page];
+        return !needed || this.can(...needed);
+    },
+
+    applyNavPermissions() {
+        Object.entries(this.NAV_PERMISSIONS).forEach(([page, permissions]) => {
+            $(`a.nav-link[data-page="${page}"], a.dropdown-item[data-page="${page}"]`).toggleClass("d-none", !this.can(...permissions));
+        });
     }
 };
 

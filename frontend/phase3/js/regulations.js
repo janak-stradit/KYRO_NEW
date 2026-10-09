@@ -19,8 +19,8 @@ const Regulations = {
         return value ? String(value).replace(/_/g, ' ').toLowerCase().replace(/^\w/, c => c.toUpperCase()) : '—';
     },
 
-    canReview() {
-        return ['ADMIN', 'COMPLIANCE_OFFICER'].includes(String(Auth.getUserRole() || '').toUpperCase());
+    canReview(permission) {
+        return Auth.can(permission);
     },
 
     async init() {
@@ -32,7 +32,7 @@ const Regulations = {
     },
 
     renderLayout() {
-        const reviewer = this.canReview();
+        const reviewer = this.canReview('regulatory.ingest');
         $("#mainContent").html(`
             <div class="kyro-page">
                 <div class="kyro-page-head">
@@ -133,7 +133,7 @@ const Regulations = {
                             <h2>Rule changes</h2>
                             <small class="text-muted">A threshold change takes effect only after a second person approves it, on its effective date</small>
                         </div>
-                        ${reviewer ? `
+                        ${this.canReview('rules.propose') ? `
                         <div class="rc-toolbar__controls">
                             <button type="button" class="btn btn-sm rc-actions__view" id="regProposeRuleChange">
                                 <i class="fas fa-plus me-1"></i>Propose a change
@@ -215,7 +215,7 @@ const Regulations = {
                             <small class="text-muted">Confirmed obligations, the KYRO control that meets each one, and its live setting</small>
                         </div>
                         <div class="rc-toolbar__controls">
-                            ${reviewer ? `
+                            ${this.canReview('mappings.manage') ? `
                             <button type="button" class="btn btn-sm rc-actions__view" id="regProposeMappings">
                                 <i class="fas fa-wand-magic-sparkles me-1"></i>Propose mappings
                             </button>` : ''}
@@ -343,7 +343,7 @@ const Regulations = {
             this.sources = await API.get('/regulatory/sources');
             const counts = await Promise.all(this.sources.map(s =>
                 API.get('/regulatory/sections', { source_id: s.id, page_size: 1 }).then(p => p.total).catch(() => null)));
-            const reviewer = this.canReview();
+            const reviewer = this.canReview('obligations.manage');
             $("#regSourcesBody").html(this.sources.map((s, i) => `
                 <tr>
                     <td class="px-3 py-2"><strong>${escapeHtml(s.name)}</strong></td>
@@ -390,7 +390,7 @@ const Regulations = {
             return;
         }
 
-        const reviewer = this.canReview();
+        const reviewer = this.canReview('obligations.manage');
         const mock = this.obligations.some(o => o.extracted_by === 'mock');
         const rows = this.obligations.map(o => `
             <tr>
@@ -440,7 +440,7 @@ const Regulations = {
             $("#regNoticesBody").html('<tr><td colspan="6" class="rc-empty">Could not load notices.</td></tr>');
             return;
         }
-        const reviewer = this.canReview();
+        const reviewer = this.canReview('changes.assess');
         const today = new Date().toISOString().slice(0, 10);
         const statusChip = { ACTION_REQUIRED: ['high', 'Action required'], NO_ACTION: ['muted', 'No action needed'], CLOSED: ['low', 'Closed'] };
         $("#regNoticesBody").html(notices.map(n => {
@@ -501,7 +501,7 @@ const Regulations = {
             c = await API.get(`/changes/regulatory/${id}`);
         } catch (error) { return; }
         const a = c.affected || {};
-        const reviewer = this.canReview();
+        const reviewer = this.canReview('changes.assess');
         const keys = (a.config_keys || []).filter(k => this.NUMERIC_SETTINGS[k]);
         $("#regChangeModal").remove();
         $("body").append(`
@@ -533,7 +533,7 @@ const Regulations = {
                         <div class="modal-footer">
                             <button type="button" class="btn btn-outline-primary" data-bs-dismiss="modal">Close</button>
                             ${reviewer ? `
-                            ${keys.length ? `<button type="button" class="btn btn-outline-primary" id="regChangePropose">Propose rule change</button>` : ''}
+                            ${keys.length && this.canReview('rules.propose') ? `<button type="button" class="btn btn-outline-primary" id="regChangePropose">Propose rule change</button>` : ''}
                             <button type="button" class="btn btn-outline-primary reg-assess" data-status="NO_ACTION">No action needed</button>
                             <button type="button" class="btn btn-primary reg-assess" data-status="ACTION_REQUIRED">Action required</button>` : ''}
                         </div>
@@ -575,14 +575,14 @@ const Regulations = {
             return;
         }
         const me = (Auth.getUser() || {}).id;
-        const reviewer = this.canReview();
+        const reviewer = this.canReview('rules.approve');
         const chip = { PENDING_APPROVAL: 'medium', APPROVED: 'medium', ACTIVE: 'low', REJECTED: 'high', CANCELLED: 'muted' };
         const label = { PENDING_APPROVAL: 'Awaiting approval', APPROVED: 'Approved, scheduled', ACTIVE: 'In effect', REJECTED: 'Rejected', CANCELLED: 'Withdrawn' };
         $("#regRuleChangesBody").html(changes.map(c => {
             const b = c.backtest;
             const mine = c.proposed_by === me;
             let actions = '';
-            if (reviewer && c.status === 'PENDING_APPROVAL') {
+            if (c.status === 'PENDING_APPROVAL' && (mine ? this.canReview('rules.propose') : reviewer)) {
                 actions = mine
                     ? `<button type="button" class="btn btn-sm rc-actions__view reg-rule-decide" data-id="${escapeHtml(c.id)}" data-decision="CANCELLED">Withdraw</button>`
                     : `<button type="button" class="btn btn-sm rc-actions__view reg-rule-decide" data-id="${escapeHtml(c.id)}" data-decision="APPROVED">Approve</button>
@@ -723,7 +723,7 @@ const Regulations = {
             return;
         }
         const s = data.summary;
-        const reviewer = this.canReview();
+        const reviewer = this.canReview('mappings.manage');
         const chip = { CONFIRMED: 'low', PROPOSED: 'medium', GAP: 'high' };
         const label = { CONFIRMED: 'Covered', PROPOSED: 'Proposed', GAP: 'Gap' };
 
@@ -783,7 +783,7 @@ const Regulations = {
     },
 
     showReviewModal(o) {
-        const editable = this.canReview() && o.status !== 'SUPERSEDED';
+        const editable = this.canReview('obligations.manage') && o.status !== 'SUPERSEDED';
         const dis = editable ? '' : 'disabled';
         const html = `
             <div class="modal fade" id="regReviewModal" tabindex="-1" aria-labelledby="regReviewTitle" aria-hidden="true">

@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.ai import AIDisabledError, AIGateway, AIProviderError
 from app.database import get_db
-from app.deps import PaginationParams, get_current_user, require_role
+from app.deps import PaginationParams, get_current_user, require_permission
 from app.models.obligation import Obligation
 from app.models.obligation_mapping import ObligationMapping
 from app.models.regulatory import RegulatoryIngestionRun, RegulatorySection, RegulatorySource
@@ -52,7 +52,7 @@ def list_sources(db: Session = Depends(get_db)) -> list[RegulatorySource]:
 def trigger_ingest(
     source_id: uuid.UUID | None = None,
     db: Session = Depends(get_db),
-    user: User = Depends(require_role("ADMIN", "COMPLIANCE_OFFICER")),
+    user: User = Depends(require_permission("regulatory.ingest")),
 ) -> list[RegulatoryIngestionRun]:
     """Pull one source, or every enabled source, now. Runs are also scheduled daily."""
     if source_id is None:
@@ -127,7 +127,7 @@ def extract_obligations(
     section_id: uuid.UUID | None = None,
     redo: bool = False,
     db: Session = Depends(get_db),
-    user: User = Depends(require_role("ADMIN", "COMPLIANCE_OFFICER")),
+    user: User = Depends(require_permission("obligations.manage")),
 ) -> dict:
     """
     Have the AI propose obligations for one section, or for every current
@@ -210,7 +210,7 @@ def review_obligation(
     obligation_id: uuid.UUID,
     data: ObligationReview,
     db: Session = Depends(get_db),
-    user: User = Depends(require_role("ADMIN", "COMPLIANCE_OFFICER")),
+    user: User = Depends(require_permission("obligations.manage")),
 ) -> Obligation:
     obligation = db.get(Obligation, obligation_id)
     if obligation is None:
@@ -239,7 +239,7 @@ def list_controls() -> list[dict]:
 @router.post("/mappings/propose")
 def propose_mappings(
     db: Session = Depends(get_db),
-    user: User = Depends(require_role("ADMIN", "COMPLIANCE_OFFICER")),
+    user: User = Depends(require_permission("mappings.manage")),
 ) -> dict:
     """Have the AI propose controls for every confirmed obligation that has no mapping yet."""
     provider = AIGateway(db).status()["provider"]
@@ -256,7 +256,7 @@ def propose_mappings(
 def add_mapping(
     data: MappingCreate,
     db: Session = Depends(get_db),
-    user: User = Depends(require_role("ADMIN", "COMPLIANCE_OFFICER")),
+    user: User = Depends(require_permission("mappings.manage")),
 ) -> ObligationMapping:
     """Map a control to an obligation by hand; it is confirmed immediately."""
     obligation = db.get(Obligation, data.obligation_id)
@@ -276,7 +276,7 @@ def review_mapping(
     mapping_id: uuid.UUID,
     data: MappingReview,
     db: Session = Depends(get_db),
-    user: User = Depends(require_role("ADMIN", "COMPLIANCE_OFFICER")),
+    user: User = Depends(require_permission("mappings.manage")),
 ) -> ObligationMapping:
     mapping = db.get(ObligationMapping, mapping_id)
     if mapping is None:

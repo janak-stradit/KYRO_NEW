@@ -9,14 +9,14 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.deps import PaginationParams, get_current_user
+from app.deps import PaginationParams, get_current_user, require_permission
 from app.models.customer import Customer, KYCReview
 from app.models.user import User
 from app.schemas.common import Page
 from app.schemas.customer import KYCReviewOut, KYCReviewUpdate
 from app.services.audit_service import log_action
 
-router = APIRouter(prefix="/api/v1/kyc-reviews", tags=["kyc"], dependencies=[Depends(get_current_user)])
+router = APIRouter(prefix="/api/v1/kyc-reviews", tags=["kyc"], dependencies=[Depends(require_permission("cases.view"))])
 
 
 @router.post("", response_model=KYCReviewOut, status_code=status.HTTP_201_CREATED)
@@ -24,7 +24,7 @@ def trigger_review(
     customer_id: uuid.UUID,
     review_type: str = "ADHOC",
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("kyc.review")),
 ) -> KYCReview:
     if db.get(Customer, customer_id) is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Customer not found")
@@ -54,7 +54,7 @@ def list_reviews(
 
 @router.put("/{review_id}", response_model=KYCReviewOut)
 def update_review(
-    review_id: uuid.UUID, data: KYCReviewUpdate, db: Session = Depends(get_db), user: User = Depends(get_current_user)
+    review_id: uuid.UUID, data: KYCReviewUpdate, db: Session = Depends(get_db), user: User = Depends(require_permission("kyc.review"))
 ) -> KYCReview:
     review = db.get(KYCReview, review_id)
     if review is None:

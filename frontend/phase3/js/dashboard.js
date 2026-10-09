@@ -291,6 +291,10 @@ const Dashboard = {
     async loadRecentAlerts() {
         const $list = $("#kdRecentAlerts");
         if (!$list.length) return;
+        if (!Auth.can('cases.view')) {
+            $list.html(`<li class="kd-empty">Individual alerts are not shown for your role.</li>`);
+            return;
+        }
         try {
             const alerts = (await API.get("/dashboard/recent-alerts")) || [];
             if (!alerts.length) {
@@ -317,6 +321,7 @@ const Dashboard = {
     },
 
     async loadReviewCounts() {
+        if (!Auth.can('cases.view')) return;
         try {
             const [scheduled, overdue] = await Promise.all([
                 API.get("/kyc-reviews", { review_status: "SCHEDULED", page_size: 1 }),

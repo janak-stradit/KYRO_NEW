@@ -15,8 +15,9 @@ from app.config import get_settings
 from app.database import get_db
 from app.deps import get_current_user
 from app.models.user import User
+from app.permissions import ROLES, permissions_for
 from app.rate_limit import limiter
-from app.schemas.auth import RefreshRequest, Token, UserCreate, UserOut
+from app.schemas.auth import RefreshRequest, Token, UserCreate, UserOut, CurrentUser
 from app.utils.security import create_access_token, create_refresh_token, decode_token, hash_password, verify_password
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
@@ -90,6 +91,11 @@ def refresh(payload: RefreshRequest, db: Session = Depends(get_db)) -> Token:
     )
 
 
-@router.get("/me", response_model=UserOut)
-def me(user: User = Depends(get_current_user)) -> User:
-    return user
+@router.get("/me", response_model=CurrentUser)
+def me(user: User = Depends(get_current_user)) -> dict:
+    definition = ROLES.get(user.role)
+    return {
+        **UserOut.model_validate(user).model_dump(),
+        "role_label": definition.label if definition else user.role,
+        "permissions": sorted(permissions_for(user.role)),
+    }

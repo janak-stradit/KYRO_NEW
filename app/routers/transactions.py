@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.deps import PaginationParams, get_current_user
+from app.deps import PaginationParams, get_current_user, require_permission
 from app.models.account import Account
 from app.models.customer import Customer
 from app.models.transaction import Transaction as TransactionModel
@@ -27,7 +27,7 @@ from app.schemas.transaction import (
 from app.services.audit_service import log_action
 from app.services.rules_engine import apply_to_transaction
 
-router = APIRouter(prefix="/api/v1/transactions", tags=["transactions"], dependencies=[Depends(get_current_user)])
+router = APIRouter(prefix="/api/v1/transactions", tags=["transactions"], dependencies=[Depends(require_permission("cases.view"))])
 
 
 def _get_transaction_or_404(db: Session, transaction_id: uuid.UUID) -> TransactionModel:
@@ -58,7 +58,7 @@ def _ingest_one(db: Session, data: TransactionCreate, performed_by: uuid.UUID | 
 
 
 @router.post("", response_model=TransactionOut, status_code=status.HTTP_201_CREATED)
-def create(data: TransactionCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> TransactionModel:
+def create(data: TransactionCreate, db: Session = Depends(get_db), user: User = Depends(require_permission("transactions.ingest"))) -> TransactionModel:
     txn = _ingest_one(db, data, user.id)
     db.commit()
     db.refresh(txn)
@@ -67,7 +67,7 @@ def create(data: TransactionCreate, db: Session = Depends(get_db), user: User = 
 
 @router.post("/batch", response_model=list[TransactionOut], status_code=status.HTTP_201_CREATED)
 def create_batch(
-    data: TransactionBatchCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)
+    data: TransactionBatchCreate, db: Session = Depends(get_db), user: User = Depends(require_permission("transactions.ingest"))
 ) -> list[TransactionModel]:
     txns = [_ingest_one(db, item, user.id) for item in data.transactions]
     db.commit()

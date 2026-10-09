@@ -15,10 +15,11 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database import get_db, SessionLocal
-from app.deps import PaginationParams, get_current_user, require_role
+from app.deps import PaginationParams, get_current_user, require_permission
 from app.models.alert import Alert as AlertModel
 from app.models.customer import Customer
 from app.models.user import User
+from app.permissions import has_permission
 from app.schemas.alert import (
     OUTCOME_REASONS,
     RESOLUTION_OUTCOMES,
@@ -26,6 +27,7 @@ from app.schemas.alert import (
     AlertAssign,
     AlertEscalate,
     AlertOut,
+    AlertQA,
     AlertResolve,
     ResolutionOptions,
 )
@@ -34,7 +36,15 @@ from app.services import customer_risk_service, feedback_service
 from app.services.audit_service import log_action
 from app.utils.security import decode_token
 
-router = APIRouter(prefix="/api/v1/alerts", tags=["alerts"])
+router = APIRouter(prefix="/api/v1/alerts", tags=["alerts"], dependencies=[Depends(require_permission("cases.view"))])
+# The live stream authenticates from its query string, so it sits outside the header-based check
+stream_router = APIRouter(prefix="/api/v1/alerts", tags=["alerts"])
+
+_OUTCOME_PERMISSION = {
+    "FALSE_POSITIVE": "alerts.close_false_positive",
+    "TRUE_POSITIVE_NO_SAR": "alerts.close",
+    "SAR_FILED": "sar.approve",
+}
 
 
 def _get_alert_or_404(db: Session, alert_id: uuid.UUID) -> AlertModel:
@@ -112,13 +122,15 @@ def _get_user_from_token(token: str, db: Session) -> User:
     return user
 
 
-@router.get("/stream")
+@stream_router.get("/stream")
 async def stream_alerts(
     token: str,
     db: Session = Depends(get_db),
 ) -> StreamingResponse:
-    # Authenticate query param token
-    _get_user_from_token(token, db)
+    # EventSource cannot send headers, so the token arrives as a query parameter
+    user = _get_user_from_token(token, db)
+    if not has_permission(user.role, "cases.view"):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Insufficient permissions")
 
     async def event_generator():
         yield "event: heartbeat\ndata: {}\n\n"
@@ -322,7 +334,7 @@ def resolution_options(user: User = Depends(get_current_user)) -> dict:
 def disposition_baseline(
     days: int = Query(90, ge=1, le=730),
     db: Session = Depends(get_db),
-    user: User = Depends(require_role("COMPLIANCE_OFFICER", "ADMIN")),
+    user: User = Depends(require_permission("alerts.baseline")),
 ) -> dict:
     """False-positive rate, volumes and time-to-disposition, overall and per rule."""
     return feedback_service.disposition_baseline(db, days=days)
@@ -338,7 +350,7 @@ def assign(
     alert_id: uuid.UUID,
     data: AlertAssign,
     db: Session = Depends(get_db),
-    user: User = Depends(require_role("ANALYST", "COMPLIANCE_OFFICER", "ADMIN")),
+    user: User = Depends(require_permission("alerts.assign")),
 ) -> AlertModel:
     alert = _get_alert_or_404(db, alert_id)
     alert.assigned_to = data.assigned_to
@@ -354,9 +366,14 @@ def resolve(
     alert_id: uuid.UUID,
     data: AlertResolve,
     db: Session = Depends(get_db),
-    user: User = Depends(require_role("COMPLIANCE_OFFICER", "ADMIN")),
+    user: User = Depends(require_permission("alerts.close_false_positive", "alerts.close", "sar.approve")),
 ) -> AlertModel:
     alert = _get_alert_or_404(db, alert_id)
+    # Each outcome is its own decision: anyone on the queue may clear a false
+    # positive, but only the MLRO (or an administrator) may approve a SAR.
+    needed = _OUTCOME_PERMISSION[data.outcome]
+    if not has_permission(user.role, needed):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, f"Your role cannot record the outcome {data.outcome}")
     if alert.status == "RESOLVED":
         raise HTTPException(status.HTTP_409_CONFLICT, "Alert is already resolved")
     alert.status = "RESOLVED"
@@ -390,12 +407,36 @@ def resolve(
     return alert
 
 
+@router.put("/{alert_id}/qa", response_model=AlertOut)
+def quality_check(
+    alert_id: uuid.UUID,
+    data: AlertQA,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission("alerts.qa")),
+) -> AlertModel:
+    """Record whether a resolved case followed policy. The outcome itself is not changed."""
+    alert = _get_alert_or_404(db, alert_id)
+    if alert.status != "RESOLVED":
+        raise HTTPException(status.HTTP_409_CONFLICT, "Only a resolved case can be quality-checked")
+    if alert.resolved_by == user.id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "A case must be quality-checked by someone other than the person who resolved it")
+    alert.qa_result = data.result
+    alert.qa_notes = data.notes
+    alert.qa_by = user.id
+    alert.qa_at = datetime.now(timezone.utc)
+    log_action(db, entity_type="ALERT", entity_id=alert.id, action="REVIEW", performed_by=user.id,
+               new_values={"qa_result": data.result, "qa_notes": data.notes})
+    db.commit()
+    db.refresh(alert)
+    return alert
+
+
 @router.put("/{alert_id}/escalate", response_model=AlertOut)
 def escalate(
     alert_id: uuid.UUID,
     data: AlertEscalate,
     db: Session = Depends(get_db),
-    user: User = Depends(require_role("ANALYST", "COMPLIANCE_OFFICER", "ADMIN")),
+    user: User = Depends(require_permission("alerts.escalate")),
 ) -> AlertModel:
     alert = _get_alert_or_404(db, alert_id)
     if alert.status == "RESOLVED":

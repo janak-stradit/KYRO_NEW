@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.deps import PaginationParams, get_current_user, require_role
+from app.deps import PaginationParams, get_current_user, require_permission
 from app.models.customer import CustomerRiskProfile, KYCReview, PEPSanctionsScreening
 from app.models.customer import Customer as CustomerModel
 from app.models.user import User
@@ -28,7 +28,7 @@ from app.services.audit_service import log_action
 from app.services.customer_service import create_customer, update_customer
 from app.services.screening_service import screen_customer
 
-router = APIRouter(prefix="/api/v1/customers", tags=["customers"], dependencies=[Depends(get_current_user)])
+router = APIRouter(prefix="/api/v1/customers", tags=["customers"], dependencies=[Depends(require_permission("cases.view"))])
 
 
 def _get_customer_or_404(db: Session, customer_id: uuid.UUID) -> CustomerModel:
@@ -39,13 +39,13 @@ def _get_customer_or_404(db: Session, customer_id: uuid.UUID) -> CustomerModel:
 
 
 @router.post("", response_model=CustomerOut, status_code=status.HTTP_201_CREATED)
-def create(data: CustomerCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> CustomerModel:
+def create(data: CustomerCreate, db: Session = Depends(get_db), user: User = Depends(require_permission("customers.edit"))) -> CustomerModel:
     return create_customer(db, data, performed_by=user.id)
 
 
 @router.post("/risk-assessment")
 def assess_all_customers(
-    db: Session = Depends(get_db), user: User = Depends(require_role("ADMIN", "COMPLIANCE_OFFICER"))
+    db: Session = Depends(get_db), user: User = Depends(require_permission("customers.assess_risk"))
 ) -> dict:
     """Recalculate every customer's risk rating from its current risk factors."""
     result = customer_risk_service.assess_all(db, performed_by=user.id)
@@ -86,14 +86,14 @@ def get_customer(customer_id: uuid.UUID, db: Session = Depends(get_db)) -> Custo
 
 @router.put("/{customer_id}", response_model=CustomerOut)
 def update(
-    customer_id: uuid.UUID, data: CustomerUpdate, db: Session = Depends(get_db), user: User = Depends(get_current_user)
+    customer_id: uuid.UUID, data: CustomerUpdate, db: Session = Depends(get_db), user: User = Depends(require_permission("customers.edit"))
 ) -> CustomerModel:
     customer = _get_customer_or_404(db, customer_id)
     return update_customer(db, customer, data, performed_by=user.id)
 
 
 @router.delete("/{customer_id}", status_code=status.HTTP_204_NO_CONTENT)
-def soft_delete(customer_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> None:
+def soft_delete(customer_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(require_permission("customers.edit"))) -> None:
     customer = _get_customer_or_404(db, customer_id)
     customer.kyc_status = "REJECTED"
     log_action(db, entity_type="CUSTOMER", entity_id=customer.id, action="DELETE", performed_by=user.id)
@@ -114,7 +114,7 @@ def list_kyc_reviews(customer_id: uuid.UUID, db: Session = Depends(get_db)) -> l
 
 @router.post("/{customer_id}/kyc-reviews", response_model=KYCReviewOut, status_code=status.HTTP_201_CREATED)
 def create_kyc_review(
-    customer_id: uuid.UUID, data: KYCReviewCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)
+    customer_id: uuid.UUID, data: KYCReviewCreate, db: Session = Depends(get_db), user: User = Depends(require_permission("kyc.review"))
 ) -> KYCReview:
     _get_customer_or_404(db, customer_id)
     review = KYCReview(customer_id=customer_id, **data.model_dump())
@@ -141,7 +141,7 @@ def get_screening(customer_id: uuid.UUID, db: Session = Depends(get_db)) -> list
 def screen(
     customer_id: uuid.UUID,
     db: Session = Depends(get_db),
-    user: User = Depends(require_role("ANALYST", "COMPLIANCE_OFFICER", "ADMIN")),
+    user: User = Depends(require_permission("screening.run")),
 ) -> list[PEPSanctionsScreening]:
     customer = _get_customer_or_404(db, customer_id)
     results = screen_customer(db, customer, triggered_by=str(user.id))

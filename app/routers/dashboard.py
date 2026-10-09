@@ -12,7 +12,7 @@ from sqlalchemy import case, func, text
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.deps import get_current_user
+from app.deps import get_current_user, require_permission
 from app.models.alert import Alert
 from app.models.customer import Customer
 from app.models.transaction import Transaction
@@ -203,7 +203,7 @@ def get_system_health(db: Session = Depends(get_db)) -> dict[str, Any]:
     }
 
 
-@router.get("/recent-alerts")
+@router.get("/recent-alerts", dependencies=[Depends(require_permission("cases.view"))])
 def get_recent_alerts(db: Session = Depends(get_db)) -> list[dict[str, Any]]:
     """Get recent alerts for the dashboard feed."""
 
@@ -264,7 +264,7 @@ def get_behavioral_patterns(db: Session = Depends(get_db)) -> dict[str, Any]:
     }
 
 
-@router.get("/patterns/customers")
+@router.get("/patterns/customers", dependencies=[Depends(require_permission("cases.view"))])
 def get_pattern_customers(
     pattern: str | None = None,
     q: str | None = None,

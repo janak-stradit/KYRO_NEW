@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.ai import AIDisabledError, AIProviderError
 from app.database import get_db
-from app.deps import get_current_user
+from app.deps import get_current_user, require_permission
 from app.models.alert import Alert
 from app.models.customer import Customer
 from app.models.document import DOCUMENT_TYPES, Document, DocumentExtraction, DocumentPage
@@ -24,7 +24,9 @@ from app.models.user import User
 from app.services import document_service
 from app.services.document_service import APPLICABLE, DocumentError
 
-router = APIRouter(prefix="/api/v1/documents", tags=["documents"], dependencies=[Depends(get_current_user)])
+router = APIRouter(
+    prefix="/api/v1/documents", tags=["documents"], dependencies=[Depends(require_permission("cases.view"))]
+)
 
 
 class ExtractionOut(BaseModel):
@@ -113,7 +115,7 @@ async def upload_document(
     alert_id: uuid.UUID | None = Form(None),
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("documents.manage")),
 ) -> dict[str, Any]:
     """Store a PDF, Word or text document against a customer and read its text."""
     if doc_type not in DOCUMENT_TYPES:
@@ -166,7 +168,7 @@ def download_document(document_id: uuid.UUID, db: Session = Depends(get_db)) -> 
 
 
 @router.post("/{document_id}/extract", response_model=DocumentDetail)
-def extract_fields(document_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> dict[str, Any]:
+def extract_fields(document_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(require_permission("documents.manage"))) -> dict[str, Any]:
     """Have the AI read the fields for this document type, then check each against KYRO's records."""
     document = _document_or_404(db, document_id)
     try:
@@ -185,7 +187,7 @@ def review_extraction(
     extraction_id: uuid.UUID,
     data: ExtractionReview,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("documents.manage")),
 ) -> dict[str, Any]:
     """Accept (optionally with a corrected value) or reject one extracted field."""
     extraction = db.get(DocumentExtraction, extraction_id)

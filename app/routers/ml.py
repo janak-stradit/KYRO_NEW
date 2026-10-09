@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.deps import get_current_user, require_role
+from app.deps import get_current_user, require_permission
 from app.ml.registry.model_registry import ModelNotFoundError, ModelRegistry
 from app.ml.scoring.batch_scorer import score_batch
 from app.ml.scoring.real_time_scorer import RealTimeScorer, ScoringUnavailableError
@@ -164,7 +164,7 @@ def score_customer(customer_id: uuid.UUID, db: Session = Depends(get_db)) -> Sco
 
 
 @router.post("/train", response_model=TrainResponse)
-def train(data: TrainRequest, user: User = Depends(require_role("ADMIN"))) -> TrainResponse:
+def train(data: TrainRequest, user: User = Depends(require_permission("ml.train"))) -> TrainResponse:
     if data.run_async:
         from app.tasks.ml_tasks import run_training_pipeline_task
 

@@ -223,8 +223,7 @@ const Cases = {
 
     // False-positive rate and time-to-disposition per rule, from recorded outcomes
     async loadBaseline() {
-        const role = String(Auth.getUserRole() || '').toUpperCase();
-        if (!['ADMIN', 'COMPLIANCE_OFFICER'].includes(role)) return;
+        if (!Auth.can('alerts.baseline')) return;
 
         let data;
         try {
@@ -408,6 +407,8 @@ const Cases = {
             ESCALATED: ['#fee2e2', '#b91c1c'], RESOLVED: ['#dcfce7', '#15803d']
         };
         const canAct = (c) => c.status !== 'RESOLVED';
+        const mayAssign = Auth.can('alerts.assign');
+        const mayResolve = this.canDecide();
 
         $("#casesTableBody").html(this.casesData.map(c => {
             const a = c.fullData;
@@ -449,10 +450,11 @@ const Cases = {
                             <button type="button" class="btn btn-sm rc-actions__view view-case-btn" data-case="${escapeHtml(c.caseId)}">
                                 <i class="far fa-eye me-1"></i>View
                             </button>
-                            ${canAct(c) ? `
+                            ${canAct(c) && mayAssign ? `
                             <button type="button" class="btn btn-sm rc-actions__icon assign-btn" data-case="${escapeHtml(c.caseId)}" title="Assign" aria-label="Assign alert for ${escapeHtml(displayName)}">
                                 <i class="fas fa-user-plus"></i>
-                            </button>
+                            </button>` : ''}
+                            ${canAct(c) && mayResolve ? `
                             <button type="button" class="btn btn-sm rc-actions__icon resolve-btn" data-case="${escapeHtml(c.caseId)}" title="Resolve" aria-label="Resolve alert for ${escapeHtml(displayName)}">
                                 <i class="fas fa-check-double"></i>
                             </button>` : ''}
@@ -476,12 +478,29 @@ const Cases = {
 
     // Records the disposition (outcome + reason codes + notes) for a case.
     // "Escalated" goes to /escalate; the other outcomes close the alert.
+    // Each outcome is a separate decision with its own permission
+    OUTCOME_PERMISSION: {
+        FALSE_POSITIVE: 'alerts.close_false_positive',
+        TRUE_POSITIVE_NO_SAR: 'alerts.close',
+        SAR_FILED: 'sar.approve',
+        ESCALATED: 'alerts.escalate'
+    },
+
+    canDecide() {
+        return Auth.can(...Object.values(this.OUTCOME_PERMISSION));
+    },
+
     async showResolveModal(caseData) {
         let options;
         try {
             options = await API.get('/alerts/resolution-options');
         } catch (error) {
             showToast('error', 'Could not load resolution options. Please try again.');
+            return;
+        }
+        options.outcomes = options.outcomes.filter(o => Auth.can(this.OUTCOME_PERMISSION[o.code]));
+        if (!options.outcomes.length) {
+            showToast('error', 'Your role cannot record an outcome on this case.');
             return;
         }
         const reasonLabels = Object.fromEntries(options.reasons.map(r => [r.code, r.label]));

@@ -13,7 +13,7 @@ const Feeds = {
     saved: [],
 
     canUse() {
-        return ['ADMIN', 'COMPLIANCE_OFFICER'].includes(String(Auth.getUserRole() || '').toUpperCase());
+        return Auth.can('feeds.load');
     },
 
     async init() {
@@ -43,7 +43,7 @@ const Feeds = {
                 </section>
                 <div id="feedMapping"></div>
                 <div id="feedResult"></div>` : `
-                <section class="card kd-panel mb-4"><p class="cp-empty mb-0">Loading data feeds is limited to compliance officers and admins.</p></section>`}
+                <section class="card kd-panel mb-4"><p class="cp-empty mb-0">Your role cannot load data feeds. Past runs are listed below.</p></section>`}
                 <div class="card border-0 rc-table-card">
                     <div class="rc-toolbar"><div class="rc-toolbar__title"><h2>Recent checks and loads</h2><small class="text-muted">Every run is kept with its file name and result</small></div></div>
                     <div class="table-responsive">

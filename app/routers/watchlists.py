@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.deps import PaginationParams, get_current_user, require_role
+from app.deps import PaginationParams, get_current_user, require_permission
 from app.models.watchlist import WatchlistEntity, WatchlistIngestionRun, WatchlistSource
 from app.models.user import User
 from app.schemas.common import Page
@@ -34,7 +34,7 @@ def list_sources(db: Session = Depends(get_db)) -> list[WatchlistSource]:
 @router.post("/ingest", response_model=IngestResponse, status_code=status.HTTP_202_ACCEPTED)
 def trigger_ingest(
     data: IngestRequest,
-    user: User = Depends(require_role("ADMIN", "COMPLIANCE_OFFICER")),
+    user: User = Depends(require_permission("watchlists.ingest")),
 ) -> IngestResponse:
     if data.run_async:
         from app.tasks.watchlist_tasks import ingest_watchlists_task

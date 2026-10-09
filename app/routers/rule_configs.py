@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.database import get_db
-from app.deps import get_current_user, require_role
+from app.deps import get_current_user, require_permission
 from app.models.rule_config import RuleConfig
 from app.models.user import User
 from app.schemas.rule_config import RuleConfigOut, RuleConfigUpdate
@@ -72,7 +72,7 @@ def upsert(
     key: str,
     data: RuleConfigUpdate,
     db: Session = Depends(get_db),
-    user: User = Depends(require_role("ADMIN", "COMPLIANCE_OFFICER")),
+    user: User = Depends(require_permission("rules.edit_direct")),
 ) -> RuleConfig:
     _validate_value(key, data.value)
     if get_settings().rule_changes_require_approval:
@@ -93,7 +93,7 @@ def upsert(
 def deactivate(
     config_id: uuid.UUID,
     db: Session = Depends(get_db),
-    user: User = Depends(require_role("ADMIN", "COMPLIANCE_OFFICER")),
+    user: User = Depends(require_permission("rules.edit_direct")),
 ) -> None:
     row = rule_config_service.deactivate_config(db, config_id, performed_by=user.id)
     if row is None:

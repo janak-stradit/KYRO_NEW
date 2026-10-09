@@ -41,7 +41,7 @@ const Profile = {
                             <h4 class="fw-bold mb-1 text-dark">${user.full_name || user.username}</h4>
                             <p class="text-muted mb-3">@${user.username}</p>
                             <div class="d-inline-block px-3 py-1 rounded-pill bg-light text-primary border mb-4" style="font-size: 0.85rem; font-weight: 600;">
-                                <i class="fas fa-shield-alt me-1"></i> ${user.role}
+                                <i class="fas fa-shield-alt me-1"></i> ${escapeHtml(user.role_label || user.role)}
                             </div>
                             
                             <div class="border-top pt-3 text-start small">
@@ -83,7 +83,7 @@ const Profile = {
                                     </div>
                                     <div class="col-md-6">
                                         <label class="form-label fw-semibold text-muted small">Security Role</label>
-                                        <div class="form-control bg-light border-0 py-2 text-dark font-monospace">${user.role}</div>
+                                        <div class="form-control bg-light border-0 py-2 text-dark font-monospace">${escapeHtml(user.role_label || user.role)}</div>
                                     </div>
                                     <div class="col-md-6">
                                         <label class="form-label fw-semibold text-muted small">Last Login Timestamp</label>
@@ -108,18 +108,18 @@ const Profile = {
                                         </div>
                                         <div class="col-md-6">
                                             <div class="p-2 border rounded bg-light d-flex align-items-center gap-2 small">
-                                                ${user.role === 'COMPLIANCE_OFFICER' || user.role === 'ADMIN' ? 
+                                                ${Auth.can('alerts.close', 'sar.approve') ? 
                                                     '<i class="fas fa-check-circle text-success"></i>' : 
                                                     '<i class="fas fa-ban text-muted"></i>'}
-                                                <span class="${user.role === 'COMPLIANCE_OFFICER' || user.role === 'ADMIN' ? 'text-dark' : 'text-muted text-decoration-line-through'}">Resolve Compliance Alerts</span>
+                                                <span class="${Auth.can('alerts.close', 'sar.approve') ? 'text-dark' : 'text-muted text-decoration-line-through'}">Resolve Compliance Alerts</span>
                                             </div>
                                         </div>
                                         <div class="col-md-6">
                                             <div class="p-2 border rounded bg-light d-flex align-items-center gap-2 small">
-                                                ${user.role === 'ADMIN' ? 
+                                                ${Auth.can('ml.train') ? 
                                                     '<i class="fas fa-check-circle text-success"></i>' : 
                                                     '<i class="fas fa-ban text-muted"></i>'}
-                                                <span class="${user.role === 'ADMIN' ? 'text-dark' : 'text-muted text-decoration-line-through'}">Trigger ML Retraining Pipeline</span>
+                                                <span class="${Auth.can('ml.train') ? 'text-dark' : 'text-muted text-decoration-line-through'}">Trigger ML Retraining Pipeline</span>
                                             </div>
                                         </div>
                                     </div>

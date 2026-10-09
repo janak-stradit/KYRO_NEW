@@ -84,6 +84,10 @@ class AlertOut(BaseModel):
     resolution_outcome: ResolutionOutcome | None = None
     resolution_reasons: list[str] | None = None
     sar_reference: str | None = None
+    qa_result: Literal["PASS", "FAIL"] | None = None
+    qa_notes: str | None = None
+    qa_by: uuid.UUID | None = None
+    qa_at: datetime | None = None
     ml_version: str | None = None
 
 
@@ -121,6 +125,17 @@ class AlertEscalate(BaseModel):
     @classmethod
     def _valid_reasons(cls, value: list[str]) -> list[str]:
         return _check_reasons("ESCALATED", value)
+
+
+class AlertQA(BaseModel):
+    result: Literal["PASS", "FAIL"]
+    notes: str | None = Field(default=None, max_length=2000)
+
+    @model_validator(mode="after")
+    def _fail_needs_notes(self) -> "AlertQA":
+        if self.result == "FAIL" and not (self.notes or "").strip():
+            raise ValueError("Say what was wrong when a case fails the quality check")
+        return self
 
 
 class ResolutionOption(BaseModel):

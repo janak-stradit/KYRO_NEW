@@ -31,6 +31,7 @@ const Documents = {
         this.selector = selector;
         $(selector).html(`
             <ul class="doc-list" id="docList"><li class="kd-skeleton"></li></ul>
+            ${Auth.can('documents.manage') ? `
             <form class="doc-upload" id="docUploadForm">
                 <select class="form-select form-select-sm" id="docType" aria-label="Document type">
                     ${Object.entries(this.TYPES).map(([k, l]) => `<option value="${k}">${escapeHtml(l)}</option>`).join('')}
@@ -38,7 +39,7 @@ const Documents = {
                 <input type="file" class="form-control form-control-sm" id="docFile" accept=".pdf,.docx,.txt" aria-label="Document file">
                 <button type="submit" class="btn btn-sm rc-actions__view"><i class="fas fa-upload me-1"></i>Upload</button>
             </form>
-            <p class="kx-note mt-2 mb-0">PDF, Word or text, up to 10 MB. Scanned images cannot be read yet.</p>
+            <p class="kx-note mt-2 mb-0">PDF, Word or text, up to 10 MB. Scanned images cannot be read yet.</p>` : ''}
         `);
         $("#docUploadForm").on("submit", (e) => { e.preventDefault(); this.upload(); });
         $(selector).off("click.docs").on("click.docs", ".doc-open", (e) => {
@@ -139,7 +140,7 @@ const Documents = {
                         <div class="modal-footer">
                             <button type="button" class="btn btn-outline-primary" data-bs-dismiss="modal">Close</button>
                             <button type="button" class="btn btn-outline-primary" id="docDownload"><i class="fas fa-file-arrow-down me-2"></i>Download original</button>
-                            ${doc.text_status === 'EXTRACTED' ? `<button type="button" class="btn btn-primary" id="docExtract">${doc.extracted_at ? 'Read fields again' : 'Read fields'}</button>` : ''}
+                            ${doc.text_status === 'EXTRACTED' && Auth.can('documents.manage') ? `<button type="button" class="btn btn-primary" id="docExtract">${doc.extracted_at ? 'Read fields again' : 'Read fields'}</button>` : ''}
                         </div>
                     </div>
                 </div>
@@ -189,6 +190,7 @@ const Documents = {
         $("#docFields").html((mock ? '<p class="fp-empty doc-mock">Read by the built-in mock reader, which only finds lines written as "Label: value". It is not an AI model.</p>' : '')
             + doc.extractions.map(e => {
                 const [chip, label] = this.CHECK[e.check_status] || this.CHECK.NOT_CHECKED;
+                const mayReview = Auth.can('documents.manage');
                 const done = e.status !== 'PROPOSED';
                 return `
                 <div class="doc-field ${e.status === 'REJECTED' ? 'is-rejected' : ''}" data-id="${escapeHtml(e.id)}">
@@ -198,10 +200,10 @@ const Documents = {
                         ${e.quote_verified ? '' : '<span class="cd-chip cd-chip--high" title="This value is not in the document text">Not found in document</span>'}
                         ${e.page_number ? `<button type="button" class="doc-field__page" data-id="${escapeHtml(e.id)}">Page ${e.page_number}</button>` : ''}
                     </div>
-                    <input type="text" class="form-control form-control-sm doc-field__value" value="${escapeHtml(e.value)}" ${done ? 'disabled' : ''} aria-label="${escapeHtml(this.human(e.field))}">
+                    <input type="text" class="form-control form-control-sm doc-field__value" value="${escapeHtml(e.value)}" ${done || !mayReview ? 'disabled' : ''} aria-label="${escapeHtml(this.human(e.field))}">
                     ${e.record_value || e.check_detail ? `<p class="doc-field__detail">${e.record_value ? `On record: <strong>${escapeHtml(e.record_value)}</strong>. ` : ''}${escapeHtml(e.check_detail || '')}</p>` : ''}
                     <div class="doc-field__actions">
-                        ${done ? `<span class="text-muted">${escapeHtml(this.human(e.status))}${e.applied_to_record ? ', customer record updated' : ''}</span>` : `
+                        ${done ? `<span class="text-muted">${escapeHtml(this.human(e.status))}${e.applied_to_record ? ', customer record updated' : ''}</span>` : !mayReview ? '<span class="text-muted">Awaiting review</span>' : `
                         ${e.can_apply && e.check_status !== 'MATCH' ? `<label class="doc-field__apply"><input type="checkbox" class="form-check-input doc-apply"> Update the customer record</label>` : ''}
                         <button type="button" class="btn btn-sm rc-actions__icon doc-decide" data-decision="REJECTED" title="Reject" aria-label="Reject ${escapeHtml(this.human(e.field))}"><i class="fas fa-xmark"></i></button>
                         <button type="button" class="btn btn-sm rc-actions__view doc-decide" data-decision="ACCEPTED">Accept</button>`}

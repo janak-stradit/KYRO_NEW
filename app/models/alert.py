@@ -31,6 +31,7 @@ class Alert(Base, UUIDPrimaryKeyMixin):
             "('SAR_FILED','ESCALATED','TRUE_POSITIVE_NO_SAR','FALSE_POSITIVE')",
             name="chk_alert_resolution_outcome",
         ),
+        CheckConstraint("qa_result IS NULL OR qa_result IN ('PASS','FAIL')", name="chk_alert_qa_result"),
         {"schema": SCHEMA},
     )
 
@@ -54,4 +55,9 @@ class Alert(Base, UUIDPrimaryKeyMixin):
     resolution_outcome: Mapped[str | None] = mapped_column(String(30), index=True)
     resolution_reasons: Mapped[list | None] = mapped_column(JSONB)
     sar_reference: Mapped[str | None] = mapped_column(String(100))
+    # Quality check on the resolved case (does not change the outcome)
+    qa_result: Mapped[str | None] = mapped_column(String(10))
+    qa_notes: Mapped[str | None] = mapped_column(Text)
+    qa_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    qa_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     ml_version: Mapped[str | None] = mapped_column(String(20))

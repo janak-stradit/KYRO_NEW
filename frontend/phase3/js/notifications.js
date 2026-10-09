@@ -52,9 +52,10 @@ const Notifications = {
     },
 
     async refresh() {
+        await Auth.ensureUser();  // what the bell may show depends on the role
         const [kpis, alerts] = await Promise.allSettled([
             API.get("/dashboard/kpis"),
-            API.get("/dashboard/recent-alerts")
+            (Auth.can("cases.view") ? API.get("/dashboard/recent-alerts") : Promise.resolve([]))
         ]);
 
         if (kpis.status === "fulfilled" && kpis.value) {

@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from app.ai import AIDisabledError, AIGateway, AIProviderError
 from app.ai.retrieval import search
 from app.database import get_db
-from app.deps import get_current_user, require_role
+from app.deps import get_current_user, require_permission
 from app.models.user import User
 
 router = APIRouter(prefix="/api/v1/ai", tags=["ai"])
@@ -21,7 +21,7 @@ router = APIRouter(prefix="/api/v1/ai", tags=["ai"])
 @router.get("/status")
 def ai_status(
     db: Session = Depends(get_db),
-    _: User = Depends(require_role("ADMIN", "COMPLIANCE_OFFICER")),
+    _: User = Depends(require_permission("ai.status")),
 ) -> dict[str, Any]:
     """Current AI configuration. Never returns the API key."""
     return AIGateway(db).status()
@@ -58,7 +58,7 @@ def knowledge_search(
 @router.post("/check")
 def ai_check(
     db: Session = Depends(get_db),
-    user: User = Depends(require_role("ADMIN")),
+    user: User = Depends(require_permission("ai.admin")),
 ) -> dict[str, Any]:
     """Round-trips a no-PII test prompt through the gateway and reports the result."""
     nonce = secrets.token_hex(4)

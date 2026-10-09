@@ -32,6 +32,8 @@ const RealTime = {
             console.warn("No auth token available for real-time connection");
             return;
         }
+        // Live alerts carry customer names, so they follow the same permission as the queue
+        if (!Auth.can('cases.view')) return;
         
         try {
             console.log("🔄 Connecting to real-time updates...");

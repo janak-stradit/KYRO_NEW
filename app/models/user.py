@@ -8,13 +8,14 @@ from datetime import datetime
 from sqlalchemy import Boolean, CheckConstraint, DateTime, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.permissions import ROLE_CODES
 from app.models.base import Base, SCHEMA, UUIDPrimaryKeyMixin
 
 
 class User(Base, UUIDPrimaryKeyMixin):
     __tablename__ = "users"
     __table_args__ = (
-        CheckConstraint("role IN ('ANALYST','COMPLIANCE_OFFICER','ADMIN')", name="chk_user_role"),
+        CheckConstraint(f"role IN {ROLE_CODES}", name="chk_user_role"),
         {"schema": SCHEMA},
     )
 

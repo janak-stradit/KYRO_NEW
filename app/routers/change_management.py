@@ -13,10 +13,11 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.deps import get_current_user, require_role
+from app.deps import get_current_user, require_permission
 from app.models.change_management import RegulatoryChange, RuleConfigChange
 from app.models.regulatory_notice import RegulatoryNotice
 from app.models.user import User
+from app.permissions import has_permission
 from app.routers.rule_configs import _validate_value
 from app.services import change_service, federal_register_service
 from app.services.change_service import ChangeError
@@ -138,7 +139,7 @@ def assess_regulatory_change(
     change_id: uuid.UUID,
     data: RegulatoryChangeAssess,
     db: Session = Depends(get_db),
-    user: User = Depends(require_role("ADMIN", "COMPLIANCE_OFFICER")),
+    user: User = Depends(require_permission("changes.assess")),
 ) -> RegulatoryChange:
     change = db.get(RegulatoryChange, change_id)
     if change is None:
@@ -161,7 +162,7 @@ def list_rule_changes(status_filter: str | None = None, db: Session = Depends(ge
 def backtest_rule_change(
     data: RuleChangeBacktest,
     db: Session = Depends(get_db),
-    user: User = Depends(require_role("ADMIN", "COMPLIANCE_OFFICER")),
+    user: User = Depends(require_permission("rules.propose")),
 ) -> dict[str, Any]:
     """Preview a change's effect without proposing it."""
     _validate_value(data.key, data.value)
@@ -175,7 +176,7 @@ def backtest_rule_change(
 def propose_rule_change(
     data: RuleChangePropose,
     db: Session = Depends(get_db),
-    user: User = Depends(require_role("ADMIN", "COMPLIANCE_OFFICER")),
+    user: User = Depends(require_permission("rules.propose")),
 ) -> dict[str, Any]:
     _validate_value(data.key, data.value)
     try:
@@ -193,11 +194,13 @@ def review_rule_change(
     change_id: uuid.UUID,
     data: RuleChangeReview,
     db: Session = Depends(get_db),
-    user: User = Depends(require_role("ADMIN", "COMPLIANCE_OFFICER")),
+    user: User = Depends(require_permission("rules.propose", "rules.approve")),
 ) -> dict[str, Any]:
     change = db.get(RuleConfigChange, change_id)
     if change is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Rule change not found")
+    if data.decision != "CANCELLED" and not has_permission(user.role, "rules.approve"):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Approving or rejecting a rule change needs the approval permission")
     try:
         change = change_service.review_rule_change(db, change, decision=data.decision, notes=data.notes, user_id=user.id)
     except ChangeError as exc:
@@ -242,7 +245,7 @@ def list_notices(status_filter: str | None = None, db: Session = Depends(get_db)
 
 @router.post("/notices/sync")
 def sync_notices(
-    db: Session = Depends(get_db), user: User = Depends(require_role("ADMIN", "COMPLIANCE_OFFICER"))
+    db: Session = Depends(get_db), user: User = Depends(require_permission("regulatory.ingest"))
 ) -> dict[str, Any]:
     """Fetch rules and proposed rules from the Federal Register for every loaded CFR part."""
     return federal_register_service.sync(db)
@@ -253,7 +256,7 @@ def assess_notice(
     notice_id: uuid.UUID,
     data: NoticeAssess,
     db: Session = Depends(get_db),
-    user: User = Depends(require_role("ADMIN", "COMPLIANCE_OFFICER")),
+    user: User = Depends(require_permission("changes.assess")),
 ) -> RegulatoryNotice:
     notice = db.get(RegulatoryNotice, notice_id)
     if notice is None:

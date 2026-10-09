@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.deps import get_current_user, require_role
+from app.deps import get_current_user, require_permission
 from app.models.beneficial_ownership import BeneficialOwner
 from app.models.customer import Customer
 from app.models.user import User
@@ -26,7 +26,7 @@ from app.services import beneficial_ownership_service as ubo_service
 router = APIRouter(
     prefix="/api/v1/customers/{customer_id}/beneficial-owners",
     tags=["beneficial-owners"],
-    dependencies=[Depends(get_current_user)],
+    dependencies=[Depends(require_permission("cases.view"))],
 )
 
 
@@ -57,7 +57,7 @@ def create(
     customer_id: uuid.UUID,
     data: BeneficialOwnerCreate,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("customers.edit")),
 ) -> BeneficialOwner:
     customer = _get_customer_or_404(db, customer_id)
     try:
@@ -85,7 +85,7 @@ def update(
     owner_id: uuid.UUID,
     data: BeneficialOwnerUpdate,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("customers.edit")),
 ) -> BeneficialOwner:
     owner = _get_owner_or_404(db, customer_id, owner_id)
     try:
@@ -100,7 +100,7 @@ def verify(
     owner_id: uuid.UUID,
     data: BeneficialOwnerVerify,
     db: Session = Depends(get_db),
-    user: User = Depends(require_role("COMPLIANCE_OFFICER", "ADMIN")),
+    user: User = Depends(require_permission("ubo.verify")),
 ) -> BeneficialOwner:
     owner = _get_owner_or_404(db, customer_id, owner_id)
     return ubo_service.verify_beneficial_owner(db, owner, data, performed_by=user.id)
@@ -111,7 +111,7 @@ def deactivate(
     customer_id: uuid.UUID,
     owner_id: uuid.UUID,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("customers.edit")),
 ) -> BeneficialOwner:
     owner = _get_owner_or_404(db, customer_id, owner_id)
     return ubo_service.deactivate_beneficial_owner(db, owner, performed_by=user.id)

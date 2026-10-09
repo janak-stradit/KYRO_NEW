@@ -491,7 +491,7 @@ const Alerts = {
             
         } catch (error) {
             console.error("Resolve alert error:", error);
-            showToast("error", "Only COMPLIANCE_OFFICER or ADMIN roles can resolve alerts.");
+            showToast("error", "Could not resolve the alert. Your role may not allow this outcome.");
         } finally {
             hideLoading();
         }

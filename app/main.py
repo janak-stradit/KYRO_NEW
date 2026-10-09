@@ -36,6 +36,7 @@ from app.routers import (
     rule_configs,
     transactions,
     tts,
+    users,
     watchlists,
 )
 
@@ -114,6 +115,7 @@ app.include_router(customers.router)
 app.include_router(beneficial_owners.router)
 app.include_router(accounts.router)
 app.include_router(transactions.router)
+app.include_router(alerts.stream_router)  # before /{alert_id}
 app.include_router(alerts.router)
 app.include_router(kyc.router)
 app.include_router(watchlists.router)
@@ -122,6 +124,7 @@ app.include_router(regulatory.router)
 app.include_router(change_management.router)
 app.include_router(documents.router)
 app.include_router(feeds.router)
+app.include_router(users.router)
 try:
     app.include_router(importlib.import_module("app.routers.ml").router)
 except ImportError as exc:

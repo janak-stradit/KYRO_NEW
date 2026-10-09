@@ -7,13 +7,17 @@ const App = {
     currentPage: null,
     pages: {},
     
-    init() {
+    async init() {
         console.log("🛡️ KYRO Risk Assessment Specialist starting...");
         
         this.setupEventListeners();
         this.setupRouting();
-        this.initializeModules();
         
+        // Pages show or hide actions by permission, so load the profile first
+        await Auth.ensureUser();
+        Auth.applyNavPermissions();
+        this.initializeModules();
+
         // Load initial page based on URL
         this.handleRoute();
         
@@ -151,7 +155,8 @@ const App = {
             case: CaseDetail,
             patterns: Patterns,
             regulations: Regulations,
-            feeds: Feeds
+            feeds: Feeds,
+            admin: Admin
         };
     },
     
@@ -180,6 +185,10 @@ const App = {
         console.log(`📍 Navigating to: ${pageName}`);
         
         try {
+            if (this.pages[pageName] && !Auth.canOpen(pageName)) {
+                showToast("error", "Your role does not have access to that page.");
+                return;
+            }
             // Validate page exists
             if (!this.pages[pageName]) {
                 console.error(`❌ Invalid page: ${pageName}`);
@@ -327,8 +336,8 @@ const App = {
             params.id = pathParts[1];
         }
         
-        // Default to dashboard for unknown pages
-        if (!this.pages[pageName]) {
+        // Default to dashboard for unknown pages, and for pages this role cannot open
+        if (!this.pages[pageName] || !Auth.canOpen(pageName)) {
             pageName = "dashboard";
         }
         

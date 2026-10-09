@@ -155,12 +155,12 @@ const PeriodicReviews = {
                             </svg>
                             Refresh
                         </button>
-                        <button class="aml-btn aml-btn-primary" id="scheduleReviewBtn">
+                        ${Auth.can('kyc.review') ? `<button class="aml-btn aml-btn-primary" id="scheduleReviewBtn">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
                                 <path d="M12 5v14M5 12h14"/>
                             </svg>
                             Schedule Review
-                        </button>
+                        </button>` : ''}
                     </div>
                 </div>
                 
@@ -513,7 +513,7 @@ const PeriodicReviews = {
                 </td>
                 <td class="px-3 py-3">
                     <div class="rc-actions">
-                        ${review.status !== 'Active' ? '<span class="text-muted" style="font-size: 13px;">Done</span>' : `
+                        ${review.status !== 'Active' ? '<span class="text-muted" style="font-size: 13px;">Done</span>' : !Auth.can('kyc.review') ? '' : `
                         ${review.reviewStatus === 'IN_PROGRESS' ? '' : `
                         <button type="button" class="btn btn-sm rc-actions__icon start-review-btn" data-id="${escapeHtml(review.id)}" title="Mark as in progress" aria-label="Start review for ${escapeHtml(displayName)}">
                             <i class="fas fa-play"></i>

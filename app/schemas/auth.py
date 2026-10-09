@@ -9,7 +9,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr
 
-Role = Literal["ANALYST", "COMPLIANCE_OFFICER", "ADMIN"]
+Role = str  # one of app.permissions.ROLE_CODES
 
 
 class LoginRequest(BaseModel):
@@ -48,6 +48,11 @@ class UserOut(BaseModel):
     is_active: bool
     last_login: datetime | None = None
     created_at: datetime
+
+
+class CurrentUser(UserOut):
+    role_label: str
+    permissions: list[str]
 
 
 class UserCreate(BaseModel):

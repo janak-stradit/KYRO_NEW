@@ -83,6 +83,45 @@ const CaseDetail = {
         $("#cpBack").on("click", () => App.navigateTo('cases'));
     },
 
+    /** Quality check on a resolved case: the recorded result, and the form for those who may check it. */
+    qaBlock(alert) {
+        if (alert.status !== 'RESOLVED') return '';
+        const me = (Auth.getUser() || {}).id;
+        const recorded = alert.qa_result ? `
+            <p><span class="cd-chip cd-chip--${alert.qa_result === 'PASS' ? 'low' : 'high'}">${alert.qa_result === 'PASS' ? 'Passed' : 'Failed'}</span>
+               <span class="kx-note">Checked ${escapeHtml(formatDateTime(alert.qa_at))}</span></p>
+            ${alert.qa_notes ? `<p class="mb-0">${escapeHtml(alert.qa_notes)}</p>` : ''}` : '';
+        let form = '';
+        if (Auth.can('alerts.qa')) {
+            form = alert.resolved_by === me
+                ? '<p class="kx-note mb-0">You resolved this case, so someone else must quality-check it.</p>'
+                : `
+            <label class="kx-label mt-2" for="cpQaNotes">${alert.qa_result ? 'Record a new check' : 'Did this case follow policy?'}</label>
+            <textarea class="form-control mb-2" id="cpQaNotes" rows="2" maxlength="2000" placeholder="Notes (required when the case fails)"></textarea>
+            <button type="button" class="btn btn-sm btn-outline-primary cp-qa-btn" data-result="PASS">Pass</button>
+            <button type="button" class="btn btn-sm btn-outline-primary cp-qa-btn" data-result="FAIL">Fail</button>`;
+        }
+        if (!recorded && !form) return '';
+        return `<div class="cp-disposition"><div class="kx-label">Quality check</div>${recorded || '<p class="kx-note">Not checked yet.</p>'}${form}</div>`;
+    },
+
+    async recordQA(alertId, result) {
+        const notes = ($("#cpQaNotes").val() || '').trim();
+        if (result === 'FAIL' && !notes) {
+            showToast('error', 'Say what was wrong when a case fails the quality check.');
+            $("#cpQaNotes").trigger("focus");
+            return;
+        }
+        $(".cp-qa-btn").prop("disabled", true);
+        try {
+            await API.put(`/alerts/${alertId}/qa`, { result, notes: notes || null });
+            showToast('success', 'Quality check recorded.');
+            await this.load();
+        } catch (xhr) {
+            $(".cp-qa-btn").prop("disabled", false);
+        }
+    },
+
     render(d) {
         const c = this.caseData;
         const alert = d.alert;
@@ -140,8 +179,9 @@ const CaseDetail = {
                         </div>
                     </div>
                     <div class="cp-head__actions">
-                        ${open ? `
-                        <button type="button" class="btn btn-outline-primary" id="cpAssign"><i class="fas fa-user-plus me-2"></i>Assign</button>
+                        ${open && Auth.can('alerts.assign') ? `
+                        <button type="button" class="btn btn-outline-primary" id="cpAssign"><i class="fas fa-user-plus me-2"></i>Assign</button>` : ''}
+                        ${open && Cases.canDecide() ? `
                         <button type="button" class="btn btn-primary" id="cpResolve"><i class="fas fa-check-double me-2"></i>Resolve</button>` : ''}
                         <button type="button" class="btn btn-outline-primary" id="cpExport"><i class="fas fa-file-arrow-down me-2"></i>Export report</button>
                     </div>
@@ -176,6 +216,7 @@ const CaseDetail = {
                             ${alert.resolution_notes ? `<p class="mb-0">${escapeHtml(alert.resolution_notes)}</p>` : ''}
                             ${alert.resolved_at ? `<p class="kx-note mb-0">Resolved ${escapeHtml(formatDateTime(alert.resolved_at))}</p>` : ''}
                         </div>` : ''}
+                        ${this.qaBlock(alert)}
                     </section>
 
                     <section class="card kd-panel">
@@ -248,6 +289,7 @@ const CaseDetail = {
 
         $("#cpBack").on("click", () => App.navigateTo('cases'));
         $("#cpAssign").on("click", () => Cases.showAssignModal(c));
+        $(".cp-qa-btn").on("click", (e) => this.recordQA(alert.id, $(e.currentTarget).data("result")));
         $("#cpResolve").on("click", () => Cases.showResolveModal(c));
         $("#cpExport").on("click", () => Cases.showExportModal(c.caseId, c.customerId));
         $("#cpAllAlerts").on("click", () => App.navigateTo('cases', { customer: c.customerId }));

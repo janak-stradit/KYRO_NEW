@@ -14,7 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.deps import get_current_user, require_role
+from app.deps import get_current_user, require_permission
 from app.models.feed import FeedMapping, FeedRun
 from app.models.user import User
 from app.services import feed_service
@@ -64,7 +64,7 @@ def _fail(exc: FeedError) -> HTTPException:
 async def preview(
     target: Target = Form(...),
     file: UploadFile = File(...),
-    user: User = Depends(require_role("ADMIN", "COMPLIANCE_OFFICER")),
+    user: User = Depends(require_permission("feeds.load")),
 ) -> dict[str, Any]:
     """Read a CSV's header and first rows and suggest which column is which KYRO field."""
     try:
@@ -80,7 +80,7 @@ def list_mappings(db: Session = Depends(get_db)) -> list[FeedMapping]:
 
 @router.post("/mappings", response_model=MappingOut, status_code=status.HTTP_201_CREATED)
 def save_mapping(
-    data: MappingIn, db: Session = Depends(get_db), user: User = Depends(require_role("ADMIN", "COMPLIANCE_OFFICER"))
+    data: MappingIn, db: Session = Depends(get_db), user: User = Depends(require_permission("feeds.load"))
 ) -> FeedMapping:
     """Save a mapping under a name so the next file from the same source needs no setup."""
     fields = {f.name for f in feed_service.TARGETS[data.target]}
@@ -109,7 +109,7 @@ async def run_feed(
     mapping_id: uuid.UUID | None = Form(None),
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    user: User = Depends(require_role("ADMIN", "COMPLIANCE_OFFICER")),
+    user: User = Depends(require_permission("feeds.load")),
 ) -> FeedRun:
     """
     Check every row of the file against the mapping. With dry_run=false the
