@@ -4,20 +4,22 @@ routers/alerts.py — Analyst alert work queue: assign, resolve, escalate.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import asyncio
 import json
 import jwt
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
-from sqlalchemy import func
+from sqlalchemy import and_, case, exists, func, or_
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.database import get_db, SessionLocal
 from app.deps import PaginationParams, get_current_user, require_permission
 from app.models.alert import Alert as AlertModel
 from app.models.customer import Customer
+from app.models.alert_request import AlertRequest
 from app.models.user import User
 from app.permissions import has_permission
 from app.schemas.alert import (
@@ -185,6 +187,35 @@ _UNRESOLVED = ("OPEN", "ASSIGNED", "IN_REVIEW", "ESCALATED")
 _RISK_BANDS = {"high": (80, 101), "medium": (60, 80), "low": (0, 60)}
 
 
+def _target_days() -> dict[str, int]:
+    settings = get_settings()
+    return {"high": settings.case_target_days_high, "medium": settings.case_target_days_medium, "low": settings.case_target_days_low}
+
+
+def _risk_band(score: int) -> str:
+    return "high" if score >= 80 else "medium" if score >= 60 else "low"
+
+
+def _overdue_condition():
+    """Unresolved alerts older than the target for their risk band (CASE_TARGET_DAYS_*)."""
+    now = datetime.now(timezone.utc)
+    targets = _target_days()
+    return and_(
+        AlertModel.status.in_(_UNRESOLVED),
+        or_(*(
+            and_(AlertModel.risk_score >= low, AlertModel.risk_score < high, AlertModel.created_at < now - timedelta(days=targets[band] + 1))
+            for band, (low, high) in _RISK_BANDS.items()
+        )),
+    )
+
+
+def _awaiting_information_condition():
+    return and_(
+        AlertModel.status.in_(_UNRESOLVED),
+        exists().where(AlertRequest.alert_id == AlertModel.id, AlertRequest.status == "OPEN"),
+    )
+
+
 def _queue_filters(
     db: Session,
     user: User,
@@ -195,6 +226,7 @@ def _queue_filters(
     assignment: str | None,
     customer_id: uuid.UUID | None,
     q: str | None,
+    attention: str | None = None,
 ):
     """Alerts joined to their customer, narrowed by the work-queue filters."""
     query = db.query(AlertModel, Customer).join(Customer, AlertModel.customer_id == Customer.id)
@@ -219,6 +251,10 @@ def _queue_filters(
         query = query.filter(AlertModel.customer_id == customer_id)
     if q:
         query = query.filter(Customer.full_name.ilike(f"%{q.strip()}%"))
+    if attention == "overdue":
+        query = query.filter(_overdue_condition())
+    elif attention == "awaiting_information":
+        query = query.filter(_awaiting_information_condition())
     return query
 
 
@@ -231,6 +267,7 @@ def alert_queue(
     assignment: str | None = Query(None, pattern="^(unassigned|mine)$"),
     customer_id: uuid.UUID | None = None,
     q: str | None = Query(None, max_length=100),
+    attention: str | None = Query(None, pattern="^(overdue|awaiting_information)$"),
     sort: str = Query("priority", pattern="^(priority|newest|oldest)$"),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
@@ -240,7 +277,8 @@ def alert_queue(
     so the alert that most needs attention is always at the top.
     """
     query = _queue_filters(
-        db, user, status_filter=status_filter, risk=risk, rule=rule, assignment=assignment, customer_id=customer_id, q=q
+        db, user, status_filter=status_filter, risk=risk, rule=rule, assignment=assignment, customer_id=customer_id, q=q,
+        attention=attention,
     )
     total = query.count()
     order = {
@@ -262,10 +300,29 @@ def alert_queue(
         u.id: u.full_name or u.username for u in db.query(User).filter(User.id.in_(assignee_ids))
     } if assignee_ids else {}
 
+    alert_ids = [alert.id for alert, _ in rows]
+    open_requests: dict[uuid.UUID, tuple[int, int]] = {
+        alert_id: (count, overdue or 0)
+        for alert_id, count, overdue in db.query(
+            AlertRequest.alert_id, func.count(AlertRequest.id),
+            func.sum(case((AlertRequest.due_date < date.today(), 1), else_=0)),
+        ).filter(AlertRequest.alert_id.in_(alert_ids), AlertRequest.status == "OPEN").group_by(AlertRequest.alert_id)
+    } if alert_ids else {}
+    targets = _target_days()
+    now = datetime.now(timezone.utc)
+
     items = []
     for alert, customer in rows:
         item = AlertOut.model_validate(alert).model_dump(mode="json")
+        target = targets[_risk_band(alert.risk_score)]
+        age_days = ((alert.resolved_at or now) - alert.created_at).days
+        requests_open, requests_overdue = open_requests.get(alert.id, (0, 0))
         item.update(
+            age_days=age_days,
+            target_days=target,
+            overdue=alert.status in _UNRESOLVED and age_days > target,
+            open_requests=requests_open,
+            requests_overdue=int(requests_overdue),
             customer_name=customer.full_name,
             customer_pep=customer.pep_flag,
             customer_sanctions=customer.sanctions_flag,
@@ -305,6 +362,9 @@ def alert_queue_summary(db: Session = Depends(get_db), user: User = Depends(get_
         "unassigned": count(AlertModel.assigned_to.is_(None)),
         "assigned_to_me": count(AlertModel.assigned_to == user.id),
         "escalated": count(AlertModel.status == "ESCALATED"),
+        "overdue": count(_overdue_condition()),
+        "awaiting_information": count(_awaiting_information_condition()),
+        "target_days": _target_days(),
         "oldest_created_at": unresolved.with_entities(func.min(AlertModel.created_at)).scalar(),
         "customers_with_alerts": unresolved.with_entities(func.count(func.distinct(AlertModel.customer_id))).scalar() or 0,
         "by_rule": [{"rule": r, "alerts": n} for r, n in sorted(rule_counts.items(), key=lambda kv: (-kv[1], kv[0]))],

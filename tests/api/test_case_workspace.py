@@ -233,3 +233,34 @@ def test_draft_narrative_needs_ai_and_a_working_role(client, auth_headers, db_se
     assert client.post(f"/api/v1/alerts/{alert['id']}/draft-narrative", headers=auth_headers).status_code == 409
     qa = _login(client, _make_user(db_session, username="qa.narrative", role="QA_REVIEWER").username)
     assert client.post(f"/api/v1/alerts/{alert['id']}/draft-narrative", headers=qa).status_code == 403
+
+
+# ── Work queue: overdue and waiting on information ───────────────────────
+
+def test_queue_marks_overdue_cases_and_open_requests(client, auth_headers, db_session):
+    fresh = _create_alert_via_sanctions_hit(client, auth_headers, "queue.fresh@example.com")
+    old = _create_alert_via_sanctions_hit(client, auth_headers, "queue.old@example.com")
+    waiting = _create_alert_via_sanctions_hit(client, auth_headers, "queue.waiting@example.com")
+
+    row = db_session.get(Alert, uuid.UUID(old["id"]))
+    band = "high" if row.risk_score >= 80 else "medium" if row.risk_score >= 60 else "low"
+    target = getattr(get_settings(), f"case_target_days_{band}")
+    row.created_at = row.created_at - timedelta(days=target + 3)
+    db_session.commit()
+    client.post(f"/api/v1/alerts/{waiting['id']}/requests",
+                json={"requested_from": "Customer", "subject": "Source of funds", "due_date": SOON}, headers=auth_headers)
+
+    def queue(**params):
+        return {a["id"]: a for a in client.get("/api/v1/alerts/queue", params=params, headers=auth_headers).json()["items"]}
+
+    everything = queue()
+    assert everything[old["id"]]["overdue"] is True and everything[old["id"]]["age_days"] == target + 3
+    assert everything[fresh["id"]]["overdue"] is False and everything[fresh["id"]]["target_days"] == target
+    assert everything[waiting["id"]]["open_requests"] == 1 and everything[waiting["id"]]["requests_overdue"] == 0
+    assert everything[fresh["id"]]["open_requests"] == 0
+
+    assert set(queue(attention="overdue")) == {old["id"]}
+    assert set(queue(attention="awaiting_information")) == {waiting["id"]}
+    summary = client.get("/api/v1/alerts/queue/summary", headers=auth_headers).json()
+    assert summary["overdue"] == 1 and summary["awaiting_information"] == 1 and summary["target_days"][band] == target
+    assert client.get("/api/v1/alerts/queue", params={"attention": "nonsense"}, headers=auth_headers).status_code == 422

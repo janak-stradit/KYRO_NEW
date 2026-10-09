@@ -135,6 +135,11 @@ const Cases = {
                                 <option value="unassigned">Unassigned</option>
                                 <option value="mine">Assigned to me</option>
                             </select>
+                            <select class="form-select" id="filterAttention" aria-label="Filter by what needs attention">
+                                <option value="">Any age</option>
+                                <option value="overdue">Overdue</option>
+                                <option value="awaiting_information">Waiting on information</option>
+                            </select>
                             <select class="form-select" id="filterSort" aria-label="Sort order">
                                 <option value="priority">Highest risk first</option>
                                 <option value="oldest">Oldest first</option>
@@ -316,6 +321,8 @@ const Cases = {
             + tile('unassigned', 'Unassigned', s.unassigned.toLocaleString(), 'no owner yet', s.unassigned ? 'rq-tile--warn' : '')
             + tile('mine', 'Assigned to me', s.assigned_to_me.toLocaleString(), 'in your name')
             + tile('escalated', 'Escalated', s.escalated.toLocaleString(), 'awaiting a senior decision')
+            + tile('overdue', 'Overdue', s.overdue.toLocaleString(), `past the ${s.target_days.high}/${s.target_days.medium}/${s.target_days.low}-day target`, s.overdue ? 'rq-tile--alert' : '')
+            + tile('awaiting', 'Waiting on information', s.awaiting_information.toLocaleString(), 'an open request for information')
             + tile('oldest', 'Longest waiting', s.oldest_created_at ? this.age(s.oldest_created_at) : '—', 'oldest unresolved alert')
         );
 
@@ -352,6 +359,7 @@ const Cases = {
         if (f.risk) params.risk = f.risk;
         if (f.rule) params.rule = f.rule;
         if (f.assignment) params.assignment = f.assignment;
+        if (f.attention) params.attention = f.attention;
         if (f.customerId) params.customer_id = f.customerId;
 
         let data;
@@ -446,7 +454,7 @@ const Cases = {
                         </div>
                     </td>
                     <td class="px-3 py-3"><span class="badge" style="background:${statusBg};color:${statusFg};font-size:11px;font-weight:600;padding:5px 10px;">${escapeHtml(this.human(c.status))}</span></td>
-                    <td class="px-3 py-3 text-nowrap" title="Created ${escapeHtml(new Date(a.created_at).toLocaleString())}">${canAct(c) ? escapeHtml(this.age(a.created_at)) : '—'}</td>
+                    <td class="px-3 py-3 text-nowrap" title="Created ${escapeHtml(new Date(a.created_at).toLocaleString())}">${canAct(c) ? escapeHtml(this.age(a.created_at)) : '—'}${a.overdue ? ` <span class="cd-chip cd-chip--high" title="Target ${a.target_days} days for this risk level">Overdue</span>` : ''}${a.open_requests ? ` <span class="cd-chip cd-chip--${a.requests_overdue ? 'high' : 'medium'}" title="${a.open_requests} open request${a.open_requests === 1 ? '' : 's'} for information${a.requests_overdue ? ', past the due date' : ''}"><i class="fas fa-envelope" aria-hidden="true"></i><span class="visually-hidden">Waiting on information</span></span>` : ''}</td>
                     <td class="px-3 py-3 ${a.assigned_to ? '' : 'text-muted'}">${escapeHtml(c.assignedTo)}</td>
                     <td class="px-3 py-3">
                         <div class="rc-actions">
@@ -614,15 +622,16 @@ const Cases = {
         $("#filterRisk").val(f.risk);
         $("#filterRule").val(f.rule);
         $("#filterAssignment").val(f.assignment);
+        $("#filterAttention").val(f.attention || '');
         $("#filterSort").val(f.sort);
-        const changed = f.q || f.risk || f.rule || f.assignment || f.status !== 'UNRESOLVED' || f.sort !== 'priority';
+        const changed = f.q || f.risk || f.rule || f.assignment || f.attention || f.status !== 'UNRESOLVED' || f.sort !== 'priority';
         $("#clearFiltersBtn").toggleClass("d-none", !changed);
         this.pagination.currentPage = 1;
         this.fetchCasesData();
     },
 
     resetFilters(overrides = {}) {
-        Object.assign(this.filters, { q: '', status: 'UNRESOLVED', risk: '', rule: '', assignment: '', sort: 'priority' }, overrides);
+        Object.assign(this.filters, { q: '', status: 'UNRESOLVED', risk: '', rule: '', assignment: '', attention: '', sort: 'priority' }, overrides);
         this.applyFilters();
     },
 
@@ -635,10 +644,10 @@ const Cases = {
             clearTimeout(searchTimer);
             searchTimer = setTimeout(() => { self.filters.q = $(this).val().trim(); self.applyFilters(); }, 300);
         });
-        $("#filterStatus, #filterRisk, #filterRule, #filterAssignment, #filterSort").on("change", () => {
+        $("#filterStatus, #filterRisk, #filterRule, #filterAssignment, #filterAttention, #filterSort").on("change", () => {
             Object.assign(self.filters, {
                 status: $("#filterStatus").val(), risk: $("#filterRisk").val(), rule: $("#filterRule").val(),
-                assignment: $("#filterAssignment").val(), sort: $("#filterSort").val()
+                assignment: $("#filterAssignment").val(), attention: $("#filterAttention").val(), sort: $("#filterSort").val()
             });
             self.applyFilters();
         });
@@ -665,7 +674,8 @@ const Cases = {
             .on("click.cases", ".rq-tile", function() {
                 const presets = {
                     all: {}, high: { risk: 'high' }, unassigned: { assignment: 'unassigned' }, mine: { assignment: 'mine' },
-                    escalated: { status: 'ESCALATED' }, oldest: { sort: 'oldest' }
+                    escalated: { status: 'ESCALATED' }, oldest: { sort: 'oldest' },
+                    overdue: { attention: 'overdue', sort: 'oldest' }, awaiting: { attention: 'awaiting_information' }
                 };
                 self.resetFilters(presets[$(this).data("tile")] || {});
             })
@@ -781,7 +791,7 @@ const Cases = {
                                     <label class="form-check"><input class="form-check-input" type="checkbox" id="includeRisk" checked><span class="form-check-label">Risk assessment &amp; screening</span></label>
                                     <label class="form-check"><input class="form-check-input" type="checkbox" id="includeTransactions" checked><span class="form-check-label">Transaction analysis</span></label>
                                     <label class="form-check"><input class="form-check-input" type="checkbox" id="includeDocuments" checked><span class="form-check-label">Documents reviewed</span></label>
-                                    <label class="form-check"><input class="form-check-input" type="checkbox" id="includeTimeline" checked><span class="form-check-label">Activity timeline</span></label>
+                                    <label class="form-check"><input class="form-check-input" type="checkbox" id="includeTimeline" checked><span class="form-check-label">Notes, requests and timeline</span></label>
                                 </div>
                             </div>
                             <p class="kx-note"><i class="fas fa-circle-info me-1"></i>Reports are built from live case, customer and transaction data at the time of export.</p>
@@ -844,7 +854,9 @@ const Cases = {
             rawCustomerId ? API.get(`/customers/${rawCustomerId}`) : Promise.resolve(null),
             rawCustomerId ? API.get('/transactions', { customer_id: rawCustomerId, page_size: 2000 }) : Promise.resolve(null),
             rawCustomerId ? API.get(`/customers/${rawCustomerId}/screening`) : Promise.resolve(null),
-            rawCustomerId ? API.get(`/customers/${rawCustomerId}/kyc-reviews`) : Promise.resolve(null)
+            rawCustomerId ? API.get(`/customers/${rawCustomerId}/kyc-reviews`) : Promise.resolve(null),
+            API.get(`/alerts/${caseId}/timeline`),
+            API.get(`/alerts/${caseId}/requests`)
         ]);
         const value = (i) => (settled[i].status === 'fulfilled' ? settled[i].value : null);
         const user = (window.Auth && Auth.getUser && Auth.getUser()) || {};
@@ -872,6 +884,8 @@ const Cases = {
             transactions: (value(2) && (value(2).items || value(2))) || [],
             screening: value(3) || [],
             kycReviews: value(4) || [],
+            timeline: value(5),
+            requests: value(6) || [],
             documents
         };
     },
@@ -1279,10 +1293,29 @@ const Cases = {
         }
 
         if (has('timeline')) {
+            // What was asked for on this case, and whether it arrived
+            if ((data.requests || []).length) {
+                section('Requests for Information', `${data.requests.filter(r => r.status === 'OPEN').length} open`);
+                table(
+                    ['Asked from', 'What was asked for', 'Due', 'Status', 'Answer'],
+                    data.requests.map(r => [
+                        r.requested_from, r.subject, fmtDate(r.due_date),
+                        r.status === 'RECEIVED' ? 'Received' : r.status === 'CANCELLED' ? 'Withdrawn' : r.overdue ? 'Overdue' : 'Waiting',
+                        r.response_note || '—'
+                    ]),
+                    { columnStyles: { 0: { cellWidth: 32 }, 2: { cellWidth: 24 }, 3: { cellWidth: 22 } } }
+                );
+            }
+
+            // The case file as recorded: notes, decisions, documents and requests, oldest first
+            const recorded = data.timeline && data.timeline.events;
             const events = [];
-            if (alert.created_at) events.push([alert.created_at, 'Alert raised', `${human(alert.alert_type)} · risk score ${alert.risk_score ?? '—'}`]);
-            if (alert.assigned_to) events.push([alert.created_at, 'Assigned', 'Case assigned to an analyst']);
-            if (alert.resolved_at) events.push([alert.resolved_at, 'Resolved', alert.resolution_notes || (alert.is_false_positive ? 'Closed as false positive' : 'Case resolved')]);
+            if (recorded) {
+                recorded.forEach(e => events.push([e.at, e.kind === 'note' ? 'Note' : e.title, `${e.detail ? `${e.detail}  ` : ''}(${e.by})`]));
+            } else {
+                if (alert.created_at) events.push([alert.created_at, 'Alert raised', `${human(alert.alert_type)} · risk score ${alert.risk_score ?? '—'}`]);
+                if (alert.resolved_at) events.push([alert.resolved_at, 'Resolved', alert.resolution_notes || (alert.is_false_positive ? 'Closed as false positive' : 'Case resolved')]);
+            }
             (data.kycReviews || []).forEach(r => {
                 events.push([r.completed_date || r.scheduled_date || r.created_at,
                     `KYC review ${human(r.review_status).toLowerCase()}`,
@@ -1290,11 +1323,20 @@ const Cases = {
             });
             if (cust.last_screened_at) events.push([cust.last_screened_at, 'Watchlist screening', 'Customer screened against sanctions lists']);
             events.sort((a, b) => new Date(a[0]) - new Date(b[0]));
-            section('Activity Timeline', '', 22 + Math.min(Math.max(events.length, 1), 6) * 9);
+            const clock = data.timeline && data.timeline.clock;
+            const clockText = clock
+                ? (clock.closed_at ? `Closed after ${clock.age_days} days` : `Open ${clock.age_days} days, target ${clock.target_days}${clock.overdue ? ' (overdue)' : ''}`)
+                : '';
+            section('Case Notes and Timeline', clockText, 22 + Math.min(Math.max(events.length, 1), 6) * 9);
             table(['Date', 'Event', 'Details'], events.map(e => [fmtDate(e[0], true), e[1], e[2]]), {
                 empty: 'No recorded activity.',
                 columnStyles: { 0: { cellWidth: 38 }, 1: { cellWidth: 40, fontStyle: 'bold' } }
             });
+            if (alert.qa_result) {
+                ensure(10);
+                text(`Quality check: ${alert.qa_result === 'PASS' ? 'passed' : 'failed'} on ${fmtDate(alert.qa_at, true)}${alert.qa_notes ? `. ${alert.qa_notes}` : ''}`, M, y, { size: 9 });
+                y += 7;
+            }
         }
 
         // ── Suggested next steps (system guidance, not findings) ─────
@@ -1389,6 +1431,14 @@ const Cases = {
                 `Document ${d.filename}: ${e.field}`,
                 `${e.value} [${e.check_status}${e.record_value ? `, on record ${e.record_value}` : ''}; ${e.status}; page ${e.page_number || '-'}]`
             ])),
+            ...(data.requests || []).map(r => [
+                `Request to ${r.requested_from} (due ${r.due_date})`,
+                `${r.subject} [${r.status}${r.overdue ? ', overdue' : ''}${r.response_note ? `; ${r.response_note}` : ''}]`
+            ]),
+            ...((data.timeline && data.timeline.events) || []).slice().reverse().map(e => [
+                `${e.at} ${e.kind === 'note' ? 'Note' : e.title}`, `${e.detail || ''} (${e.by})`.trim()
+            ]),
+            ['Quality check', alert.qa_result ? `${alert.qa_result}${alert.qa_notes ? `: ${alert.qa_notes}` : ''}` : ''],
             ['Exported', data.exportDate],
             ['Exported by', data.preparedBy]
         ];
