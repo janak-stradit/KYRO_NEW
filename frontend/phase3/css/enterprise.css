@@ -790,3 +790,16 @@ body:not(.modal-open) { overflow-x: clip !important; overflow-y: visible !import
     .ks:focus-within #globalSearch { background: #2A3442 !important; opacity: 1; }
     .kyro-navbar:has(.ks:focus-within) .kn-wrap, .kyro-navbar:has(.ks:focus-within) #userMenuDropdown { visibility: hidden; }
 }
+
+/* ── Keyboard focus: always visible, the same everywhere ───────────────── */
+#mainContent a:focus-visible, #mainContent button:focus-visible, #mainContent [role="tab"]:focus-visible,
+.modal button:focus-visible, .modal a:focus-visible, .kyro-navbar a:focus-visible, .kyro-navbar button:focus-visible,
+.kw button:focus-visible, .dropdown-item:focus-visible {
+    outline: 2px solid var(--kt-accent) !important; outline-offset: 2px; box-shadow: none !important;
+}
+.kyro-navbar a:focus-visible, .kyro-navbar button:focus-visible { outline-color: #FDBA74 !important; }
+#mainContent .form-check-input:focus-visible, .modal .form-check-input:focus-visible { outline: 2px solid var(--kt-accent); outline-offset: 2px; box-shadow: none; }
+#mainContent .form-check-input:checked, .modal .form-check-input:checked { background-color: var(--kt-accent); border-color: var(--kt-accent); }
+
+/* Loading: spinners in the accent colour, not Bootstrap blue */
+.spinner-border.text-primary, #mainContent .spinner-border { color: var(--kt-accent) !important; }
