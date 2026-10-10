@@ -211,3 +211,25 @@ def test_cases_are_assigned_only_to_people_who_work_them(client, auth_headers, d
         assert client.put(url, json={"assigned_to": str(person.id)}, headers=lead).status_code == 422, person.username
     assert client.put(url, json={"assigned_to": str(uuid.uuid4())}, headers=lead).status_code == 422
     assert client.put(url, json={"assigned_to": str(analyst.id)}, headers=lead).status_code == 200
+
+
+def test_header_search_finds_customers_the_user_may_see(client, auth_headers, db_session):
+    lead, _ = _user(client, db_session, "TEAM_LEAD", "find.lead")
+    mine_headers, _ = _user(client, db_session, "L2_INVESTIGATOR", "find.l2")
+    _, other = _user(client, db_session, "L2_INVESTIGATOR", "find.l2b")
+    viewer, _ = _user(client, db_session, "EXECUTIVE_VIEWER", "find.exec")
+    pool = _create_alert_via_sanctions_hit(client, auth_headers, "find.pool@example.com")
+    taken = _create_alert_via_sanctions_hit(client, auth_headers, "find.taken@example.com")
+    client.put(f"/api/v1/alerts/{taken['id']}/assign", json={"assigned_to": str(other.id)}, headers=lead)
+    find = lambda headers, **params: client.get("/api/v1/search", params=params, headers=headers)
+
+    everyone = find(lead, q="risky").json()
+    assert {r["customer_id"] for r in everyone} == {pool["customer_id"], taken["customer_id"]}
+    row = next(r for r in everyone if r["customer_id"] == pool["customer_id"])
+    assert row["name"] == "Risky Corp" and row["open_alerts"] == 1 and row["top_alert_id"] == pool["id"] and row["sanctions"] is True
+
+    assert {r["customer_id"] for r in find(mine_headers, q="RISKY").json()} == {pool["customer_id"]}  # not the colleague's case
+    assert find(mine_headers, customer_id=taken["customer_id"]).json() == []
+    assert [r["customer_id"] for r in find(lead, customer_id=taken["customer_id"]).json()] == [taken["customer_id"]]
+    assert find(lead, q="r").json() == [] and find(lead, q="no such customer").json() == []
+    assert find(viewer, q="risky").status_code == 403

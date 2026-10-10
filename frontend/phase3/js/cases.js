@@ -32,6 +32,9 @@ const Cases = {
             attention: ['overdue', 'awaiting_information'].includes(params.attention) ? params.attention : ''
         };
         this.currentFilters = { customer: params.customer || null, pattern: params.pattern || null };
+        // A customer chosen in the header search: all of their alerts, whatever the status
+        this.searchedCustomer = params.customerId ? { id: params.customerId, name: params.customerName || 'this customer' } : null;
+        if (this.searchedCustomer) { this.filters.customerId = params.customerId; this.filters.status = 'ALL'; }
         this.pagination.currentPage = 1;
         this.afterChange = null;
         this.loadDashboard();
@@ -190,6 +193,10 @@ const Cases = {
         this.setupEventListeners();
         await this.loadCustomerCodes();
         this.applyCustomerFromPatterns();
+        if (this.searchedCustomer) {
+            this.renderCustomerChip(this.searchedCustomer.name, null);
+            $("#filterStatus").val('ALL');
+        }
         // Show a view asked for by the link that led here (e.g. "my queue" from the dashboard)
         $("#filterAssignment").val(this.filters.assignment);
         $("#filterAttention").val(this.filters.attention);

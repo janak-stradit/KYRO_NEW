@@ -59,12 +59,7 @@ const App = {
             this.handleRoute();
         });
         
-        // Global search
-        $("#globalSearch").on("keypress", (e) => {
-            if (e.which === 13) {
-                this.handleGlobalSearch($(e.target).val());
-            }
-        });
+        this.setupSearch();
         
         // Hamburger menu drawer toggle
         $(document).on("click", "#hamburgerMenuBtn", () => {
@@ -373,43 +368,111 @@ const App = {
         return paramString ? `?${paramString}` : "";
     },
     
-    async handleGlobalSearch(query) {
-        if (!query || query.trim().length < 2) {
-            showToast("warning", "Please enter at least 2 characters to search");
+    // ── Header search: customers by name or CUST code ──────────────────────
+    search: { items: [], active: -1, timer: null, seq: 0 },
+
+    setupSearch() {
+        const $input = $("#globalSearch");
+        if (!$input.length) return;
+        $input.on("input", () => {
+            clearTimeout(this.search.timer);
+            this.search.timer = setTimeout(() => this.runSearch($input.val()), 220);
+        });
+        $input.on("focus", () => { if (this.search.items.length) this.showSearch(true); });
+        $input.on("keydown", (e) => {
+            const n = this.search.items.length;
+            if (e.key === 'ArrowDown' && n) { e.preventDefault(); this.setActiveResult((this.search.active + 1) % n); }
+            else if (e.key === 'ArrowUp' && n) { e.preventDefault(); this.setActiveResult((this.search.active - 1 + n) % n); }
+            else if (e.key === 'Enter') { e.preventDefault(); if (n) this.openSearchResult(this.search.items[Math.max(0, this.search.active)]); }
+            else if (e.key === 'Escape') { this.showSearch(false); $input.trigger("blur"); }
+        });
+        $("#kyroSearchResults").on("mousedown", ".ks__item", (e) => {
+            e.preventDefault();  // keep focus in the box until the result opens
+            this.openSearchResult(this.search.items[$(e.currentTarget).data("index")]);
+        });
+        $(document).on("mousedown", (e) => { if (!$(e.target).closest("#kyroSearch").length) this.showSearch(false); });
+        // "/" jumps to the search box, as long as the user is not typing somewhere else
+        $(document).on("keydown", (e) => {
+            if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey) return;
+            if ($(e.target).is("input, textarea, select, [contenteditable=true]")) return;
+            e.preventDefault();
+            $input.trigger("focus").trigger("select");
+        });
+    },
+
+    showSearch(open) {
+        $("#kyroSearchResults").toggleClass("d-none", !open);
+        $("#globalSearch").attr("aria-expanded", String(open));
+    },
+
+    setActiveResult(index) {
+        this.search.active = index;
+        $("#kyroSearchResults .ks__item").each((i, el) => $(el).toggleClass("is-active", i === index).attr("aria-selected", String(i === index)));
+    },
+
+    async runSearch(raw) {
+        const query = (raw || '').trim();
+        const seq = ++this.search.seq;
+        if (query.length < 2) { this.search.items = []; this.showSearch(false); return; }
+        if (!Auth.can('cases.view')) {
+            $("#kyroSearchResults").html('<p class="ks__empty">Your role does not open customer records.</p>');
+            this.showSearch(true);
             return;
         }
-        
-        console.log(`🔍 Global search: ${query}`);
-        
-        try {
-            showGlobalLoading();
-            
-            const results = await API.get("/search", { q: query.trim() });
-            
-            // Navigate to search results or specific result
-            if (results.length === 1) {
-                const result = results[0];
-                if (result.type === "customer") {
-                    this.navigateTo("customers", { id: result.id });
-                } else if (result.type === "alert") {
-                    this.navigateTo("alerts", { id: result.id });
-                } else if (result.type === "transaction") {
-                    this.navigateTo("transactions", { id: result.id });
-                }
-            } else {
-                // Show search results page
-                this.navigateTo("search", { q: query });
-            }
-            
-        } catch (error) {
-            console.error("Search error:", error);
-            showToast("error", "Search failed. Please try again.");
-        } finally {
-            hideLoading();
-            $("#globalSearch").blur();
+        // A customer code (CUST-012) is looked up directly; anything else searches names
+        const params = { q: query };
+        const code = query.toUpperCase().replace(/^CUST[\s-]?(\d+)$/, (m, n) => `CUST-${n.padStart(3, '0')}`);
+        if (/^CUST-\d+$/.test(code) && window.Cases) {
+            await Cases.loadCustomerCodes();
+            if (Cases.customerIds[code]) { delete params.q; params.customer_id = Cases.customerIds[code]; }
         }
+        let items;
+        try {
+            items = await API.get('/search', params);
+        } catch (error) {
+            if (seq !== this.search.seq) return;
+            $("#kyroSearchResults").html('<p class="ks__empty">Search is not available right now.</p>');
+            this.showSearch(true);
+            return;
+        }
+        if (seq !== this.search.seq) return;  // a newer search has started
+        if (window.Cases) await Cases.loadCustomerCodes();
+        this.search.items = items;
+        this.search.active = items.length ? 0 : -1;
+        const band = (score) => (score >= 80 ? 'high' : score >= 60 ? 'medium' : 'low');
+        $("#kyroSearchResults").html(items.length ? items.map((c, i) => `
+            <button type="button" class="ks__item${i === 0 ? ' is-active' : ''}" role="option" aria-selected="${i === 0}" data-index="${i}">
+                <span class="ks__avatar" aria-hidden="true">${escapeHtml(c.name.split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?')}</span>
+                <span class="ks__text">
+                    <strong>${escapeHtml(c.name)}</strong>
+                    <small>${escapeHtml((window.Cases && Cases.customerCodes[c.customer_id]) || '')}${c.customer_type ? ` &middot; ${escapeHtml(c.customer_type.charAt(0) + c.customer_type.slice(1).toLowerCase())}` : ''}${c.country ? ` &middot; ${escapeHtml(c.country)}` : ''}</small>
+                </span>
+                <span class="ks__meta">
+                    ${c.sanctions ? '<span class="cd-chip cd-chip--high">Sanctions</span>' : ''}${c.pep ? '<span class="cd-chip cd-chip--medium">PEP</span>' : ''}
+                    ${c.open_alerts ? `<span class="rq-score rq-score--${band(c.max_risk_score)}">${c.max_risk_score}</span><small>${c.open_alerts} open</small>` : '<small>no open alerts</small>'}
+                </span>
+            </button>`).join('') + '<p class="ks__hint">Enter opens the highest-risk open case</p>'
+            : `<p class="ks__empty">No customer matches "${escapeHtml(query)}".</p>`);
+        this.showSearch(true);
     },
-    
+
+    openSearchResult(item) {
+        if (!item) return;
+        this.showSearch(false);
+        $("#globalSearch").val('').trigger("blur");
+        this.search.items = [];
+        if (item.top_alert_id) {
+            // The case page is one route for every case, so tell it directly when it is already open
+            if (this.currentPage === 'case') CaseDetail.open(item.top_alert_id);
+            else this.navigateTo('case', { id: item.top_alert_id });
+            return;
+        }
+        // No open alert: show the customer's alerts of any status in the queue
+        const params = { customerId: item.customer_id, customerName: item.name };
+        if (this.currentPage === 'cases') Cases.init(params);
+        else this.navigateTo('cases', params);
+    },
+
     startHealthMonitoring() {
         // Check system health every 5 minutes
         setInterval(async () => {

@@ -35,7 +35,7 @@
     <link rel="stylesheet" href="css/kyrochat.css?v=3">
     <!-- Theme layer (template layout/cards/typography, KYRO colours) - keep last -->
     <link rel="stylesheet" href="css/theme.css?v=27">
-    <link rel="stylesheet" href="css/enterprise.css?v=31">
+    <link rel="stylesheet" href="css/enterprise.css?v=33">
     
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡️</text></svg>">
 </head>
@@ -91,9 +91,13 @@
             
             <div class="d-flex align-items-center gap-3">
                 <!-- Search -->
-                <div class="position-relative d-none d-md-block">
-                    <input type="text" class="form-control" placeholder="search" id="globalSearch" style="width: 240px; padding: 6px 35px 6px 12px; border-radius: 12px; border: 1px solid #d1d5db; font-size: 0.875rem;">
-                    <i class="fas fa-search position-absolute top-50 translate-middle-y text-muted" style="right: 12px; font-size: 14px;"></i>
+                <div class="ks" id="kyroSearch" role="search">
+                    <label class="visually-hidden" for="globalSearch">Search customers</label>
+                    <i class="fas fa-search ks__icon" aria-hidden="true"></i>
+                    <input type="search" class="ks__input" id="globalSearch" placeholder="Search customers" autocomplete="off"
+                           role="combobox" aria-expanded="false" aria-controls="kyroSearchResults" aria-autocomplete="list">
+                    <kbd class="ks__key" aria-hidden="true">/</kbd>
+                    <div class="ks__panel d-none" id="kyroSearchResults" role="listbox" aria-label="Customers"></div>
                 </div>
                 
                 <!-- Notifications -->
@@ -213,7 +217,7 @@
     <script src="js/transactions.js?v=2"></script>
     <script src="js/alerts.js?v=20261009b"></script>
     <script src="js/documents.js?v=20261010a"></script>
-    <script src="js/cases.js?v=20261010e"></script>
+    <script src="js/cases.js?v=20261010f"></script>
     <script src="js/case-detail.js?v=20261010k"></script>
     <script src="js/periodic-reviews.js?v=20261010b"></script>
     <script src="js/patterns.js?v=20261008f"></script>
@@ -225,7 +229,7 @@
     <script src="js/kyrochat.js?v=20261010a"></script>
     <script src="js/profile.js?v=20261009c"></script>
     <script src="js/notifications.js?v=20261009b"></script>
-    <script src="js/app.js?v=20261009e"></script>
+    <script src="js/app.js?v=20261010f"></script>
     
     <!-- Mobile Hamburger Offcanvas Drawer -->
     <div class="kyro-mobile-drawer" id="kyroMobileDrawer">

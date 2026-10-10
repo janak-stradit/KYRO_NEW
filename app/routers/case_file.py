@@ -33,7 +33,9 @@ from app.models.watchlist import WatchlistEntity, WatchlistSource
 from app.services import customer_risk_service, pattern_service, rule_config_service
 from app.services.audit_service import log_action
 from app.services.control_catalogue import CONTROLS
-from app.visibility import alert_conditions, alert_visible, sees_sar, visible_alert_or_404, visible_customer_or_404
+from app.visibility import (
+    alert_conditions, alert_visible, sees_all_customers, sees_sar, visible_alert_or_404, visible_customer_or_404,
+)
 
 router = APIRouter(prefix="/api/v1", tags=["case-file"], dependencies=[Depends(require_permission("cases.view"))])
 
@@ -720,3 +722,54 @@ def accounts_overview(customer_id: uuid.UUID, db: Session = Depends(get_db), use
         "turnover_last_30_days": [{"currency": c, "amount": round(v, 2)} for c, v in sorted(turnover.items(), key=lambda kv: -kv[1]) if v],
         "expected_monthly_turnover": expected if isinstance(expected, dict) else None,
     }
+
+
+# ── Header search ────────────────────────────────────────────────────────
+
+SEARCH_LIMIT = 8
+
+
+@router.get("/search")
+def search_customers(
+    q: str | None = Query(None, max_length=100),
+    customer_id: uuid.UUID | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> list[dict[str, Any]]:
+    """
+    Customers by name (or one customer by id), each with its open alerts and
+    the case to open first. Only customers and alerts this user may see.
+    """
+    query = db.query(Customer)
+    if customer_id is not None:
+        query = query.filter(Customer.id == customer_id)
+    else:
+        term = (q or "").strip()
+        if len(term) < 2:
+            return []
+        query = query.filter(Customer.full_name.ilike(f"%{term}%"))
+        # Names that start with the term first, then alphabetically
+        query = query.order_by(Customer.full_name.ilike(f"{term}%").desc(), Customer.full_name)
+    if not sees_all_customers(user):
+        query = query.filter(Customer.id.in_(db.query(Alert.customer_id).filter(*alert_conditions(user))))
+    customers = query.limit(SEARCH_LIMIT).all()
+    if not customers:
+        return []
+
+    open_alerts: dict[uuid.UUID, list[Alert]] = {c.id: [] for c in customers}
+    for alert in (
+        db.query(Alert)
+        .filter(Alert.customer_id.in_(list(open_alerts)), Alert.status != "RESOLVED", *alert_conditions(user))
+        .order_by(Alert.risk_score.desc(), Alert.created_at)
+    ):
+        open_alerts[alert.customer_id].append(alert)
+    return [
+        {
+            "customer_id": str(c.id), "name": c.full_name, "customer_type": c.customer_type, "country": c.country,
+            "risk_level": c.risk_level, "pep": c.pep_flag, "sanctions": c.sanctions_flag,
+            "open_alerts": len(open_alerts[c.id]),
+            "max_risk_score": open_alerts[c.id][0].risk_score if open_alerts[c.id] else None,
+            "top_alert_id": str(open_alerts[c.id][0].id) if open_alerts[c.id] else None,
+        }
+        for c in customers
+    ]
