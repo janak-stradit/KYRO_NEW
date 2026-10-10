@@ -3,6 +3,10 @@
  * choose what the file contains, confirm which column is which field,
  * check every row, then load it. Loaded rows go through the same screening,
  * rules and audit as records created in the app.
+ *
+ * The page also starts and stops the live synthetic feed: made-up
+ * transactions for existing accounts, sent through the rules engine and
+ * the AI anomaly models.
  */
 
 const Feeds = {
@@ -11,6 +15,9 @@ const Feeds = {
     preview: null,
     lastCheck: null,
     saved: [],
+    RATES: { 6: 'One every 10 seconds', 12: 'One every 5 seconds', 30: 'One every 2 seconds', 60: 'One every second' },
+    live: null,
+    liveTimer: null,
 
     canUse() {
         return Auth.can('feeds.load');
@@ -30,6 +37,7 @@ const Feeds = {
                     </div>
                 </div>
                 ${this.canUse() ? `
+                <section class="card kd-panel mb-4" id="liveFeed"></section>
                 <section class="card kd-panel mb-4">
                     <header class="kd-panel__head"><div><h2>1. Choose a file</h2><p class="aml-subtitle">CSV with a header row, up to 5 MB. Load customers first, then accounts, then transactions.</p></div></header>
                     <form class="feed-pick" id="feedPickForm">
@@ -60,7 +68,101 @@ const Feeds = {
         `);
         $("#feedPickForm").on("submit", (e) => { e.preventDefault(); this.readFile(); });
         $("#feedTarget").on("change", () => this.renderSavedOptions());
-        await Promise.all([this.loadSaved(), this.loadRuns()]);
+        await Promise.all([this.loadSaved(), this.loadRuns(), this.canUse() ? this.loadLive() : null]);
+    },
+
+    // ── Live synthetic feed ──────────────────────────────────────────────
+
+    /** JSON call that bypasses the shared API helper, which caches GETs. */
+    async liveCall(path = '', body = null) {
+        const response = await fetch(`${API.baseUrl}/feeds/live${path}`, {
+            method: body ? 'POST' : 'GET', cache: 'no-store',
+            headers: { Authorization: API.getHeaders().Authorization, 'Content-Type': 'application/json' },
+            body: body ? JSON.stringify(body) : undefined
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : 'The request failed.');
+        return data;
+    },
+
+    async loadLive() {
+        clearTimeout(this.liveTimer);
+        if (!document.getElementById('liveFeed')) return;  // the user has left the page
+        try {
+            this.live = await this.liveCall();
+        } catch (error) {
+            if (!this.live) $("#liveFeed").html('<p class="cp-empty mb-0">Could not load the live feed status.</p>');
+        }
+        if (!this.live) return;
+        this.renderLive();
+        if (this.live.running) this.liveTimer = setTimeout(() => this.loadLive(), 3000);
+    },
+
+    async toggleLive(start) {
+        $("#liveStart, #liveStop").prop("disabled", true);
+        try {
+            this.live = await this.liveCall(start ? '/start' : '/stop', start ? { per_minute: Number($("#liveRate").val()) } : {});
+            showToast('success', start ? 'The synthetic feed is running.' : 'The synthetic feed has stopped.');
+            if (!start) API.clearCache();  // other pages should show the new transactions and alerts
+        } catch (error) {
+            showToast('error', error.message);
+        }
+        await this.loadLive();
+    },
+
+    renderLive() {
+        const f = this.live;
+        if (!f.enabled) {
+            $("#liveFeed").html(`
+                <header class="kd-panel__head"><div><h2>Live synthetic feed <span class="cd-chip cd-chip--muted">Turned off</span></h2>
+                    <p class="aml-subtitle mb-0">Sends made-up transactions through the rules engine for demonstrations and testing. It is turned off on this system; an administrator can set SYNTHETIC_FEED_ENABLED=true where no real customer data is held.</p></div></header>`);
+            return;
+        }
+        const rate = $("#liveRate").val() || f.per_minute;
+        const tile = (label, value, cls = '') => `<div class="rq-tile rq-tile--static ${cls}"><span class="rq-tile__label">${label}</span><strong class="rq-tile__value">${value}</strong></div>`;
+        const since = f.running ? `Started ${escapeHtml(formatDateTime(f.started_at))}${f.started_by ? ` by ${escapeHtml(f.started_by)}` : ''}.`
+            : f.stopped_at ? `Stopped ${escapeHtml(formatDateTime(f.stopped_at))}.` : 'Not started yet.';
+        $("#liveFeed").html(`
+            <header class="kd-panel__head">
+                <div><h2>Live synthetic feed <span class="cd-chip cd-chip--${f.running ? 'low' : 'muted'}">${f.running ? '<span class="feed-live__dot"></span>Running' : 'Stopped'}</span></h2>
+                    <p class="aml-subtitle">Sends made-up transactions for existing accounts through the rules engine and the AI anomaly models, as a client feed would. They are marked "synthetic_feed" as their source. ${since}</p></div>
+                <div class="feed-live__controls">
+                    <select class="form-select" id="liveRate" aria-label="How often a transaction is sent" ${f.running ? 'disabled' : ''}>
+                        ${Object.entries(this.RATES).map(([k, l]) => `<option value="${k}" ${Number(k) === Number(rate) ? 'selected' : ''}>${l}</option>`).join('')}
+                    </select>
+                    ${f.running ? '<button type="button" class="btn btn-danger" id="liveStop"><i class="fas fa-stop me-2"></i>Stop feed</button>'
+                                : '<button type="button" class="btn btn-primary" id="liveStart"><i class="fas fa-play me-2"></i>Start feed</button>'}
+                </div>
+            </header>
+            ${f.last_error ? `<div class="alert alert-warning py-2 px-3 mb-3">${escapeHtml(f.last_error)}</div>` : ''}
+            ${f.ai_unavailable ? `<div class="alert alert-warning py-2 px-3 mb-3">AI anomaly scoring is not running: ${escapeHtml(f.ai_unavailable)}. Transactions are scored by the rules engine only.</div>` : ''}
+            ${f.started_at ? `
+            <div class="rq-tiles rq-tiles--four">
+                ${tile('Transactions sent', f.transactions.toLocaleString())}
+                ${tile('Flagged by a rule', f.flagged.toLocaleString())}
+                ${tile('Alerts opened', f.alerts.toLocaleString(), f.alerts ? 'rq-tile--alert' : '')}
+                ${tile('Flagged by AI', f.ai_unavailable ? '—' : f.anomalies.toLocaleString())}
+            </div>
+            <div class="table-responsive feed-live__recent">
+                <table class="table mb-0 fp-table">
+                    <thead><tr><th class="px-3 py-2">Time</th><th class="px-3 py-2">Customer</th><th class="px-3 py-2">Type</th><th class="px-3 py-2 text-end">Amount</th><th class="px-3 py-2">Country</th><th class="px-3 py-2 text-end">Rules score</th><th class="px-3 py-2 text-end">AI score</th><th class="px-3 py-2">Rules</th></tr></thead>
+                    <tbody>
+                        ${f.recent.map(t => `
+                        <tr>
+                            <td class="px-3 py-2 text-nowrap">${escapeHtml(new Date(t.at).toLocaleTimeString())}</td>
+                            <td class="px-3 py-2">${escapeHtml(t.customer)}</td>
+                            <td class="px-3 py-2">${escapeHtml(t.transaction_type)}</td>
+                            <td class="px-3 py-2 text-end text-nowrap">${escapeHtml(formatCurrency(t.amount, t.currency))}</td>
+                            <td class="px-3 py-2">${escapeHtml(t.country || '')}</td>
+                            <td class="px-3 py-2 text-end">${t.risk_score}</td>
+                            <td class="px-3 py-2 text-end">${t.ai_score === null ? '<span class="text-muted">—</span>' : `${t.anomaly ? `<span class="cd-chip cd-chip--high">${t.ai_score} · anomaly</span>` : t.ai_score}`}</td>
+                            <td class="px-3 py-2">${t.triggered_rules.length ? `<span class="cd-chip cd-chip--${t.alert_opened ? 'high' : 'medium'}">${escapeHtml(t.triggered_rules.join(', '))}${t.alert_opened ? ' · alert' : ''}</span>` : '<span class="text-muted">—</span>'}</td>
+                        </tr>`).join('') || '<tr><td colspan="8" class="rc-empty">Waiting for the first transaction...</td></tr>'}
+                    </tbody>
+                </table>
+            </div>` : ''}`);
+        $("#liveStart").on("click", () => this.toggleLive(true));
+        $("#liveStop").on("click", () => this.toggleLive(false));
     },
 
     async loadSaved() {

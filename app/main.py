@@ -19,6 +19,7 @@ from slowapi.middleware import SlowAPIMiddleware
 
 from app.config import get_settings
 from app.rate_limit import limiter
+from app.services import live_feed_service
 from app.routers import (
     accounts,
     ai,
@@ -93,6 +94,7 @@ def _seed_default_users() -> None:
 async def lifespan(app: FastAPI):
     _seed_default_users()
     yield
+    live_feed_service.stop()
 
 
 app = FastAPI(title=settings.app_name, version="0.1.0", debug=settings.debug, lifespan=lifespan)

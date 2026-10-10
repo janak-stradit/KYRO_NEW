@@ -18,6 +18,9 @@ from sqlalchemy.orm import sessionmaker
 # The suite logs in far more often than the production login limit allows;
 # tests that exercise rate limiting re-enable the limiter explicitly.
 os.environ.setdefault("RATE_LIMIT_ENABLED", "false")
+# Tests assert on the rules engine's alerts; the tests of automatic ML scoring
+# turn it on themselves.
+os.environ.setdefault("ML_AUTO_SCORE", "false")
 os.environ.setdefault(
     "DATABASE_URL", "postgresql+psycopg://kyro_user:kyro_pass@localhost:5434/kyro_aml"
 )

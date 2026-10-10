@@ -97,9 +97,19 @@ jobs:
           ELEVENLABS_VOICE_ID: ${{ secrets.ELEVENLABS_VOICE_ID }}
           ELEVENLABS_MODEL_ID: ${{ secrets.ELEVENLABS_MODEL_ID }}
           TTS_PROVIDER: ${{ secrets.TTS_PROVIDER }}
+          # Application settings: repository variables (Settings > Secrets and
+          # variables > Actions > Variables). Unset ones take deploy.sh's defaults.
+          SYNTHETIC_FEED_ENABLED: ${{ vars.SYNTHETIC_FEED_ENABLED }}
+          ML_AUTO_SCORE: ${{ vars.ML_AUTO_SCORE }}
+          KYRO_AI_ENABLED: ${{ vars.KYRO_AI_ENABLED }}
+          KYRO_LLM_MOCK: ${{ vars.KYRO_LLM_MOCK }}
+          KYRO_LLM_BASE_URL: ${{ vars.KYRO_LLM_BASE_URL }}
+          KYRO_LLM_MODEL: ${{ vars.KYRO_LLM_MODEL }}
+          KYRO_LLM_TIMEOUT_SECONDS: ${{ vars.KYRO_LLM_TIMEOUT_SECONDS }}
+          KYRO_LLM_API_KEY: ${{ secrets.KYRO_LLM_API_KEY }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_SSH_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          envs: AWS_REGION,ECR_REGISTRY,SECRET_KEY,DB_PASSWORD,ELEVENLABS_API_KEY,ELEVENLABS_VOICE_ID,ELEVENLABS_MODEL_ID,TTS_PROVIDER
+          envs: AWS_REGION,ECR_REGISTRY,SECRET_KEY,DB_PASSWORD,ELEVENLABS_API_KEY,ELEVENLABS_VOICE_ID,ELEVENLABS_MODEL_ID,TTS_PROVIDER,SYNTHETIC_FEED_ENABLED,ML_AUTO_SCORE,KYRO_AI_ENABLED,KYRO_LLM_MOCK,KYRO_LLM_BASE_URL,KYRO_LLM_MODEL,KYRO_LLM_TIMEOUT_SECONDS,KYRO_LLM_API_KEY
           script: /opt/kyro/deploy/deploy.sh ${{ github.sha }}

@@ -10,6 +10,8 @@ REM    run_kyro.bat            start KYRO (first run installs everything)
 REM    run_kyro.bat seed       load synthetic sample customers, transactions
 REM                            and periodic review schedules
 REM    run_kyro.bat install    re-install Python dependencies
+REM    run_kyro.bat export     write every row of the local database to a file
+REM                            for the deployed server (see deploy\README.md)
 REM
 REM  Database connection: put it in local.env (git-ignored), e.g.
 REM    KYRO_DATABASE_URL=postgresql+psycopg://postgres:yourpass@localhost:5432/kyro_aml
@@ -38,6 +40,9 @@ REM The app uses psycopg v3, so accept psycopg2-style URLs too.
 set "DATABASE_URL=%KYRO_DATABASE_URL:+psycopg2=+psycopg%"
 set "SERVE_FRONTEND_DIR=%~dp0frontend\phase3"
 set "ML_OPTIONAL=true"
+REM Local runs use sample data, so the live synthetic feed on the Data Feeds
+REM page is available; set SYNTHETIC_FEED_ENABLED=false in local.env to hide it.
+if not defined SYNTHETIC_FEED_ENABLED set "SYNTHETIC_FEED_ENABLED=true"
 set "CORS_ALLOWED_ORIGINS=http://localhost:%KYRO_PORT%,http://127.0.0.1:%KYRO_PORT%"
 REM The API also serves the frontend locally, so page assets count toward
 REM the per-IP limit - raise it for local use.
@@ -63,8 +68,9 @@ if /i "%~1"=="install" (
     exit /b 0
 )
 if /i "%~1"=="seed" goto :seed
+if /i "%~1"=="export" goto :export
 if not "%~1"=="" (
-    echo Unknown option "%~1". Use: seed ^| install
+    echo Unknown option "%~1". Use: seed ^| install ^| export
     exit /b 1
 )
 
@@ -110,6 +116,12 @@ echo Loading synthetic sample data...
 echo Scheduling risk-based periodic reviews...
 "%VENV_PY%" scripts\seed_periodic_reviews.py --backfill-last-review || goto :fail
 echo Done.
+exit /b 0
+
+REM ---------------------------------------------------------------
+:export
+call :ensure_venv || goto :fail
+"%VENV_PY%" scripts\export_db.py || goto :fail
 exit /b 0
 
 REM ---------------------------------------------------------------

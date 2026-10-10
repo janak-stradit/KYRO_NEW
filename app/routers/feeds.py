@@ -1,6 +1,7 @@
 """
 routers/feeds.py — Data-feed field mapping (Phase 11.4 step 4): preview a
-client CSV, save the column mapping, check the file and load it.
+client CSV, save the column mapping, check the file and load it. Also starts
+and stops the live synthetic feed.
 """
 from __future__ import annotations
 
@@ -17,8 +18,9 @@ from app.database import get_db
 from app.deps import get_current_user, require_permission
 from app.models.feed import FeedMapping, FeedRun
 from app.models.user import User
-from app.services import feed_service
+from app.services import feed_service, live_feed_service
 from app.services.feed_service import FeedError
+from app.services.live_feed_service import LiveFeedError
 
 router = APIRouter(prefix="/api/v1/feeds", tags=["feeds"], dependencies=[Depends(get_current_user)])
 
@@ -56,7 +58,27 @@ class RunOut(BaseModel):
     run_at: datetime
 
 
-def _fail(exc: FeedError) -> HTTPException:
+class LiveStartIn(BaseModel):
+    per_minute: int = Field(default=live_feed_service.DEFAULT_PER_MINUTE, ge=1, le=live_feed_service.MAX_PER_MINUTE)
+
+
+class LiveOut(BaseModel):
+    enabled: bool
+    running: bool
+    per_minute: int
+    started_at: datetime | None = None
+    stopped_at: datetime | None = None
+    started_by: str | None = None
+    transactions: int
+    flagged: int
+    alerts: int
+    anomalies: int
+    ai_unavailable: str | None = None  # why transactions are not being ML-scored
+    last_error: str | None = None
+    recent: list[dict[str, Any]]
+
+
+def _fail(exc: FeedError | LiveFeedError) -> HTTPException:
     return HTTPException(exc.status_code, str(exc))
 
 
@@ -136,3 +158,24 @@ async def run_feed(
 @router.get("/runs", response_model=list[RunOut])
 def list_runs(db: Session = Depends(get_db)) -> list[FeedRun]:
     return db.query(FeedRun).order_by(FeedRun.run_at.desc()).limit(50).all()
+
+
+@router.get("/live", response_model=LiveOut)
+def live_status() -> dict[str, Any]:
+    return live_feed_service.status()
+
+
+@router.post("/live/start", response_model=LiveOut)
+def live_start(
+    data: LiveStartIn, db: Session = Depends(get_db), user: User = Depends(require_permission("feeds.load"))
+) -> dict[str, Any]:
+    """Start sending synthetic transactions through the rules engine until stopped."""
+    try:
+        return live_feed_service.start(db, per_minute=data.per_minute, user_id=user.id, username=user.username)
+    except LiveFeedError as exc:
+        raise _fail(exc) from None
+
+
+@router.post("/live/stop", response_model=LiveOut)
+def live_stop(user: User = Depends(require_permission("feeds.load"))) -> dict[str, Any]:
+    return live_feed_service.stop()

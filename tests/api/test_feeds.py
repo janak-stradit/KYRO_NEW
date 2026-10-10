@@ -151,3 +151,162 @@ def test_saved_mapping_can_be_reused(client, auth_headers, compliance_headers):
 
     run = _run(client, compliance_headers, CUSTOMERS_CSV, "CUSTOMERS", CUSTOMER_MAPPING, mapping_id=saved.json()["id"])
     assert run.json()["mapping_id"] == saved.json()["id"]
+
+
+# ── Live synthetic feed ──────────────────────────────────────────────────
+
+@pytest.fixture
+def live_feed(monkeypatch):
+    """The feed switched on, with the background loop replaced so no thread touches the test session."""
+    from app.config import get_settings
+    from app.services import live_feed_service
+
+    monkeypatch.setattr(get_settings(), "synthetic_feed_enabled", True)
+    monkeypatch.setattr(live_feed_service, "_loop", lambda state, user_id: state.stop.wait(30))
+    yield live_feed_service
+    live_feed_service.stop()
+
+
+def _account(client, headers, db_session):
+    # Only this test's account is active, whatever the database already holds
+    db_session.query(Account).update({"account_status": "CLOSED"})
+    db_session.commit()
+    customer = client.post("/api/v1/customers", json={"full_name": "Live Feed Co", "email": "live@feedco.example", "country": "GB"}, headers=headers)
+    assert customer.status_code == 201, customer.text
+    account = client.post("/api/v1/accounts", json={"customer_id": customer.json()["id"], "account_type": "CHECKING", "currency": "GBP"}, headers=headers)
+    assert account.status_code == 201, account.text
+    return account.json()
+
+
+def test_synthetic_feed_starts_and_stops(client, auth_headers, compliance_headers, db_session, live_feed):
+    assert client.post("/api/v1/feeds/live/start", json={}, headers=auth_headers).status_code == 403
+    assert client.post("/api/v1/feeds/live/stop", headers=auth_headers).status_code == 403
+    assert client.get("/api/v1/feeds/live", headers=compliance_headers).json()["running"] is False
+
+    db_session.query(Account).update({"account_status": "CLOSED"})
+    db_session.commit()
+    no_accounts = client.post("/api/v1/feeds/live/start", json={}, headers=compliance_headers)
+    assert no_accounts.status_code == 409 and "accounts" in no_accounts.json()["detail"]
+    assert client.post("/api/v1/feeds/live/start", json={"per_minute": 5000}, headers=compliance_headers).status_code == 422
+
+    _account(client, compliance_headers, db_session)
+    started = client.post("/api/v1/feeds/live/start", json={"per_minute": 30}, headers=compliance_headers)
+    assert started.status_code == 200, started.text
+    assert (started.json()["running"], started.json()["per_minute"], started.json()["started_by"]) == (True, 30, "compliance1")
+    # Starting again leaves the running feed as it is
+    again = client.post("/api/v1/feeds/live/start", json={"per_minute": 6}, headers=compliance_headers).json()
+    assert (again["per_minute"], again["started_at"]) == (30, started.json()["started_at"])
+
+    stopped = client.post("/api/v1/feeds/live/stop", headers=compliance_headers).json()
+    assert stopped["running"] is False and stopped["stopped_at"]
+    assert client.get("/api/v1/feeds/live", headers=compliance_headers).json()["running"] is False
+
+
+def test_synthetic_feed_is_refused_unless_enabled(client, compliance_headers, monkeypatch):
+    from app.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "synthetic_feed_enabled", False)
+    assert client.get("/api/v1/feeds/live", headers=compliance_headers).json()["enabled"] is False
+    assert client.post("/api/v1/feeds/live/start", json={}, headers=compliance_headers).status_code == 403
+
+
+def test_synthetic_transaction_goes_through_the_rules_and_is_marked(client, compliance_headers, compliance_user, db_session, live_feed, monkeypatch):
+    account = _account(client, compliance_headers, db_session)
+    monkeypatch.setattr(live_feed, "_amount", lambda: 250_000.0)
+
+    row = live_feed.generate_one(db_session, compliance_user.id)
+    db_session.commit()
+
+    txn = db_session.query(Transaction).filter_by(account_id=account["id"]).one()
+    assert (txn.source_system, txn.currency, float(txn.amount)) == ("synthetic_feed", "GBP", 250_000.0)
+    assert "R001" in row["triggered_rules"] and row["alert_opened"] is True and row["customer"] == "Live Feed Co"
+    assert db_session.query(Alert).filter_by(customer_id=account["customer_id"]).count() >= 1
+    assert db_session.query(AuditLog).filter_by(entity_type="TRANSACTION", entity_id=txn.id, performed_by=compliance_user.id).count() == 1
+
+
+# ── Automatic ML scoring of ingested transactions ────────────────────────
+
+class _FakeScoring:
+    """Stands in for app.ml.scoring.real_time_scorer, which needs scikit-learn and trained models."""
+
+    class ScoringUnavailableError(RuntimeError):
+        pass
+
+    result = {"risk_score": 88.0, "anomaly_probability": 0.9, "anomaly_flag": True, "explanation": {"summary": "Amount is unusually high", "top_features": [{"feature": "amount", "impact": 1.0}]}}
+    error = None
+
+    @classmethod
+    def RealTimeScorer(cls):
+        return cls
+
+    @classmethod
+    def score_transaction(cls, db, txn, customer):
+        if cls.error:
+            raise cls.error
+        from app.models.ml_score import MLScore
+
+        db.add(MLScore(transaction_id=txn.id, combined_score=cls.result["risk_score"], anomaly_probability=cls.result["anomaly_probability"], anomaly_flag=cls.result["anomaly_flag"], explanation=cls.result["explanation"]))
+        db.flush()
+        return dict(cls.result)
+
+
+@pytest.fixture
+def auto_scoring(monkeypatch):
+    from app.config import get_settings
+    from app.services import auto_scoring_service
+
+    monkeypatch.setattr(get_settings(), "ml_auto_score", True)
+    monkeypatch.setattr(auto_scoring_service, "_scoring_module", _FakeScoring)
+    monkeypatch.setattr(_FakeScoring, "error", None)
+    return _FakeScoring
+
+
+def _ingest(client, headers, account, amount):
+    resp = client.post("/api/v1/transactions", json={
+        "customer_id": account["customer_id"], "account_id": account["id"], "transaction_type": "DEPOSIT", "amount": amount,
+        "currency": "GBP", "transaction_date": "2026-09-02T10:00:00Z", "meta_counterparty": "Known Payer",
+    }, headers=headers)
+    assert resp.status_code == 201, resp.text
+    return resp.json()
+
+
+def test_ingested_transactions_are_ml_scored_and_anomalies_open_an_alert(client, compliance_headers, db_session, auto_scoring, monkeypatch):
+    from app.models.ml_score import MLScore
+
+    account = _account(client, compliance_headers, db_session)
+    alerts = lambda: db_session.query(Alert).filter_by(customer_id=account["customer_id"]).order_by(Alert.created_at).all()  # noqa: E731
+
+    # The rules engine opened an alert: the model's explanation is added to it, not a second alert
+    large = _ingest(client, compliance_headers, account, 250_000)
+    assert db_session.query(MLScore).filter_by(transaction_id=large["id"]).one().anomaly_flag is True
+    assert len(alerts()) == 1 and alerts()[0].triggered_rules and alerts()[0].ml_explanation["summary"] == "Amount is unusually high"
+
+    # No rules alert, but the models flag it: an ML alert is opened
+    rule_alerts = len(alerts())
+    small = _ingest(client, compliance_headers, account, 40)
+    if not db_session.query(Alert).filter(Alert.triggered_rules.isnot(None)).filter_by(customer_id=account["customer_id"]).count() > rule_alerts:
+        assert len(alerts()) == rule_alerts + 1 and alerts()[-1].ml_version and alerts()[-1].triggered_rules is None
+
+    # Not an anomaly: scored, no alert
+    monkeypatch.setattr(auto_scoring, "result", {**auto_scoring.result, "risk_score": 45.0, "anomaly_flag": False})
+    before = len(alerts())
+    quiet = _ingest(client, compliance_headers, account, 41)
+    assert db_session.query(MLScore).filter_by(transaction_id=quiet["id"]).one().combined_score == 45.0
+    assert len([a for a in alerts() if a.triggered_rules is None]) == len([a for a in alerts()[:before] if a.triggered_rules is None])
+    assert small["id"] != quiet["id"]
+
+
+def test_a_failed_or_unavailable_ml_score_never_blocks_the_transaction(client, compliance_headers, db_session, auto_scoring, monkeypatch):
+    from app.models.ml_score import MLScore
+    from app.services import auto_scoring_service
+
+    account = _account(client, compliance_headers, db_session)
+    for error in (auto_scoring.ScoringUnavailableError("no models"), RuntimeError("boom")):
+        monkeypatch.setattr(auto_scoring, "error", error)
+        txn = _ingest(client, compliance_headers, account, 250_000)
+        assert "R001" in txn["risk_flags"]["triggered_rules"]
+        assert db_session.query(MLScore).filter_by(transaction_id=txn["id"]).count() == 0
+
+    monkeypatch.setattr(auto_scoring_service, "_scoring_module", False)  # ML libraries cannot be imported
+    assert _ingest(client, compliance_headers, account, 55)["id"]
+    assert "cannot be loaded" in auto_scoring_service.unavailable_reason()

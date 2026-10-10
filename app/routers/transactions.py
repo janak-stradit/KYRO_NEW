@@ -1,6 +1,7 @@
 """
 routers/transactions.py — Transaction ingestion (single/batch) and risk retrieval.
-Newly ingested transactions are scored synchronously by the rules engine.
+Newly ingested transactions are scored synchronously by the rules engine and
+then by the ML models (services/auto_scoring_service.py).
 """
 from __future__ import annotations
 
@@ -25,6 +26,7 @@ from app.schemas.transaction import (
     TransactionOut,
     TransactionRiskOut,
 )
+from app.services import auto_scoring_service
 from app.services.audit_service import log_action
 from app.services.rules_engine import apply_to_transaction
 
@@ -65,7 +67,8 @@ def _ingest_one(db: Session, data: TransactionCreate, performed_by: uuid.UUID | 
     db.add(txn)
     db.flush()
 
-    apply_to_transaction(db, txn, customer)
+    _, _, alert = apply_to_transaction(db, txn, customer)
+    auto_scoring_service.score_ingested(db, txn, customer, alert)
 
     log_action(db, entity_type="TRANSACTION", entity_id=txn.id, action="CREATE", performed_by=performed_by, new_values=data.model_dump(mode="json"))
     return txn

@@ -1331,5 +1331,14 @@ td.rc-empty strong { display: block; color: var(--kt-ink); font-size: 15px; marg
 .feed-errors li { padding: 8px 12px; font-size: 13px; color: var(--kt-body); border-bottom: 1px solid var(--kt-border-soft); }
 .feed-errors li:last-child { border-bottom: 0; }
 .feed-errors strong { display: inline-block; min-width: 62px; color: var(--kt-ink); }
+.kd-panel__head h2 .cd-chip { margin-left: 8px; vertical-align: middle; }
+.feed-live__controls { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+.feed-live__controls .form-select { width: auto; min-width: 200px; }
+.feed-live__controls .btn { white-space: nowrap; }
+@media (max-width: 767.98px) { #liveFeed .kd-panel__head { flex-direction: column; align-items: stretch; } .feed-live__controls { flex-wrap: wrap; } }
+.feed-live__dot { display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; background: currentColor; animation: feed-live-pulse 1.4s ease-in-out infinite; }
+@keyframes feed-live-pulse { 50% { opacity: 0.25; } }
+@media (prefers-reduced-motion: reduce) { .feed-live__dot { animation: none; } }
+.feed-live__recent { max-height: 320px; overflow-y: auto; border: 1px solid var(--kt-border-soft); border-radius: 8px; }
 
 #mainContent td.bp-evidence { max-width: 420px; white-space: normal; color: var(--kt-ink); }

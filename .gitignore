@@ -107,3 +107,6 @@ GITHUB_STATUS.md
 
 # Uploaded KYC documents and other local runtime data
 var/
+
+# ── Database backups written by deploy/restore_data.sh ─────────
+backups/

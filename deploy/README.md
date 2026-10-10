@@ -78,8 +78,9 @@ cp .env.example .env
 #   ELEVENLABS_API_KEY / ELEVENLABS_VOICE_ID (if TTS is used)
 chmod 600 .env
 ```
-`.env` lives only on the instance, is gitignored, and `deploy.sh` never
-touches it.
+`.env` lives only on the instance and is gitignored. Every deploy rewrites
+it from the GitHub secrets and variables in section 2, so change values
+there rather than by editing the file on the server.
 
 ## 2. GitHub repository secrets
 
@@ -91,6 +92,22 @@ touches it.
 | `EC2_HOST`         | the instance's Elastic IP / public DNS                  |
 | `EC2_SSH_USER`     | `ubuntu`                                                |
 | `EC2_SSH_KEY`      | private half of the deploy keypair generated above      |
+
+### Application settings (optional)
+
+`deploy.sh` rewrites the server's `.env` on every deploy from the secrets
+above plus these. Unset ones take the default.
+
+| Name | Kind | Default | What it does |
+|------|------|---------|--------------|
+| `SYNTHETIC_FEED_ENABLED` | variable | `true` | Start/Stop live synthetic feed on the Data Feeds page. Set to `false` once the server holds real customer data. |
+| `ML_AUTO_SCORE` | variable | `true` | Score every new transaction with the ML models |
+| `KYRO_AI_ENABLED` | variable | `false` | Compliance AI features |
+| `KYRO_LLM_MOCK` | variable | `true` | `false` sends prompts to the real LLM (needs `KYRO_AI_ENABLED=true`) |
+| `KYRO_LLM_BASE_URL`, `KYRO_LLM_MODEL`, `KYRO_LLM_TIMEOUT_SECONDS` | variable | | LLM gateway |
+| `KYRO_LLM_API_KEY` | **secret** | | LLM gateway key |
+
+Variables live under Settings > Secrets and variables > Actions > Variables.
 
 ## 3. How a deploy works
 
@@ -158,7 +175,54 @@ Once HTTPS is live, remember to update the `EC2_HOST` GitHub secret's
 usage in your head (SSH still uses the raw IP — that's unaffected) and
 just bookmark `https://<your-hostname>` for the app itself.
 
-## 6. Explicitly out of scope for now
+## 6. Copy a database to the server
+
+A deploy only builds the tables (`alembic upgrade head`) and creates the three
+default users. It does not bring any data with it. To give the server the same
+users, customers, accounts, transactions, alerts and cases as another KYRO
+database (for example the one on your own machine):
+
+1. **Deploy the same code first.** The export records which migration it was
+   made on, and the restore refuses a server on a different one. Merge the
+   branch you run locally to `main` and let the deploy finish.
+
+2. **Export, on the machine that has the data:**
+   ```bat
+   run_kyro.bat export
+   ```
+   (or `python scripts/export_db.py` with `DATABASE_URL` set). It writes
+   `var/export/kyro_data_<migration>_<date>.sql.gz`.
+
+3. **Copy the file to the server:**
+   ```bash
+   scp -i kyro_deploy_key var/export/kyro_data_*.sql.gz ubuntu@<EC2_HOST>:/opt/kyro/
+   ```
+
+4. **Load it, on the server:**
+   ```bash
+   cd /opt/kyro
+   bash deploy/restore_data.sh kyro_data_<migration>_<date>.sql.gz
+   ```
+   It shows what the server holds now and asks you to type `replace`.
+   **Everything in the server's database is replaced** by the file's contents.
+   The previous contents are saved to `backups/` first, the application is
+   stopped while the rows are loaded, and the load is a single transaction, so
+   a failure leaves the server's data as it was.
+
+5. Delete the export file from both machines: it holds personal data and
+   password hashes.
+
+The users come across with their passwords, so anyone who can sign in on the
+source machine can sign in on the server with the same password. Change the
+demo passwords (`admin123`, `kyro123`) on the Users and Access page before
+the server is reachable by anyone else.
+
+Not copied, because they are files rather than database rows: uploaded KYC
+documents (`var/documents`) and trained ML models (`models/`). Train the
+models on the server with `POST /api/v1/ml/train` (admin only); until
+then transactions are scored by the rules engine only.
+
+## 7. Explicitly out of scope for now
 
 - Managed RDS/ElastiCache — Postgres and Redis run as containers on the
   same instance.

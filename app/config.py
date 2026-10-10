@@ -48,6 +48,9 @@ class Settings(BaseSettings):
     # ── ML (Phase 2) ─────────────────────────────────────────────
     # True = start without /api/v1/ml endpoints if the ML stack can't import.
     ml_optional: bool = False
+    # Score every newly ingested transaction with the ML models, after the
+    # rules engine. Skipped quietly where the models or libraries are missing.
+    ml_auto_score: bool = True
     model_registry_path: str = "./models"
     default_risk_model_version: int | None = None
     default_anomaly_model_version: int | None = None
@@ -75,6 +78,9 @@ class Settings(BaseSettings):
     # Users are created by an administrator. Turn this on only for a demo
     # environment where anyone may register themselves as an analyst.
     allow_self_registration: bool = False
+    # Lets the Data Feeds page start a live feed of synthetic transactions.
+    # Demo and development only: never turn it on where real customers are held.
+    synthetic_feed_enabled: bool = False
     # Days a case may stay open before the case page marks it overdue, by risk band.
     # Placeholders: set them to the firm's own policy.
     case_target_days_high: int = 5
