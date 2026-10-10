@@ -508,3 +508,24 @@ body:not(.modal-open) { overflow-x: clip !important; overflow-y: visible !import
 
 .cp-summary__wait { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 13.5px; color: #475467; }
 .cp-summary__wait .spinner-border { color: var(--kt-accent); flex: 0 0 auto; }
+
+/* Case stage tracker */
+.cp-stages { display: flex; align-items: flex-start; gap: 0; list-style: none; margin: 0 0 6px; padding: 4px 0 0; overflow-x: auto; }
+.cp-stage { position: relative; flex: 1 1 0; min-width: 132px; padding-right: 12px; }
+.cp-stage:not(:last-child)::after { content: ""; position: absolute; top: 11px; left: 30px; right: 6px; height: 2px; background: var(--kt-border); }
+.cp-stage--done:not(:last-child)::after { background: #12B76A; }
+.cp-stage__dot { position: relative; width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; background: #fff; border: 2px solid #D0D5DD; color: #667085; z-index: 1; }
+.cp-stage__text { display: flex; flex-direction: column; margin-top: 4px; line-height: 1.25; }
+.cp-stage__text strong { font-size: 12.5px; font-weight: 600; color: #475467; }
+.cp-stage__text small { font-size: 11.5px; color: #667085; min-height: 14px; }
+.cp-stage--done .cp-stage__dot { background: #12B76A; border-color: #12B76A; color: #fff; }
+.cp-stage--done .cp-stage__text strong { color: var(--kt-ink); }
+.cp-stage--current .cp-stage__dot { border-color: var(--kt-accent); color: var(--kt-accent-strong); box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.18); }
+.cp-stage--current .cp-stage__text strong { color: var(--kt-ink); font-weight: 700; }
+.cp-stage--current .cp-stage__text small { color: var(--kt-accent-strong); font-weight: 600; }
+.cp-stage--skipped .cp-stage__dot { border-style: dashed; }
+
+/* Customer profile grid */
+#mainContent .cp-profile { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 0; }
+#mainContent .cp-profile strong { font-weight: 600; overflow-wrap: anywhere; }
+@media (max-width: 1199.98px) { #mainContent .cp-profile { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

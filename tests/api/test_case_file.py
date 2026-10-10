@@ -134,3 +134,35 @@ def test_activity_for_a_customer_without_history(client, auth_headers, db_sessio
     assert data["comparison"]["transactions"] == {"current": 1, "usual": 0.0}
     assert data["comparison"]["largest_amount"] == [{"currency": "USD", "current": 5000.0, "previous": None}]
     assert client.get(f"/api/v1/customers/{uuid.uuid4()}/activity", headers=auth_headers).status_code == 404
+
+
+def test_stage_tracker_follows_the_case(client, auth_headers, compliance_headers, analyst_user):
+    alert = _create_alert_via_sanctions_hit(client, auth_headers, "stages@example.com")
+    url = f"/api/v1/alerts/{alert['id']}"
+    stages = lambda: {s["key"]: s for s in client.get(f"{url}/timeline", headers=compliance_headers).json()["stages"]}
+
+    s = stages()
+    assert list(s) == ["opened", "assigned", "investigation", "decision", "quality"]
+    assert s["opened"]["done"] and s["assigned"]["current"] and not s["investigation"]["done"]
+
+    client.put(f"{url}/assign", json={"assigned_to": str(analyst_user.id)}, headers=auth_headers)
+    assert stages()["assigned"]["done"] and stages()["investigation"]["current"]
+
+    client.post(f"{url}/notes", json={"body": "Reviewed the transfers."}, headers=auth_headers)
+    assert stages()["investigation"]["done"] and stages()["decision"]["current"]
+
+    client.put(f"{url}/escalate", json={"reasons": ["SANCTIONS_EXPOSURE"]}, headers=auth_headers)
+    s = stages()
+    assert list(s) == ["opened", "assigned", "investigation", "escalated", "decision", "quality"]
+    assert s["escalated"]["done"] and s["decision"]["current"]
+
+    client.put(f"{url}/resolve", json=_FP_RESOLUTION, headers=compliance_headers)
+    s = stages()
+    assert s["decision"]["done"] and s["decision"]["detail"] == "False positive" and s["quality"]["current"]
+
+
+def test_a_case_resolved_straight_away_skips_the_middle_stages(client, auth_headers, compliance_headers):
+    alert = _create_alert_via_sanctions_hit(client, auth_headers, "stages.fast@example.com")
+    client.put(f"/api/v1/alerts/{alert['id']}/resolve", json=_FP_RESOLUTION, headers=compliance_headers)
+    s = {x["key"]: x for x in client.get(f"/api/v1/alerts/{alert['id']}/timeline", headers=compliance_headers).json()["stages"]}
+    assert s["assigned"]["skipped"] and not s["assigned"]["current"] and s["decision"]["done"] and s["quality"]["current"]

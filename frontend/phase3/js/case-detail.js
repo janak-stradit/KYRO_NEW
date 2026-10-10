@@ -112,6 +112,7 @@ const CaseDetail = {
         }
         if (this.id !== alertId) return;  // the user has moved to another case
         if (data.clock) this.renderClock(data.clock);
+        if (data.stages) this.renderStages(data.stages);
         $("#cpGlanceNotes").text(data.note_count);
         $("#cpGlanceNotesNote").text(`${data.events.length - data.note_count} other event${data.events.length - data.note_count === 1 ? '' : 's'} on the timeline`);
         this.setInvestigationCount('notes', data.note_count);
@@ -325,6 +326,19 @@ const CaseDetail = {
         this.setCount('investigation', (this.counts.notes || 0) + (this.counts.requests || 0));
     },
 
+    // ── Stage tracker: where the case stands ───────────────────────────────
+    renderStages(stages) {
+        $("#cpStages").html(stages.map((st, i) => {
+            const state = st.done ? 'done' : st.current ? 'current' : st.skipped ? 'skipped' : 'todo';
+            const note = st.done ? [st.detail, st.at ? formatDate(st.at) : ''].filter(Boolean).join(' · ') : st.current ? 'Current stage' : st.skipped ? 'Skipped' : '';
+            return `
+            <li class="cp-stage cp-stage--${state}" ${st.current ? 'aria-current="step"' : ''}>
+                <span class="cp-stage__dot" aria-hidden="true">${st.done ? '<i class="fas fa-check"></i>' : i + 1}</span>
+                <span class="cp-stage__text"><strong>${escapeHtml(st.label)}</strong><small>${escapeHtml(note)}<span class="visually-hidden">${st.done ? ' (done)' : st.current ? '' : ' (not reached)'}</span></small></span>
+            </li>`;
+        }).join(''));
+    },
+
     // ── Case clock (filled from the timeline response) ─────────────────────
     renderClock(clock) {
         const days = (n) => `${n} day${n === 1 ? '' : 's'}`;
@@ -364,23 +378,89 @@ const CaseDetail = {
         `);
     },
 
+    // ── Customer profile ───────────────────────────────────────────────────
+    money(amount, currency) {
+        return `${Number(amount).toLocaleString(undefined, { maximumFractionDigits: 0 })} ${currency || ''}`.trim();
+    },
+
+    /** A few lines on who the customer is, for the Overview. */
+    profileSummary(customer) {
+        const m = customer.customer_metadata || {};
+        const rows = [
+            [customer.customer_type === 'INDIVIDUAL' ? 'Occupation' : 'Business', m.occupation || m.industry],
+            ['Source of funds', m.source_of_funds],
+            ['Expected monthly turnover', m.expected_monthly_turnover && this.money(m.expected_monthly_turnover.amount, m.expected_monthly_turnover.currency)],
+            ['Customer since', m.onboarded_on && formatDate(m.onboarded_on)]
+        ].filter(r => r[1]);
+        if (!rows.length) return '';
+        return `<div class="kx-label mt-3">Profile</div>
+            <ul class="cp-factors">${rows.map(([label, value]) => `<li><span>${label}</span><span class="text-end">${escapeHtml(String(value))}</span></li>`).join('')}</ul>`;
+    },
+
+    /** Everything recorded at onboarding, for the Customer file tab. */
+    profilePanel(customer) {
+        const m = customer.customer_metadata || {};
+        const individual = customer.customer_type === 'INDIVIDUAL';
+        const address = m.address ? [m.address.line1, m.address.city, m.address.postal_code, m.address.country].filter(Boolean).join(', ') : null;
+        const id = m.id_document;
+        const expired = id && id.expires_on && new Date(id.expires_on) < new Date();
+        const fields = [
+            ['Legal name', customer.full_name],
+            ['Type', this.human(customer.customer_type)],
+            [individual ? 'Date of birth' : 'Incorporated', individual ? (customer.date_of_birth && formatDate(customer.date_of_birth)) : (m.incorporated_on && formatDate(m.incorporated_on))],
+            [individual ? 'Occupation' : 'Business', m.occupation || m.industry],
+            [individual ? 'Employer' : 'Registration number', individual ? m.employer : m.registration_number],
+            ['Country', customer.country],
+            ['Residency', customer.residency_country],
+            ['Tax residency', m.tax_residency],
+            ['Address', address],
+            ['Email', customer.email],
+            ['Phone', customer.phone],
+            ['Source of funds', m.source_of_funds],
+            ['Source of wealth', m.source_of_wealth],
+            ['Purpose of relationship', m.purpose_of_relationship],
+            ['Expected monthly turnover', m.expected_monthly_turnover && this.money(m.expected_monthly_turnover.amount, m.expected_monthly_turnover.currency)],
+            ['Customer since', m.onboarded_on && formatDate(m.onboarded_on)],
+            ['Onboarded through', m.onboarding_channel],
+            ['Relationship manager', m.relationship_manager],
+            ['Employees', m.employees]
+        ].filter(f => f[1] !== undefined && f[1] !== null && f[1] !== '');
+        const cell = ([label, value]) => `<div><label>${label}</label><strong>${escapeHtml(String(value))}</strong></div>`;
+        return `<div class="cd-grid cp-profile">${fields.map(cell).join('')}
+            ${id ? `<div><label>Identity document</label><strong>${escapeHtml(id.type)} ending ${escapeHtml(id.number_ending)}${id.expires_on ? ` <span class="cd-chip cd-chip--${expired ? 'high' : 'muted'}">${expired ? 'Expired' : 'Expires'} ${escapeHtml(formatDate(id.expires_on))}</span>` : ''}</strong></div>` : ''}
+        </div>`;
+    },
+
     // ── Accounts ───────────────────────────────────────────────────────────
     async loadAccounts(customerId) {
-        let page;
+        let d;
         try {
-            page = await API.get('/accounts', { customer_id: customerId, page_size: 50 });
+            d = await API.get(`/customers/${customerId}/accounts-overview`);
         } catch (error) {
-            $("#cpAccounts").html(this.empty('Accounts could not be loaded.'));
+            $("#cpAccountsBody").html('<tr><td colspan="7" class="rc-empty">Accounts could not be loaded.</td></tr>');
             return;
         }
         if (!this.caseData || this.caseData.rawCustomerId !== customerId) return;
         const statusChip = { ACTIVE: 'low', FROZEN: 'high', CLOSED: 'muted', SUSPENDED: 'medium' };
-        $("#cpAccounts").html(page.items.length ? `<ul class="kd-list">${page.items.map(a => `
-            <li>
-                <span>${escapeHtml(this.human(a.account_type))} &middot; ${escapeHtml(a.currency || '')}${a.opened_date ? ` <small class="text-muted">opened ${escapeHtml(formatDate(a.opened_date))}</small>` : ''}
-                    <span class="cd-chip cd-chip--${statusChip[a.account_status] || 'muted'}">${escapeHtml(this.human(a.account_status))}</span></span>
-                <strong>${Number(a.balance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${escapeHtml(a.currency || '')}</strong>
-            </li>`).join('')}</ul>` : this.empty('No accounts on record.'));
+        const amount = (v, c) => `${Number(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${escapeHtml(c || '')}`;
+        $("#cpAccountsSub").text(`${d.accounts.length} account${d.accounts.length === 1 ? '' : 's'}${d.accounts.some(a => a.sample_data) ? ' · account details are sample data' : ''}`);
+        $("#cpAccountsBody").html(d.accounts.map(a => `
+            <tr>
+                <td class="px-3 py-2"><strong>${escapeHtml(a.product || this.human(a.account_type))}</strong><br><small class="text-muted">${a.account_number ? `No. ${escapeHtml(a.account_number)} &middot; ` : ''}${escapeHtml(this.human(a.account_type))} &middot; ${escapeHtml(a.currency)}${a.branch ? ` &middot; ${escapeHtml(a.branch)}` : ''}</small></td>
+                <td class="px-3 py-2">${escapeHtml(a.purpose || '—')}</td>
+                <td class="px-3 py-2 text-nowrap">${a.opened_date ? escapeHtml(formatDate(a.opened_date)) : '—'}${a.opened_channel ? `<br><small class="text-muted">${escapeHtml(a.opened_channel)}</small>` : ''}</td>
+                <td class="px-3 py-2"><span class="cd-chip cd-chip--${statusChip[a.account_status] || 'muted'}">${escapeHtml(this.human(a.account_status))}</span></td>
+                <td class="px-3 py-2 text-end text-nowrap"><strong>${amount(a.balance, a.currency)}</strong></td>
+                <td class="px-3 py-2 text-end text-nowrap">${a.last_30_days.transactions ? `${amount(a.last_30_days.amount, a.currency)}<br><small class="text-muted">${a.last_30_days.transactions} transaction${a.last_30_days.transactions === 1 ? '' : 's'}</small>` : '<span class="text-muted">No activity</span>'}</td>
+                <td class="px-3 py-2 text-nowrap">${a.last_transaction_at ? escapeHtml(formatDate(a.last_transaction_at)) : '—'}<br><small class="text-muted">${a.transactions} in all${a.flagged_transactions ? `, ${a.flagged_transactions} flagged` : ''}</small></td>
+            </tr>`).join('') || '<tr><td colspan="7" class="rc-empty">No accounts on record.</td></tr>');
+
+        // Actual turnover beside what the customer said to expect, when both are in the same currency
+        const expected = d.expected_monthly_turnover;
+        const actual = expected && d.turnover_last_30_days.find(t => t.currency === expected.currency);
+        if (expected && actual && actual.amount > expected.amount * 1.5) {
+            $("#cpTurnoverNote").removeClass("d-none").html(`<i class="fas fa-triangle-exclamation me-1" aria-hidden="true"></i>Turnover in the last 30 days was ${escapeHtml(this.money(actual.amount, actual.currency))}, against ${escapeHtml(this.money(expected.amount, expected.currency))} a month expected at onboarding.`);
+        }
     },
 
     // ── Counterparties and countries ───────────────────────────────────────
@@ -823,6 +903,7 @@ const CaseDetail = {
                         <button type="button" class="btn btn-outline-primary" id="cpExport"><i class="fas fa-file-arrow-down me-2"></i>Export report</button>
                     </div>
                 </header>
+                    <ol class="cp-stages" id="cpStages" aria-label="Case stage"></ol>
                     <div class="cp-tabs" role="tablist" aria-label="Case sections">
                         <button type="button" class="cp-tab" role="tab" id="cpTab-overview" data-tab="overview" aria-controls="cpPane-overview">Overview</button>
                         <button type="button" class="cp-tab" role="tab" id="cpTab-activity" data-tab="activity" aria-controls="cpPane-activity">Activity <span class="cp-tab__count" id="cpCount-activity"></span></button>
@@ -889,7 +970,8 @@ const CaseDetail = {
                             ${kv('Last KYC review', customer.kyc_last_review ? escapeHtml(formatDate(customer.kyc_last_review)) : '—')}
                             ${kv('Last screened', customer.last_screened_at ? escapeHtml(formatDate(customer.last_screened_at)) : '—')}
                         </div>
-                        <div class="kx-label">Why this rating</div>
+                        ${this.profileSummary(customer)}
+                        <div class="kx-label mt-3">Why this rating</div>
                         ${d.profile.length ? `<ul class="cp-factors">${d.profile.map(f => `<li><span>${escapeHtml(f.risk_factor)}</span><strong>+${Number(f.risk_weight)}</strong></li>`).join('')}</ul>`
                             : this.empty('No risk factors apply to this customer.')}
                     </section>
@@ -1006,6 +1088,23 @@ const CaseDetail = {
                 </div>
 
                 <div class="cp-pane" id="cpPane-file" role="tabpanel" aria-labelledby="cpTab-file" data-pane="file" hidden>
+                    <section class="card kd-panel mb-4">
+                        <header class="kd-panel__head"><div><h2>Customer profile</h2><p class="aml-subtitle">What was recorded when the customer was taken on${(customer.customer_metadata || {}).sample_data ? ' (sample data)' : ''}</p></div></header>
+                        ${this.profilePanel(customer)}
+                    </section>
+                    <section class="card border-0 rc-table-card mb-4">
+                        <div class="rc-toolbar"><div class="rc-toolbar__title"><h2>Accounts</h2><small class="text-muted" id="cpAccountsSub">Accounts held by this customer</small></div></div>
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0 fp-table">
+                                <thead><tr>
+                                    <th class="px-3 py-2">Account</th><th class="px-3 py-2">Purpose</th><th class="px-3 py-2">Opened</th><th class="px-3 py-2">Status</th>
+                                    <th class="px-3 py-2 text-end">Balance</th><th class="px-3 py-2 text-end">Last 30 days</th><th class="px-3 py-2">Last activity</th>
+                                </tr></thead>
+                                <tbody id="cpAccountsBody"><tr><td colspan="7" class="rc-empty">Loading...</td></tr></tbody>
+                            </table>
+                        </div>
+                        <p class="cp-owners-note d-none" id="cpTurnoverNote"></p>
+                    </section>
                 ${customer.customer_type && customer.customer_type !== 'INDIVIDUAL' ? `
                 <section class="card border-0 rc-table-card mb-4">
                     <div class="rc-toolbar"><div class="rc-toolbar__title"><h2>Beneficial owners</h2>
@@ -1027,10 +1126,6 @@ const CaseDetail = {
                             <div id="cpScreening"><div class="kd-skeleton"></div></div>
                         </section>
                         <div class="cp-stack">
-                        <section class="card kd-panel">
-                            <header class="kd-panel__head"><div><h2>Accounts</h2><p class="aml-subtitle">Accounts held by this customer</p></div></header>
-                            <div id="cpAccounts"><div class="kd-skeleton"></div></div>
-                        </section>
                         <section class="card kd-panel">
                             <header class="kd-panel__head"><div><h2>KYC reviews</h2><p class="aml-subtitle">Scheduled and completed reviews</p></div></header>
                             ${d.reviews.length ? `<ul class="kd-list">${d.reviews.slice(0, 5).map(r => `

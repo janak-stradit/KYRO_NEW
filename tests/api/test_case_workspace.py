@@ -301,3 +301,40 @@ def test_case_summary_needs_ai_and_a_working_role(client, auth_headers, db_sessi
     monkeypatch.setattr(get_settings(), "kyro_ai_enabled", False)
     assert client.post(url, headers=auth_headers).status_code == 409
     assert client.get(f"/api/v1/alerts/{alert['id']}", headers=auth_headers).json()["summary"] is None
+
+
+# ── Accounts overview and sample profiles ────────────────────────────────
+
+def test_accounts_overview_shows_activity_on_each_account(client, auth_headers, db_session):
+    book = Book(db_session, "Accounts Case")
+    book.account.account_metadata = {"account_number": "12345678", "product": "Current account", "purpose": "Payroll"}
+    book.customer.customer_metadata = {"expected_monthly_turnover": {"amount": 500, "currency": "USD"}}
+    book.txn(days_ago(60), amount=100).txn(days_ago(5), amount=700).txn(days_ago(2), amount=300)
+    db_session.commit()
+
+    data = client.get(f"/api/v1/customers/{book.customer.id}/accounts-overview", headers=auth_headers).json()
+    assert len(data["accounts"]) == 1
+    account = data["accounts"][0]
+    assert account["account_number"] == "12345678" and account["product"] == "Current account" and account["purpose"] == "Payroll"
+    assert account["transactions"] == 3 and account["last_30_days"] == {"transactions": 2, "amount": 1000.0}
+    assert account["last_transaction_at"] and account["sample_data"] is False
+    assert data["turnover_last_30_days"] == [{"currency": "USD", "amount": 1000.0}]
+    assert data["expected_monthly_turnover"] == {"amount": 500, "currency": "USD"}
+    assert client.get(f"/api/v1/customers/{uuid.uuid4()}/accounts-overview", headers=auth_headers).status_code == 404
+
+
+def test_sample_profiles_are_repeatable_and_marked_as_sample():
+    from scripts.sample_profiles import account_profile, customer_profile
+
+    customer_id, account_id = uuid.uuid4(), uuid.uuid4()
+    person = customer_profile(customer_id, "INDIVIDUAL", "GB", "GBP")
+    assert person == customer_profile(customer_id, "INDIVIDUAL", "GB", "GBP")  # same id, same profile
+    assert person["sample_data"] is True and person["occupation"] and person["id_document"]["type"]
+    assert person["expected_monthly_turnover"]["currency"] == "GBP" and person["address"]["country"] == "GB"
+
+    company = customer_profile(uuid.uuid4(), "CORPORATE", "DE")
+    assert company["industry"] and company["registration_number"] and "occupation" not in company
+
+    account = account_profile(account_id, "TRADING")
+    assert account == account_profile(account_id, "TRADING")
+    assert account["sample_data"] is True and len(account["account_number"]) == 8 and "trading" in account["purpose"].lower()

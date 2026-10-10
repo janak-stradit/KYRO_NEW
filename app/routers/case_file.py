@@ -17,6 +17,7 @@ from app.ai import AIDisabledError, AIGateway, AIProviderError
 from app.config import get_settings
 from app.database import get_db
 from app.deps import get_current_user, require_permission
+from app.models.account import Account
 from app.models.alert import Alert
 from app.models.alert_note import AlertNote
 from app.models.alert_request import AlertRequest
@@ -96,6 +97,41 @@ def _audit_event(row: AuditLog, names: dict[uuid.UUID, str]) -> tuple[str, str, 
     return "updated", "Updated", None
 
 
+def _case_stages(alert: Alert, events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """
+    Where the case stands: opened, assigned, under investigation, (escalated),
+    decided, quality-checked. A stage is done when the record shows it
+    happened; the first one that has not is the current stage.
+    """
+    first = lambda *kinds: min((e["at"] for e in events if e["kind"] in kinds), default=None)
+    last = lambda *kinds: max((e["at"] for e in events if e["kind"] in kinds), default=None)
+    resolved = alert.status == "RESOLVED"
+    escalated_at = first("escalated")
+    worked_at = first("note", "request", "document")
+    stages = [
+        ("opened", "Opened", alert.created_at, f"Risk score {alert.risk_score}"),
+        ("assigned", "Assigned", (last("assigned") or alert.created_at) if alert.assigned_to else None, None),
+        ("investigation", "Investigation", worked_at or escalated_at, None),
+    ]
+    if escalated_at or alert.status == "ESCALATED":
+        stages.append(("escalated", "Escalated to MLRO", escalated_at or alert.created_at, None))
+    stages.append(("decision", "Decision", alert.resolved_at if resolved else None,
+                   _human(alert.resolution_outcome) if resolved and alert.resolution_outcome else None))
+    stages.append(("quality", "Quality check", alert.qa_at if alert.qa_result else None,
+                   {"PASS": "Passed", "FAIL": "Failed"}.get(alert.qa_result or "")))
+
+    out, current_found = [], False
+    for key, label, at, detail in stages:
+        done = at is not None
+        # A case decided without being assigned or worked skipped those stages; they are not "current"
+        skipped = not done and resolved and key in ("assigned", "investigation")
+        current = not done and not skipped and not current_found
+        current_found = current_found or current
+        out.append({"key": key, "label": label, "done": done, "skipped": skipped, "current": current,
+                    "at": at.isoformat() if at else None, "detail": detail if done else None})
+    return out
+
+
 # ── Notes and timeline ───────────────────────────────────────────────────
 
 @router.get("/alerts/{alert_id}/timeline")
@@ -143,6 +179,7 @@ def case_timeline(alert_id: uuid.UUID, db: Session = Depends(get_db), user: User
     events.sort(key=lambda e: e["at"], reverse=True)
     return {
         "alert_id": str(alert.id), "note_count": len(notes), "clock": _case_clock(alert, audits),
+        "stages": _case_stages(alert, events),
         "events": [{**e, "at": e["at"].isoformat()} for e in events],
     }
 
@@ -637,4 +674,49 @@ def generate_summary(
     return {
         "summary": alert.summary, "summary_at": alert.summary_at.isoformat(), "summary_provider": alert.summary_provider,
         "mock": result.provider == "mock", "by": user.full_name or user.username,
+    }
+
+
+# ── Accounts, with what has happened on each ─────────────────────────────
+
+@router.get("/customers/{customer_id}/accounts-overview")
+def accounts_overview(customer_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> dict[str, Any]:
+    """Each account with its last 30 days of activity, and the customer's actual turnover beside what was expected."""
+    customer = visible_customer_or_404(db, user, customer_id)
+    now = datetime.now(timezone.utc)
+    since = now - timedelta(days=30)
+    accounts = db.query(Account).filter(Account.customer_id == customer.id).order_by(Account.opened_date, Account.created_at).all()
+    stats: dict[uuid.UUID, dict[str, Any]] = {}
+    for account_id, when, amount, flags in db.query(
+        Transaction.account_id, Transaction.transaction_date, Transaction.amount, Transaction.risk_flags
+    ).filter(Transaction.customer_id == customer.id):
+        st = stats.setdefault(account_id, {"transactions": 0, "last_at": None, "recent": 0, "recent_amount": 0.0, "flagged": 0})
+        st["transactions"] += 1
+        st["last_at"] = max(st["last_at"], when) if st["last_at"] else when
+        if when >= since:
+            st["recent"] += 1
+            st["recent_amount"] += float(amount)
+        if isinstance(flags, dict) and flags.get("triggered_rules"):
+            st["flagged"] += 1
+
+    rows = []
+    turnover: dict[str, float] = {}
+    for a in accounts:
+        st = stats.get(a.id, {"transactions": 0, "last_at": None, "recent": 0, "recent_amount": 0.0, "flagged": 0})
+        meta = a.account_metadata or {}
+        turnover[a.currency] = turnover.get(a.currency, 0.0) + st["recent_amount"]
+        rows.append({
+            "id": str(a.id), "account_type": a.account_type, "account_status": a.account_status, "currency": a.currency,
+            "balance": float(a.balance), "opened_date": a.opened_date.isoformat() if a.opened_date else None,
+            "account_number": meta.get("account_number"), "product": meta.get("product"), "purpose": meta.get("purpose"),
+            "branch": meta.get("branch"), "opened_channel": meta.get("opened_channel"), "sample_data": bool(meta.get("sample_data")),
+            "transactions": st["transactions"], "flagged_transactions": st["flagged"],
+            "last_transaction_at": st["last_at"].isoformat() if st["last_at"] else None,
+            "last_30_days": {"transactions": st["recent"], "amount": round(st["recent_amount"], 2)},
+        })
+    expected = (customer.customer_metadata or {}).get("expected_monthly_turnover")
+    return {
+        "accounts": rows,
+        "turnover_last_30_days": [{"currency": c, "amount": round(v, 2)} for c, v in sorted(turnover.items(), key=lambda kv: -kv[1]) if v],
+        "expected_monthly_turnover": expected if isinstance(expected, dict) else None,
     }
