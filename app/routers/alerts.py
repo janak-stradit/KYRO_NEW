@@ -22,6 +22,7 @@ from app.models.customer import Customer
 from app.models.alert_request import AlertRequest
 from app.models.user import User
 from app.permissions import has_permission
+from app.visibility import alert_conditions, alert_visible, visible_alert_or_404
 from app.schemas.alert import (
     OUTCOME_REASONS,
     RESOLUTION_OUTCOMES,
@@ -64,7 +65,7 @@ def list_alerts(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> Page[AlertOut]:
-    query = db.query(AlertModel)
+    query = db.query(AlertModel).filter(*alert_conditions(user))
     if status_filter:
         query = query.filter(AlertModel.status == status_filter)
     if customer_id:
@@ -154,6 +155,8 @@ async def stream_alerts(
                 )
 
                 for alert, full_name in new_alerts:
+                    if not alert_visible(user, alert):
+                        continue
                     alert_data = {
                         "id": str(alert.id),
                         "customer_id": str(alert.customer_id),
@@ -229,7 +232,7 @@ def _queue_filters(
     attention: str | None = None,
 ):
     """Alerts joined to their customer, narrowed by the work-queue filters."""
-    query = db.query(AlertModel, Customer).join(Customer, AlertModel.customer_id == Customer.id)
+    query = db.query(AlertModel, Customer).join(Customer, AlertModel.customer_id == Customer.id).filter(*alert_conditions(user))
     if status_filter == "UNRESOLVED":
         query = query.filter(AlertModel.status.in_(_UNRESOLVED))
     elif status_filter == "AWAITING_QA":
@@ -291,7 +294,7 @@ def alert_queue(
     customer_ids = {customer.id for _, customer in rows}
     open_per_customer = dict(
         db.query(AlertModel.customer_id, func.count(AlertModel.id))
-        .filter(AlertModel.customer_id.in_(customer_ids), AlertModel.status.in_(_UNRESOLVED))
+        .filter(AlertModel.customer_id.in_(customer_ids), AlertModel.status.in_(_UNRESOLVED), *alert_conditions(user))
         .group_by(AlertModel.customer_id)
         .all()
     ) if customer_ids else {}
@@ -336,7 +339,7 @@ def alert_queue(
 @router.get("/queue/summary")
 def alert_queue_summary(db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> dict:
     """Headline numbers for the work queue: what is waiting, how risky, how old, and where it concentrates."""
-    unresolved = db.query(AlertModel).filter(AlertModel.status.in_(_UNRESOLVED))
+    unresolved = db.query(AlertModel).filter(AlertModel.status.in_(_UNRESOLVED), *alert_conditions(user))
 
     def count(*conditions) -> int:
         return unresolved.filter(*conditions).count()
@@ -350,7 +353,7 @@ def alert_queue_summary(db: Session = Depends(get_db), user: User = Depends(get_
     top_customers = (
         db.query(Customer.id, Customer.full_name, func.count(AlertModel.id), func.max(AlertModel.risk_score))
         .join(AlertModel, AlertModel.customer_id == Customer.id)
-        .filter(AlertModel.status.in_(_UNRESOLVED))
+        .filter(AlertModel.status.in_(_UNRESOLVED), *alert_conditions(user))
         .group_by(Customer.id, Customer.full_name)
         .order_by(func.count(AlertModel.id).desc(), func.max(AlertModel.risk_score).desc())
         .limit(5)
@@ -406,7 +409,7 @@ def disposition_baseline(
 
 @router.get("/{alert_id}", response_model=AlertOut)
 def get_alert(alert_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> AlertModel:
-    return _get_alert_or_404(db, alert_id)
+    return visible_alert_or_404(db, user, alert_id)
 
 
 @router.put("/{alert_id}/assign", response_model=AlertOut)
@@ -416,7 +419,7 @@ def assign(
     db: Session = Depends(get_db),
     user: User = Depends(require_permission("alerts.assign")),
 ) -> AlertModel:
-    alert = _get_alert_or_404(db, alert_id)
+    alert = visible_alert_or_404(db, user, alert_id)
     alert.assigned_to = data.assigned_to
     alert.status = "ASSIGNED"
     log_action(db, entity_type="ALERT", entity_id=alert.id, action="UPDATE", performed_by=user.id, new_values={"assigned_to": str(data.assigned_to)})
@@ -432,7 +435,7 @@ def resolve(
     db: Session = Depends(get_db),
     user: User = Depends(require_permission("alerts.close_false_positive", "alerts.close", "sar.approve")),
 ) -> AlertModel:
-    alert = _get_alert_or_404(db, alert_id)
+    alert = visible_alert_or_404(db, user, alert_id)
     # Each outcome is its own decision: anyone on the queue may clear a false
     # positive, but only the MLRO (or an administrator) may approve a SAR.
     needed = _OUTCOME_PERMISSION[data.outcome]
@@ -479,7 +482,7 @@ def quality_check(
     user: User = Depends(require_permission("alerts.qa")),
 ) -> AlertModel:
     """Record whether a resolved case followed policy. The outcome itself is not changed."""
-    alert = _get_alert_or_404(db, alert_id)
+    alert = visible_alert_or_404(db, user, alert_id)
     if alert.status != "RESOLVED":
         raise HTTPException(status.HTTP_409_CONFLICT, "Only a resolved case can be quality-checked")
     if alert.resolved_by == user.id:
@@ -502,7 +505,7 @@ def escalate(
     db: Session = Depends(get_db),
     user: User = Depends(require_permission("alerts.escalate")),
 ) -> AlertModel:
-    alert = _get_alert_or_404(db, alert_id)
+    alert = visible_alert_or_404(db, user, alert_id)
     if alert.status == "RESOLVED":
         raise HTTPException(status.HTTP_409_CONFLICT, "Alert is already resolved")
     alert.status = "ESCALATED"

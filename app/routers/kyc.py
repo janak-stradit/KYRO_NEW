@@ -12,11 +12,25 @@ from app.database import get_db
 from app.deps import PaginationParams, get_current_user, require_permission
 from app.models.customer import Customer, KYCReview
 from app.models.user import User
+from app.visibility import customer_scope
 from app.schemas.common import Page
 from app.schemas.customer import KYCReviewOut, KYCReviewUpdate
 from app.services.audit_service import log_action
 
-router = APIRouter(prefix="/api/v1/kyc-reviews", tags=["kyc"], dependencies=[Depends(require_permission("cases.view"))])
+from app.models.customer import KYCReview as _ScopedReview
+
+
+def _customer_of(db, path_params):
+    """The customer a review_id in the path belongs to, for the visibility check."""
+    row_id = path_params.get("review_id")
+    try:
+        row = db.get(_ScopedReview, uuid.UUID(str(row_id))) if row_id else None
+    except ValueError:
+        return None
+    return row.customer_id if row else None
+
+
+router = APIRouter(prefix="/api/v1/kyc-reviews", tags=["kyc"], dependencies=[Depends(require_permission("cases.view")), Depends(customer_scope(_customer_of))])
 
 
 @router.post("", response_model=KYCReviewOut, status_code=status.HTTP_201_CREATED)

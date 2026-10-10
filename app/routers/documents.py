@@ -23,6 +23,7 @@ from app.models.document import DOCUMENT_TYPES, Document, DocumentExtraction, Do
 from app.models.user import User
 from app.services import document_service
 from app.services.document_service import APPLICABLE, DocumentError
+from app.visibility import customer_visible, document_visible
 
 router = APIRouter(
     prefix="/api/v1/documents", tags=["documents"], dependencies=[Depends(require_permission("cases.view"))]
@@ -81,9 +82,9 @@ class ExtractionReview(BaseModel):
     apply_to_record: bool = False
 
 
-def _document_or_404(db: Session, document_id: uuid.UUID) -> Document:
+def _document_or_404(db: Session, document_id: uuid.UUID, user: User) -> Document:
     document = db.get(Document, document_id)
-    if document is None:
+    if document is None or not document_visible(db, user, document):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Document not found")
     return document
 
@@ -121,7 +122,7 @@ async def upload_document(
     if doc_type not in DOCUMENT_TYPES:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"doc_type must be one of {', '.join(DOCUMENT_TYPES)}")
     customer = db.get(Customer, customer_id)
-    if customer is None:
+    if customer is None or not customer_visible(db, user, customer_id):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Customer not found")
     if alert_id is not None:
         alert = db.get(Alert, alert_id)
@@ -141,26 +142,29 @@ async def upload_document(
 
 @router.get("", response_model=list[DocumentOut])
 def list_documents(
-    customer_id: uuid.UUID | None = None, alert_id: uuid.UUID | None = None, db: Session = Depends(get_db)
+    customer_id: uuid.UUID | None = None, alert_id: uuid.UUID | None = None, db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ) -> list[dict[str, Any]]:
     if customer_id is None and alert_id is None:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Give a customer_id or an alert_id")
+    if customer_id is not None and not customer_visible(db, user, customer_id):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Customer not found")
     query = db.query(Document)
     if customer_id:
         query = query.filter(Document.customer_id == customer_id)
     if alert_id:
         query = query.filter(Document.alert_id == alert_id)
-    return [_out(db, d) for d in query.order_by(Document.uploaded_at.desc()).all()]
+    return [_out(db, d) for d in query.order_by(Document.uploaded_at.desc()).all() if document_visible(db, user, d)]
 
 
 @router.get("/{document_id}", response_model=DocumentDetail)
-def get_document(document_id: uuid.UUID, db: Session = Depends(get_db)) -> dict[str, Any]:
-    return _detail(db, _document_or_404(db, document_id))
+def get_document(document_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> dict[str, Any]:
+    return _detail(db, _document_or_404(db, document_id, user))
 
 
 @router.get("/{document_id}/file")
-def download_document(document_id: uuid.UUID, db: Session = Depends(get_db)) -> FileResponse:
-    document = _document_or_404(db, document_id)
+def download_document(document_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> FileResponse:
+    document = _document_or_404(db, document_id, user)
     path = document_service.file_path(document)
     if not path.is_file():
         raise HTTPException(status.HTTP_404_NOT_FOUND, "The stored file is missing")
@@ -170,7 +174,7 @@ def download_document(document_id: uuid.UUID, db: Session = Depends(get_db)) -> 
 @router.post("/{document_id}/extract", response_model=DocumentDetail)
 def extract_fields(document_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(require_permission("documents.manage"))) -> dict[str, Any]:
     """Have the AI read the fields for this document type, then check each against KYRO's records."""
-    document = _document_or_404(db, document_id)
+    document = _document_or_404(db, document_id, user)
     try:
         document_service.extract(db, document, requested_by=user.id)
     except DocumentError as exc:
@@ -191,7 +195,7 @@ def review_extraction(
 ) -> dict[str, Any]:
     """Accept (optionally with a corrected value) or reject one extracted field."""
     extraction = db.get(DocumentExtraction, extraction_id)
-    if extraction is None:
+    if extraction is None or not document_visible(db, user, db.get(Document, extraction.document_id)):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Extracted field not found")
     try:
         extraction = document_service.review(

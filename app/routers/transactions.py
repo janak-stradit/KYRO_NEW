@@ -16,6 +16,7 @@ from app.models.customer import Customer
 from app.models.transaction import Transaction as TransactionModel
 from app.models.transaction import TransactionRiskFlag
 from app.models.user import User
+from app.visibility import customer_scope
 from app.schemas.common import Page
 from app.schemas.transaction import (
     TransactionBatchCreate,
@@ -27,7 +28,20 @@ from app.schemas.transaction import (
 from app.services.audit_service import log_action
 from app.services.rules_engine import apply_to_transaction
 
-router = APIRouter(prefix="/api/v1/transactions", tags=["transactions"], dependencies=[Depends(require_permission("cases.view"))])
+from app.models.transaction import Transaction as _ScopedTransaction
+
+
+def _customer_of(db, path_params):
+    """The customer a transaction_id in the path belongs to, for the visibility check."""
+    row_id = path_params.get("transaction_id")
+    try:
+        row = db.get(_ScopedTransaction, uuid.UUID(str(row_id))) if row_id else None
+    except ValueError:
+        return None
+    return row.customer_id if row else None
+
+
+router = APIRouter(prefix="/api/v1/transactions", tags=["transactions"], dependencies=[Depends(require_permission("cases.view")), Depends(customer_scope(_customer_of))])
 
 
 def _get_transaction_or_404(db: Session, transaction_id: uuid.UUID) -> TransactionModel:

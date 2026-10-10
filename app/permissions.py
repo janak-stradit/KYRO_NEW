@@ -17,6 +17,9 @@ from dataclasses import dataclass, field
 # ── Permissions ──────────────────────────────────────────────────────────
 PERMISSIONS: dict[str, str] = {
     "cases.view": "See the work queue, cases, customers and documents",
+    "cases.view_all": "See every case, not only your own and the unassigned pool",
+    "customers.view_all": "See every customer, not only those with a case you can see",
+    "sar.view": "See SAR-filed cases, their documents and the fact a SAR was filed",
     "alerts.assign": "Assign alerts to a person",
     "alerts.escalate": "Escalate an alert, or recommend a SAR, to the MLRO",
     "alerts.close_false_positive": "Close an alert as a false positive",
@@ -67,6 +70,7 @@ def _role(code, label, purpose, responsibilities, limits, permissions, **flags) 
 
 
 _VIEW = {"cases.view"}
+_ALL_RECORDS = {"cases.view_all", "customers.view_all"}
 
 ROLE_DEFINITIONS: tuple[RoleDefinition, ...] = (
     _role(
@@ -80,7 +84,7 @@ ROLE_DEFINITIONS: tuple[RoleDefinition, ...] = (
         ["Approve SAR filings", "Close or return escalated cases", "Approve rule changes and confirm obligations",
          "Assess regulatory changes", "Assign work and quality-check cases"],
         ["Cannot approve a rule change they proposed", "Cannot manage users or system settings"],
-        _VIEW | {"sar.approve", "alerts.close", "alerts.close_false_positive", "alerts.escalate", "alerts.assign", "alerts.qa",
+        _VIEW | _ALL_RECORDS | {"sar.view", "sar.approve", "alerts.close", "alerts.close_false_positive", "alerts.escalate", "alerts.assign", "alerts.qa",
                  "alerts.baseline", "documents.manage", "kyc.review", "screening.run", "customers.edit", "ubo.verify", "customers.assess_risk",
                  "rules.propose", "rules.approve", "regulatory.ingest", "obligations.manage", "mappings.manage", "changes.assess",
                  "audit.read", "ai.status"},
@@ -88,48 +92,51 @@ ROLE_DEFINITIONS: tuple[RoleDefinition, ...] = (
     _role(
         "TEAM_LEAD", "Team Lead", "Runs the alert queue day to day.",
         ["Assign alerts", "Close ordinary cases", "Escalate suspicion to the MLRO", "Complete KYC reviews"],
-        ["Cannot approve a SAR", "Cannot change rules"],
-        _VIEW | {"alerts.assign", "alerts.close", "alerts.close_false_positive", "alerts.escalate", "alerts.baseline",
+        ["Cannot approve a SAR or see SAR-filed cases", "Cannot change rules"],
+        _VIEW | _ALL_RECORDS | {"alerts.assign", "alerts.close", "alerts.close_false_positive", "alerts.escalate", "alerts.baseline",
                  "documents.manage", "kyc.review", "screening.run", "customers.edit", "ubo.verify"},
     ),
     _role(
         "L2_INVESTIGATOR", "Level 2 Investigator", "Investigates escalated cases in depth.",
         ["Investigate and document findings", "Close a case with no suspicion", "Recommend a SAR by escalating to the MLRO",
          "Upload and review documents", "Correct customer details from documents"],
-        ["Cannot approve a SAR", "Cannot assign work or change rules"],
+        ["Sees only cases assigned to them and the unassigned pool", "Cannot approve a SAR or see SAR-filed cases",
+         "Cannot assign work or change rules"],
         _VIEW | {"alerts.close", "alerts.close_false_positive", "alerts.escalate", "documents.manage", "screening.run", "customers.edit"},
     ),
     _role(
         "L1_ANALYST", "Level 1 Analyst", "First look at every alert.",
         ["Close an obvious false positive, with a reason", "Escalate anything else"],
-        ["Cannot close a true positive or recommend a SAR", "Cannot change customer records, documents or rules"],
+        ["Sees only cases assigned to them and the unassigned pool", "Cannot close a true positive or recommend a SAR",
+         "Cannot see SAR-filed cases", "Cannot change customer records, documents or rules"],
         _VIEW | {"alerts.close_false_positive", "alerts.escalate"},
     ),
     _role(
         "KYC_ANALYST", "KYC Analyst", "Keeps customer due diligence current.",
         ["Complete periodic reviews and set the rating after review", "Run screening and review matches",
          "Collect and check customer documents", "Escalate concerns found during a review"],
-        ["Cannot resolve transaction alerts", "Cannot change rules"],
-        _VIEW | {"kyc.review", "screening.run", "documents.manage", "customers.edit", "ubo.verify", "alerts.escalate"},
+        ["Sees only cases assigned to them and the unassigned pool, but every customer", "Cannot resolve transaction alerts",
+         "Cannot see SAR-filed cases", "Cannot change rules"],
+        _VIEW | {"customers.view_all", "kyc.review", "screening.run", "documents.manage", "customers.edit", "ubo.verify", "alerts.escalate"},
     ),
     _role(
         "QA_REVIEWER", "QA Reviewer", "Checks that closed cases followed policy.",
         ["Sample resolved cases and record pass or fail with notes", "Read the audit trail"],
-        ["Cannot change a case's outcome", "Cannot check a case they resolved"],
-        _VIEW | {"alerts.qa", "alerts.baseline", "audit.read"},
+        ["Cannot change a case's outcome", "Cannot check a case they resolved", "Cannot see SAR-filed cases"],
+        _VIEW | _ALL_RECORDS | {"alerts.qa", "alerts.baseline", "audit.read"},
     ),
     _role(
         "RULES_OWNER", "Rules Owner", "Maintains detection rules and their link to regulation.",
         ["Propose threshold changes with a backtest", "Extract and confirm obligations", "Map obligations to controls",
          "Refresh regulatory sources"],
-        ["Cannot approve their own rule changes", "Cannot resolve cases"],
-        _VIEW | {"rules.propose", "obligations.manage", "mappings.manage", "regulatory.ingest", "alerts.baseline", "ai.status"},
+        ["Cannot approve their own rule changes", "Cannot resolve cases", "Cannot see SAR-filed cases"],
+        _VIEW | _ALL_RECORDS | {"rules.propose", "obligations.manage", "mappings.manage", "regulatory.ingest", "alerts.baseline", "ai.status"},
     ),
     _role(
         "AUDITOR", "Auditor", "Independent testing of the AML programme.",
         ["Read everything, including the audit log"],
         ["Cannot change any record"],
-        _VIEW | {"audit.read", "alerts.baseline"},
+        _VIEW | _ALL_RECORDS | {"sar.view", "audit.read", "alerts.baseline"},
         read_only=True,
     ),
     _role(
@@ -150,9 +157,10 @@ ROLE_DEFINITIONS: tuple[RoleDefinition, ...] = (
     _role(
         "ANALYST", "Analyst (legacy)", "The original analyst role.",
         ["Assign and escalate alerts", "Documents, KYC reviews, screening and customer updates", "Record transactions"],
-        ["Cannot resolve alerts or change rules"],
-        _VIEW | {"alerts.assign", "alerts.escalate", "documents.manage", "kyc.review", "screening.run", "customers.edit",
-                 "transactions.ingest"},
+        ["Sees only cases assigned to them and the unassigned pool, but every customer", "Cannot resolve alerts or see SAR-filed cases",
+         "Cannot change rules"],
+        _VIEW | {"customers.view_all", "alerts.assign", "alerts.escalate", "documents.manage", "kyc.review", "screening.run",
+                 "customers.edit", "transactions.ingest"},
         legacy=True,
     ),
 )

@@ -72,7 +72,7 @@ def test_notes_need_case_access_and_a_role_that_can_write(client, auth_headers, 
 
 # ── Earlier cases ────────────────────────────────────────────────────────
 
-def test_case_history_summarises_how_earlier_alerts_ended(client, auth_headers, db_session):
+def test_case_history_summarises_how_earlier_alerts_ended(client, auth_headers, compliance_headers, db_session):
     current = _create_alert_via_sanctions_hit(client, auth_headers, "history@example.com")
     customer_id = uuid.UUID(current["customer_id"])
     _earlier_alert(db_session, customer_id, rules=["R006", "R007"], outcome="FALSE_POSITIVE")
@@ -81,14 +81,14 @@ def test_case_history_summarises_how_earlier_alerts_ended(client, auth_headers, 
     _earlier_alert(db_session, customer_id, rules=["R001"], outcome="TRUE_POSITIVE_NO_SAR")
     _earlier_alert(db_session, customer_id, rules=["R001"])  # still open
 
-    data = client.get(f"/api/v1/customers/{customer_id}/case-history", params={"alert_id": current["id"]}, headers=auth_headers).json()
+    data = client.get(f"/api/v1/customers/{customer_id}/case-history", params={"alert_id": current["id"]}, headers=compliance_headers).json()
     assert (data["total"], data["open"], data["resolved"]) == (5, 1, 4)  # the case being viewed is left out
     assert data["outcomes"] == {"FALSE_POSITIVE": 2, "SAR_FILED": 1, "TRUE_POSITIVE_NO_SAR": 1}
     same = {r["rule"]: r for r in data["same_rules"]}
     assert same["R006"] == {"rule": "R006", "resolved": 3, "false_positive": 2, "sar_filed": 1}
     assert len(data["recent"]) == 4 and all(r["id"] != current["id"] for r in data["recent"])
 
-    without = client.get(f"/api/v1/customers/{customer_id}/case-history", headers=auth_headers).json()
+    without = client.get(f"/api/v1/customers/{customer_id}/case-history", headers=compliance_headers).json()
     assert without["total"] == 6 and without["same_rules"] == []
     assert client.get(f"/api/v1/customers/{uuid.uuid4()}/case-history", headers=auth_headers).status_code == 404
 

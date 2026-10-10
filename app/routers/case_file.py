@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from app.ai import AIDisabledError, AIGateway, AIProviderError
 from app.config import get_settings
 from app.database import get_db
-from app.deps import require_permission
+from app.deps import get_current_user, require_permission
 from app.models.alert import Alert
 from app.models.alert_note import AlertNote
 from app.models.alert_request import AlertRequest
@@ -32,6 +32,7 @@ from app.models.watchlist import WatchlistEntity, WatchlistSource
 from app.services import customer_risk_service, pattern_service, rule_config_service
 from app.services.audit_service import log_action
 from app.services.control_catalogue import CONTROLS
+from app.visibility import alert_conditions, alert_visible, sees_sar, visible_alert_or_404, visible_customer_or_404
 
 router = APIRouter(prefix="/api/v1", tags=["case-file"], dependencies=[Depends(require_permission("cases.view"))])
 
@@ -98,9 +99,9 @@ def _audit_event(row: AuditLog, names: dict[uuid.UUID, str]) -> tuple[str, str, 
 # ── Notes and timeline ───────────────────────────────────────────────────
 
 @router.get("/alerts/{alert_id}/timeline")
-def case_timeline(alert_id: uuid.UUID, db: Session = Depends(get_db)) -> dict[str, Any]:
+def case_timeline(alert_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> dict[str, Any]:
     """Everything that has happened on the case, newest first: notes, decisions and documents."""
-    alert = _alert_or_404(db, alert_id)
+    alert = visible_alert_or_404(db, user, alert_id)
     notes = db.query(AlertNote).filter(AlertNote.alert_id == alert.id).all()
     audits = db.query(AuditLog).filter(AuditLog.entity_type == "ALERT", AuditLog.entity_id == alert.id).all()
     documents = db.query(Document).filter(Document.alert_id == alert.id).all()
@@ -154,7 +155,7 @@ def add_note(
     user: User = Depends(require_permission("cases.view")),
 ) -> dict[str, Any]:
     """Add an investigation note. Notes cannot be edited or removed afterwards."""
-    alert = _alert_or_404(db, alert_id)
+    alert = visible_alert_or_404(db, user, alert_id)
     note = AlertNote(alert_id=alert.id, author_id=user.id, body=data.body)
     db.add(note)
     db.commit()
@@ -165,14 +166,20 @@ def add_note(
 # ── The customer's earlier cases ─────────────────────────────────────────
 
 @router.get("/customers/{customer_id}/case-history")
-def case_history(customer_id: uuid.UUID, alert_id: uuid.UUID | None = None, db: Session = Depends(get_db)) -> dict[str, Any]:
+def case_history(
+    customer_id: uuid.UUID, alert_id: uuid.UUID | None = None, db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> dict[str, Any]:
     """
     How this customer's earlier alerts ended. With `alert_id`, also says how
     earlier alerts on the same rules ended, leaving that alert itself out.
     """
-    if db.get(Customer, customer_id) is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Customer not found")
-    alerts = db.query(Alert).filter(Alert.customer_id == customer_id, Alert.id != alert_id).order_by(Alert.created_at.desc()).all()
+    visible_customer_or_404(db, user, customer_id)
+    # Only the cases this user may see; a SAR filing is not disclosed to roles without "sar.view"
+    alerts = (
+        db.query(Alert).filter(Alert.customer_id == customer_id, Alert.id != alert_id, *alert_conditions(user))
+        .order_by(Alert.created_at.desc()).all()
+    )
     resolved = [a for a in alerts if a.status == "RESOLVED"]
 
     outcomes: dict[str, int] = {}
@@ -182,14 +189,14 @@ def case_history(customer_id: uuid.UUID, alert_id: uuid.UUID | None = None, db: 
 
     same_rules = []
     current = db.get(Alert, alert_id) if alert_id else None
-    if current is not None and current.customer_id == customer_id:
+    if current is not None and current.customer_id == customer_id and alert_visible(user, current):
         for rule in _rules(current):
             earlier = [a for a in resolved if rule in _rules(a)]
             same_rules.append({
                 "rule": rule,
                 "resolved": len(earlier),
                 "false_positive": sum(1 for a in earlier if a.resolution_outcome == "FALSE_POSITIVE"),
-                "sar_filed": sum(1 for a in earlier if a.resolution_outcome == "SAR_FILED"),
+                "sar_filed": sum(1 for a in earlier if a.resolution_outcome == "SAR_FILED") if sees_sar(user) else 0,
             })
 
     resolved.sort(key=lambda a: a.resolved_at or a.created_at, reverse=True)
@@ -214,10 +221,9 @@ def case_history(customer_id: uuid.UUID, alert_id: uuid.UUID | None = None, db: 
 # ── Activity against the customer's own baseline ─────────────────────────
 
 @router.get("/customers/{customer_id}/activity")
-def customer_activity(customer_id: uuid.UUID, db: Session = Depends(get_db)) -> dict[str, Any]:
+def customer_activity(customer_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> dict[str, Any]:
     """The last 30 days of transactions beside the customer's previous 90, and what changed."""
-    if db.get(Customer, customer_id) is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Customer not found")
+    visible_customer_or_404(db, user, customer_id)
     return pattern_service.customer_activity(db, customer_id)
 
 
@@ -286,8 +292,8 @@ def _names(db: Session, ids: set) -> dict[uuid.UUID, str]:
 
 
 @router.get("/alerts/{alert_id}/requests")
-def list_requests(alert_id: uuid.UUID, db: Session = Depends(get_db)) -> list[dict[str, Any]]:
-    alert = _alert_or_404(db, alert_id)
+def list_requests(alert_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> list[dict[str, Any]]:
+    alert = visible_alert_or_404(db, user, alert_id)
     rows = db.query(AlertRequest).filter(AlertRequest.alert_id == alert.id).order_by(AlertRequest.created_at.desc()).all()
     names = _names(db, {r.requested_by for r in rows} | {r.closed_by for r in rows})
     return [_request_out(r, names) for r in rows]
@@ -301,7 +307,7 @@ def create_request(
     user: User = Depends(require_permission("alerts.escalate")),
 ) -> dict[str, Any]:
     """Record that information was asked for. KYRO does not send the request itself."""
-    alert = _alert_or_404(db, alert_id)
+    alert = visible_alert_or_404(db, user, alert_id)
     if alert.status == "RESOLVED":
         raise HTTPException(status.HTTP_409_CONFLICT, "This case is resolved; reopen work on a new alert instead")
     if data.due_date < date.today():
@@ -322,7 +328,7 @@ def close_request(
     user: User = Depends(require_permission("alerts.escalate")),
 ) -> dict[str, Any]:
     row = db.get(AlertRequest, request_id)
-    if row is None:
+    if row is None or not alert_visible(user, db.get(Alert, row.alert_id)):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Request not found")
     if row.status != "OPEN":
         raise HTTPException(status.HTTP_409_CONFLICT, "This request is already closed")
@@ -386,9 +392,9 @@ def _screening_out(db: Session, s: PEPSanctionsScreening, customer: Customer, na
 
 
 @router.get("/customers/{customer_id}/screening-matches")
-def screening_matches(customer_id: uuid.UUID, db: Session = Depends(get_db)) -> list[dict[str, Any]]:
+def screening_matches(customer_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> list[dict[str, Any]]:
     """Possible and confirmed watchlist matches, each with the list entry it matched."""
-    customer = _customer_or_404(db, customer_id)
+    customer = visible_customer_or_404(db, user, customer_id)
     rows = (
         db.query(PEPSanctionsScreening)
         .filter(PEPSanctionsScreening.customer_id == customer.id, PEPSanctionsScreening.match_status != "NO_MATCH")
@@ -410,7 +416,7 @@ def decide_screening(
     row = db.get(PEPSanctionsScreening, screening_id)
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Screening result not found")
-    customer = _customer_or_404(db, row.customer_id)
+    customer = visible_customer_or_404(db, user, row.customer_id)
     old = {"resolution": row.resolution, "match_status": row.match_status}
     row.resolution = data.decision
     row.resolved_at = datetime.now(timezone.utc)
@@ -436,9 +442,9 @@ COUNTERPARTY_LIMIT = 8
 
 
 @router.get("/customers/{customer_id}/counterparties")
-def counterparties(customer_id: uuid.UUID, db: Session = Depends(get_db)) -> dict[str, Any]:
+def counterparties(customer_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> dict[str, Any]:
     """Who and where the customer dealt with over the last 120 days, most transactions first."""
-    customer = _customer_or_404(db, customer_id)
+    customer = visible_customer_or_404(db, user, customer_id)
     now = datetime.now(timezone.utc)
     window_start = now - timedelta(days=pattern_service.WINDOW_DAYS)
     start = window_start - timedelta(days=pattern_service.BASELINE_DAYS)
@@ -584,7 +590,7 @@ def draft_narrative(
     user: User = Depends(require_permission("alerts.escalate")),
 ) -> dict[str, Any]:
     """A first draft of the case narrative from the facts on file, for the analyst to check and edit."""
-    alert = _alert_or_404(db, alert_id)
+    alert = visible_alert_or_404(db, user, alert_id)
     customer = _customer_or_404(db, alert.customer_id)
     facts = _case_facts(db, alert, customer)
     try:
@@ -609,7 +615,7 @@ def generate_summary(
     user: User = Depends(require_permission("alerts.escalate")),
 ) -> dict[str, Any]:
     """Write a short summary of the case from the facts on file and keep it on the alert."""
-    alert = _alert_or_404(db, alert_id)
+    alert = visible_alert_or_404(db, user, alert_id)
     customer = _customer_or_404(db, alert.customer_id)
     try:
         result = AIGateway(db).run(

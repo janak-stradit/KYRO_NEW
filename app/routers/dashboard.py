@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.deps import get_current_user, require_permission
+from app.visibility import alert_conditions
 from app.models.alert import Alert
 from app.models.customer import Customer
 from app.models.transaction import Transaction
@@ -204,11 +205,11 @@ def get_system_health(db: Session = Depends(get_db)) -> dict[str, Any]:
 
 
 @router.get("/recent-alerts", dependencies=[Depends(require_permission("cases.view"))])
-def get_recent_alerts(db: Session = Depends(get_db)) -> list[dict[str, Any]]:
+def get_recent_alerts(db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> list[dict[str, Any]]:
     """Get recent alerts for the dashboard feed."""
 
     alerts = db.query(Alert).filter(
-        Alert.status != "RESOLVED"
+        Alert.status != "RESOLVED", *alert_conditions(user)
     ).order_by(Alert.created_at.desc(), Alert.risk_score.desc()).limit(10).all()
 
     result = []

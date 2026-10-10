@@ -13,6 +13,7 @@ from app.deps import PaginationParams, get_current_user, require_permission
 from app.models.customer import CustomerRiskProfile, KYCReview, PEPSanctionsScreening
 from app.models.customer import Customer as CustomerModel
 from app.models.user import User
+from app.visibility import customer_scope, sees_sar
 from app.schemas.common import Page
 from app.schemas.customer import (
     CustomerCreate,
@@ -28,7 +29,10 @@ from app.services.audit_service import log_action
 from app.services.customer_service import create_customer, update_customer
 from app.services.screening_service import screen_customer
 
-router = APIRouter(prefix="/api/v1/customers", tags=["customers"], dependencies=[Depends(require_permission("cases.view"))])
+router = APIRouter(
+    prefix="/api/v1/customers", tags=["customers"],
+    dependencies=[Depends(require_permission("cases.view")), Depends(customer_scope(list_allowed=True))],
+)
 
 
 def _get_customer_or_404(db: Session, customer_id: uuid.UUID) -> CustomerModel:
@@ -101,9 +105,14 @@ def soft_delete(customer_id: uuid.UUID, db: Session = Depends(get_db), user: Use
 
 
 @router.get("/{customer_id}/risk-profile", response_model=list[RiskProfileOut])
-def get_risk_profile(customer_id: uuid.UUID, db: Session = Depends(get_db)) -> list[CustomerRiskProfile]:
+def get_risk_profile(
+    customer_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)
+) -> list[CustomerRiskProfile]:
     _get_customer_or_404(db, customer_id)
-    return db.query(CustomerRiskProfile).filter(CustomerRiskProfile.customer_id == customer_id).all()
+    factors = db.query(CustomerRiskProfile).filter(CustomerRiskProfile.customer_id == customer_id).all()
+    if not sees_sar(user):
+        factors = [f for f in factors if f.risk_factor != customer_risk_service.SAR_FILED[1]]
+    return factors
 
 
 @router.get("/{customer_id}/kyc-reviews", response_model=list[KYCReviewOut])

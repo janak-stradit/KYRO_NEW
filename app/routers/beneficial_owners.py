@@ -14,6 +14,7 @@ from app.deps import get_current_user, require_permission
 from app.models.beneficial_ownership import BeneficialOwner
 from app.models.customer import Customer
 from app.models.user import User
+from app.visibility import customer_scope
 from app.schemas.beneficial_ownership import (
     BeneficialOwnerCreate,
     BeneficialOwnerOut,
@@ -26,7 +27,7 @@ from app.services import beneficial_ownership_service as ubo_service
 router = APIRouter(
     prefix="/api/v1/customers/{customer_id}/beneficial-owners",
     tags=["beneficial-owners"],
-    dependencies=[Depends(require_permission("cases.view"))],
+    dependencies=[Depends(require_permission("cases.view")), Depends(customer_scope())],
 )
 
 
