@@ -31,7 +31,8 @@ const Dashboard = {
                 this.loadKPIs(),
                 this.initializeCharts(),
                 this.loadRecentAlerts(),
-                this.loadReviewCounts()
+                this.loadReviewCounts(),
+                this.loadMyWork()
             ]);
             this.markUpdated();
             
@@ -121,6 +122,29 @@ const Dashboard = {
                     </a>
                 </div>
 
+                <!-- Row: the signed-in user's own work, shaped by role -->
+                <div class="kd-grid kd-grid--wide d-none" id="kdWorkRow">
+                    <section class="card kd-panel">
+                        <header class="kd-panel__head">
+                            <div>
+                                <h2>My cases</h2>
+                                <p class="aml-subtitle" id="kdMyCasesSub">Open cases assigned to you</p>
+                            </div>
+                            <a class="kd-link" href="/cases" data-page="cases" id="kdMyCasesLink">Open my queue <i class="fas fa-arrow-right"></i></a>
+                        </header>
+                        <div class="kd-mywork" id="kdMyCases"><div class="kd-skeleton"></div></div>
+                    </section>
+                    <section class="card kd-panel">
+                        <header class="kd-panel__head">
+                            <div>
+                                <h2 id="kdRoleWorkTitle">Your role</h2>
+                                <p class="aml-subtitle" id="kdRoleWorkSub">&nbsp;</p>
+                            </div>
+                        </header>
+                        <div id="kdRoleWork"><div class="kd-skeleton"></div></div>
+                    </section>
+                </div>
+
                 <!-- Row: alerts by rule + risk profile -->
                 <div class="kd-grid kd-grid--wide">
                     <section class="card kd-panel">
@@ -171,7 +195,7 @@ const Dashboard = {
                         <header class="kd-panel__head">
                             <div>
                                 <h2>Recent Alerts</h2>
-                                <p class="aml-subtitle">Newest open alerts across all customers</p>
+                                <p class="aml-subtitle">Newest open alerts you can see</p>
                             </div>
                             <a class="kd-link" href="/cases" data-page="cases">View all <i class="fas fa-arrow-right"></i></a>
                         </header>
@@ -288,6 +312,83 @@ const Dashboard = {
         $("#kdUpdatedAt").text(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
     },
 
+    // ── My cases and what the role is responsible for ─────────────────────
+    async loadMyWork() {
+        if (!Auth.can('cases.view')) return;  // the executive view shows totals only
+        let w;
+        try {
+            w = await API.get("/dashboard/my-work");
+        } catch (error) {
+            return;
+        }
+        const esc = (v) => this.escapeHtml(String(v));
+        const ruleName = (code) => ((window.Cases && Cases.RULES[code]) || [code])[0];
+        const band = (score) => (score >= 80 ? "high" : score >= 60 ? "medium" : "low");
+        const days = (n) => (n === 0 ? "today" : `${n} day${n === 1 ? "" : "s"}`);
+        const caseRow = (a) => `
+            <li>
+                <button type="button" class="kd-case" data-case="${esc(a.id)}">
+                    <span class="kd-alert__score kd-alert__score--${band(a.risk_score)}" title="Risk score">${Number(a.risk_score)}</span>
+                    <span class="kd-alert__body">
+                        <strong>${esc(a.customer_name)}</strong>
+                        <small>${esc(a.rules.slice(0, 3).map(ruleName).join(", ") || "No rule recorded")}</small>
+                    </span>
+                    <span class="kd-case__meta">
+                        <span class="cd-chip cd-chip--${a.status === "ESCALATED" ? "high" : "muted"}">${esc(this.humanize(a.status))}</span>
+                        ${a.overdue ? '<span class="cd-chip cd-chip--high">Overdue</span>' : ""}
+                        <small>open ${days(a.age_days)}</small>
+                    </span>
+                </button>
+            </li>`;
+        const stat = (label, value, alert) => `<div class="kd-workstat${alert && value ? " kd-workstat--alert" : ""}"><span>${label}</span><strong>${Number(value).toLocaleString()}</strong></div>`;
+        const me = w.assigned_to_me;
+
+        $("#kdWorkRow").removeClass("d-none");
+        $("#kdMyCasesSub").text(`Open cases assigned to you as ${w.role_label}`);
+        $("#kdMyCases").html(`
+            <div class="kd-workstats">
+                ${stat("Assigned to me", me.count)}
+                ${stat("Overdue", me.overdue, true)}
+                ${stat("Waiting on information", me.awaiting_information)}
+            </div>
+            ${me.items.length
+                ? `<ul class="kd-alerts">${me.items.map(caseRow).join("")}</ul>${me.count > me.items.length ? `<p class="kd-worknote">Showing the ${me.items.length} highest-risk of ${me.count}.</p>` : ""}`
+                : `<p class="kd-empty"><i class="fas fa-circle-check"></i>Nothing is assigned to you. ${w.unassigned ? `${w.unassigned.toLocaleString()} case${w.unassigned === 1 ? " is" : "s are"} waiting in the unassigned pool.` : "The unassigned pool is empty."}</p>`}
+        `);
+
+        // The second panel depends on what the role is responsible for
+        const blocks = [];
+        if (w.escalated) {
+            blocks.push(`<div class="kx-label">Escalated, awaiting your decision (${w.escalated.count})</div>
+                ${w.escalated.items.length ? `<ul class="kd-alerts">${w.escalated.items.map(caseRow).join("")}</ul>` : '<p class="kd-worknote">No escalated cases.</p>'}`);
+        }
+        if (w.team) {
+            blocks.push(`<div class="kx-label${blocks.length ? " mt-3" : ""}">Team workload</div>
+                ${w.team.length ? `<ul class="kd-team">${w.team.slice(0, 6).map(t => `
+                    <li><span><strong>${esc(t.name)}</strong><small>${esc(t.role_label)}</small></span>
+                        <span class="kd-team__n">${t.open} open${t.overdue ? ` <span class="cd-chip cd-chip--high">${t.overdue} overdue</span>` : ""}<small>oldest ${days(t.oldest_days)}</small></span></li>`).join("")}</ul>`
+                    : '<p class="kd-worknote">No open case is assigned to anyone yet.</p>'}
+                <p class="kd-worknote">${w.unassigned.toLocaleString()} unassigned case${w.unassigned === 1 ? "" : "s"} in the pool.</p>`);
+        }
+        if (w.awaiting_quality_check !== undefined) {
+            blocks.push(`<div class="kx-label${blocks.length ? " mt-3" : ""}">Quality checks</div>
+                <p class="kd-worknote"><strong>${w.awaiting_quality_check.toLocaleString()}</strong> resolved case${w.awaiting_quality_check === 1 ? "" : "s"} awaiting a check by you.</p>`);
+        }
+        if (!blocks.length) {
+            blocks.push(`<div class="kx-label">Unassigned pool</div>
+                <p class="kd-worknote"><strong>${w.unassigned.toLocaleString()}</strong> open case${w.unassigned === 1 ? "" : "s"} with no owner. You see these and the cases assigned to you.</p>`);
+        }
+        $("#kdRoleWorkTitle").text(w.team ? "Team and escalations" : "What you can pick up");
+        $("#kdRoleWorkSub").text(w.sees_all_cases ? "Across every case you can see" : "Your role sees its own cases and the unassigned pool");
+        $("#kdRoleWork").html(blocks.join(""));
+
+        $("#kdWorkRow").off("click.work").on("click.work", ".kd-case", (e) => App.navigateTo("case", { id: $(e.currentTarget).data("case") }));
+        $("#kdMyCasesLink").off("click.work").on("click.work", (e) => {
+            e.preventDefault(); e.stopPropagation();
+            App.navigateTo("cases", { assignment: "mine" });
+        });
+    },
+
     async loadRecentAlerts() {
         const $list = $("#kdRecentAlerts");
         if (!$list.length) return;
@@ -321,7 +422,7 @@ const Dashboard = {
     },
 
     async loadReviewCounts() {
-        if (!Auth.can('cases.view')) return;
+        if (!Auth.can('customers.view_all')) return;  // review counts span every customer
         try {
             const [scheduled, overdue] = await Promise.all([
                 API.get("/kyc-reviews", { review_status: "SCHEDULED", page_size: 1 }),
@@ -704,7 +805,7 @@ const Dashboard = {
                 // Only refresh while the dashboard is on screen
                 if (this.realTimeUpdates && $(".kd").length) {
                     cycle += 1;
-                    await Promise.all([this.loadKPIs(), this.loadRecentAlerts(), this.loadReviewCounts()]);
+                    await Promise.all([this.loadKPIs(), this.loadRecentAlerts(), this.loadReviewCounts(), this.loadMyWork()]);
                     // Charts refresh every other cycle
                     if (cycle % 2 === 0) {
                         await this.initializeCharts();

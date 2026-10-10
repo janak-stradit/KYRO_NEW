@@ -18,6 +18,8 @@ from app.models.alert import Alert
 from app.models.customer import Customer
 from app.models.transaction import Transaction
 from app.models.user import User
+from app.permissions import ROLES, has_permission
+from app.routers.alerts import _UNRESOLVED, _awaiting_information_condition, _overdue_condition, _risk_band, _target_days
 from app.services import feedback_service, pattern_service
 
 router = APIRouter(prefix="/api/v1/dashboard", tags=["dashboard"], dependencies=[Depends(get_current_user)])
@@ -307,3 +309,74 @@ def get_pattern_customers(
             for r in rows[start:start + page_size]
         ],
     }
+
+
+MY_WORK_LIMIT = 6
+
+
+@router.get("/my-work", dependencies=[Depends(require_permission("cases.view"))])
+def my_work(db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> dict[str, Any]:
+    """
+    The signed-in user's own cases, and what else their role is responsible
+    for: the unassigned pool, the team's workload, escalations awaiting a
+    decision, and resolved cases awaiting a quality check.
+    """
+    visible = alert_conditions(user)
+    open_alerts = db.query(Alert).filter(Alert.status.in_(_UNRESOLVED), *visible)
+    mine = open_alerts.filter(Alert.assigned_to == user.id)
+    targets = _target_days()
+    now = datetime.now(timezone.utc)
+
+    def rows(query, limit=MY_WORK_LIMIT) -> list[dict[str, Any]]:
+        alerts = query.order_by(Alert.risk_score.desc(), Alert.created_at).limit(limit).all()
+        names = dict(db.query(Customer.id, Customer.full_name).filter(Customer.id.in_({a.customer_id for a in alerts}))) if alerts else {}
+        out = []
+        for a in alerts:
+            age = (now - a.created_at).days
+            rules = a.triggered_rules.get("rules") if isinstance(a.triggered_rules, dict) else None
+            out.append({
+                "id": str(a.id), "customer_name": names.get(a.customer_id, "Unknown customer"), "risk_score": a.risk_score,
+                "status": a.status, "rules": list(rules or []), "age_days": age,
+                "overdue": age > targets[_risk_band(a.risk_score)], "created_at": a.created_at.isoformat(),
+            })
+        return out
+
+    result: dict[str, Any] = {
+        "role_label": ROLES[user.role].label if user.role in ROLES else user.role,
+        "sees_all_cases": has_permission(user.role, "cases.view_all"),
+        "assigned_to_me": {
+            "count": mine.count(),
+            "overdue": mine.filter(_overdue_condition()).count(),
+            "awaiting_information": mine.filter(_awaiting_information_condition()).count(),
+            "items": rows(mine),
+        },
+        "unassigned": open_alerts.filter(Alert.assigned_to.is_(None)).count(),
+    }
+
+    if has_permission(user.role, "cases.view_all"):
+        overdue_case = case((_overdue_condition(), 1), else_=0)
+        workload = (
+            db.query(Alert.assigned_to, func.count(Alert.id), func.sum(overdue_case), func.min(Alert.created_at))
+            .filter(Alert.status.in_(_UNRESOLVED), Alert.assigned_to.isnot(None), *visible)
+            .group_by(Alert.assigned_to).all()
+        )
+        users = {u.id: u for u in db.query(User).filter(User.id.in_({w[0] for w in workload}))} if workload else {}
+        result["team"] = sorted(
+            (
+                {
+                    "user_id": str(user_id), "name": (users[user_id].full_name or users[user_id].username) if user_id in users else "Unknown user",
+                    "role_label": ROLES[users[user_id].role].label if user_id in users and users[user_id].role in ROLES else "",
+                    "open": count, "overdue": int(overdue or 0), "oldest_days": (now - oldest).days,
+                }
+                for user_id, count, overdue, oldest in workload
+            ),
+            key=lambda w: (-w["overdue"], -w["open"], w["name"]),
+        )
+    if has_permission(user.role, "sar.approve"):
+        escalated = open_alerts.filter(Alert.status == "ESCALATED")
+        result["escalated"] = {"count": escalated.count(), "items": rows(escalated, 4)}
+    if has_permission(user.role, "alerts.qa"):
+        result["awaiting_quality_check"] = db.query(Alert).filter(
+            Alert.status == "RESOLVED", Alert.qa_result.is_(None), Alert.resolved_by != user.id, *visible
+        ).count()
+    return result

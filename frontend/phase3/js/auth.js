@@ -322,7 +322,7 @@ const Auth = {
     // Navigation entries that need a permission; the server enforces the same rules
     NAV_PERMISSIONS: {
         cases: ['cases.view'],
-        'periodic-reviews': ['cases.view'],
+        'periodic-reviews': ['customers.view_all'],
         patterns: ['cases.view'],
         feeds: ['feeds.load'],
         admin: ['users.manage', 'audit.read'],

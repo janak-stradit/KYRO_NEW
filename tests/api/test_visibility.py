@@ -147,3 +147,45 @@ def test_documents_on_a_sar_case_follow_the_case(client, auth_headers, db_sessio
     assert client.get(f"/api/v1/documents/{on_case.id}", headers=lead).status_code == 404
     assert client.get(f"/api/v1/documents/{on_case.id}", headers=mlro).status_code == 200
     assert client.get(f"/api/v1/documents/{general.id}", headers=lead).status_code == 200
+
+
+# ── Dashboard: my cases, by role ─────────────────────────────────────────
+
+def test_dashboard_my_work_is_shaped_by_role(client, auth_headers, db_session):
+    lead, lead_user = _user(client, db_session, "TEAM_LEAD", "work.lead")
+    mlro, _ = _user(client, db_session, "MLRO", "work.mlro")
+    qa, _ = _user(client, db_session, "QA_REVIEWER", "work.qa")
+    one, first = _user(client, db_session, "L1_ANALYST", "work.l1a")
+    two, _ = _user(client, db_session, "L1_ANALYST", "work.l1b")
+    viewer, _ = _user(client, db_session, "EXECUTIVE_VIEWER", "work.exec")
+    mine = _create_alert_via_sanctions_hit(client, auth_headers, "work.mine@example.com")
+    pool = _create_alert_via_sanctions_hit(client, auth_headers, "work.pool@example.com")
+    escalated = _create_alert_via_sanctions_hit(client, auth_headers, "work.esc@example.com")
+    client.put(f"/api/v1/alerts/{mine['id']}/assign", json={"assigned_to": str(first.id)}, headers=lead)
+    client.put(f"/api/v1/alerts/{escalated['id']}/escalate", json={"reasons": ["SANCTIONS_EXPOSURE"]}, headers=lead)
+    work = lambda headers: client.get("/api/v1/dashboard/my-work", headers=headers).json()
+
+    # The analyst who owns a case sees it; a colleague does not
+    own = work(one)
+    assert own["role_label"] == "Level 1 Analyst" and own["sees_all_cases"] is False
+    assert own["assigned_to_me"]["count"] == 1 and [c["id"] for c in own["assigned_to_me"]["items"]] == [mine["id"]]
+    assert own["assigned_to_me"]["items"][0]["customer_name"] == "Risky Corp" and own["unassigned"] == 2
+    assert "team" not in own and "escalated" not in own and "awaiting_quality_check" not in own
+    assert work(two)["assigned_to_me"]["count"] == 0 and work(two)["unassigned"] == 2
+
+    # A team lead sees who holds what
+    team = work(lead)
+    assert team["sees_all_cases"] is True and team["assigned_to_me"]["count"] == 0
+    assert [(m["name"], m["open"], m["overdue"]) for m in team["team"]] == [(first.full_name, 1, 0)]
+    assert team["team"][0]["role_label"] == "Level 1 Analyst" and "escalated" not in team
+
+    # The MLRO also sees what is waiting for a decision; QA sees what is waiting for a check
+    decision = work(mlro)
+    assert decision["escalated"]["count"] == 1 and decision["escalated"]["items"][0]["id"] == escalated["id"]
+    assert decision["awaiting_quality_check"] == 0 and work(qa)["awaiting_quality_check"] == 0
+    client.put(f"/api/v1/alerts/{pool['id']}/resolve",
+               json={"outcome": "FALSE_POSITIVE", "reasons": ["DUPLICATE_ALERT"], "resolution_notes": "Duplicate"}, headers=mlro)
+    assert work(qa)["awaiting_quality_check"] == 1
+    assert work(mlro)["awaiting_quality_check"] == 0  # not the cases they resolved themselves
+
+    assert client.get("/api/v1/dashboard/my-work", headers=viewer).status_code == 403

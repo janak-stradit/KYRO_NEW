@@ -24,9 +24,13 @@ const Cases = {
     },
 
     init(params = {}) {
-        // Each visit starts on the default queue; only a customer passed from
-        // the Patterns page carries over.
-        this.filters = { q: '', status: 'UNRESOLVED', risk: '', rule: '', assignment: '', customerId: null, sort: 'priority' };
+        // Each visit starts on the default queue, unless the link that led here
+        // asked for a view (the dashboard's "my queue", a customer from Patterns).
+        this.filters = {
+            q: '', status: 'UNRESOLVED', risk: '', rule: '', customerId: null, sort: 'priority',
+            assignment: ['mine', 'unassigned'].includes(params.assignment) ? params.assignment : '',
+            attention: ['overdue', 'awaiting_information'].includes(params.attention) ? params.attention : ''
+        };
         this.currentFilters = { customer: params.customer || null, pattern: params.pattern || null };
         this.pagination.currentPage = 1;
         this.afterChange = null;
@@ -191,6 +195,10 @@ const Cases = {
         this.setupEventListeners();
         await this.loadCustomerCodes();
         this.applyCustomerFromPatterns();
+        // Show a view asked for by the link that led here (e.g. "my queue" from the dashboard)
+        $("#filterAssignment").val(this.filters.assignment);
+        $("#filterAttention").val(this.filters.attention);
+        $("#clearFiltersBtn").toggleClass("d-none", !(this.filters.assignment || this.filters.attention));
         await Promise.all([this.loadSummary(), this.fetchCasesData()]);
         this.loadBaseline();
     },
