@@ -79,7 +79,7 @@ const Cases = {
                 <div id="customerFilterChip"></div>
 
                 <!-- What is waiting: each tile is also a one-click filter -->
-                <div class="rq-tiles" id="rqTiles" aria-label="Queue summary"></div>
+                <div class="rq-tiles" id="rqTiles" aria-label="Queue summary">${Skeleton.tileCards(8)}</div>
 
                 <!-- Where the work concentrates -->
                 <!-- The queue -->
@@ -159,7 +159,7 @@ const Cases = {
                                 </tr>
                             </thead>
                             <tbody id="casesTableBody">
-                                <tr><td colspan="7" class="rc-empty">Loading the queue...</td></tr>
+                                ${Skeleton.rows(7)}
                             </tbody>
                         </table>
                     </div>

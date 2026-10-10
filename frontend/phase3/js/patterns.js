@@ -79,7 +79,7 @@ const Patterns = {
                                     <th class="px-3 py-3"><span class="visually-hidden">Actions</span></th>
                                 </tr>
                             </thead>
-                            <tbody id="bpTableBody"><tr><td colspan="6" class="rc-empty">Loading...</td></tr></tbody>
+                            <tbody id="bpTableBody">${Skeleton.rows(6)}</tbody>
                         </table>
                     </div>
                     <div class="d-flex justify-content-between align-items-center p-3" style="border-top: 1px solid #f0f0f0;">

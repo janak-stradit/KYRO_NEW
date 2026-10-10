@@ -92,7 +92,7 @@ const Dashboard = {
                         <span class="kd-kpi__icon">${icon("investigation")}</span>
                         <span class="kd-kpi__body">
                             <span class="kd-kpi__label">Open Alerts</span>
-                            <span class="kd-kpi__value" id="kpiOpenAlerts">&ndash;</span>
+                            <span class="kd-kpi__value" id="kpiOpenAlerts"><span class="sk sk--inline" style="width:72px;height:22px"></span></span>
                             <span class="kd-kpi__meta" id="kpiFalsePositive">Awaiting review</span>
                         </span>
                     </a>
@@ -100,7 +100,7 @@ const Dashboard = {
                         <span class="kd-kpi__icon">${icon("customers")}</span>
                         <span class="kd-kpi__body">
                             <span class="kd-kpi__label">Customers Monitored</span>
-                            <span class="kd-kpi__value" id="kpiCustomers">&ndash;</span>
+                            <span class="kd-kpi__value" id="kpiCustomers"><span class="sk sk--inline" style="width:72px;height:22px"></span></span>
                             <span class="kd-kpi__meta" id="kpiHighRisk">&nbsp;</span>
                         </span>
                     </a>
@@ -108,7 +108,7 @@ const Dashboard = {
                         <span class="kd-kpi__icon">${icon("review-checklist")}</span>
                         <span class="kd-kpi__body">
                             <span class="kd-kpi__label">Periodic Reviews Due</span>
-                            <span class="kd-kpi__value" id="kpiReviewsDue">&ndash;</span>
+                            <span class="kd-kpi__value" id="kpiReviewsDue"><span class="sk sk--inline" style="width:72px;height:22px"></span></span>
                             <span class="kd-kpi__meta" id="kpiReviewsOverdue">&nbsp;</span>
                         </span>
                     </a>
@@ -116,7 +116,7 @@ const Dashboard = {
                         <span class="kd-kpi__icon">${icon("transaction-report")}</span>
                         <span class="kd-kpi__body">
                             <span class="kd-kpi__label">Transactions</span>
-                            <span class="kd-kpi__value" id="kpiTransactions">&ndash;</span>
+                            <span class="kd-kpi__value" id="kpiTransactions"><span class="sk sk--inline" style="width:72px;height:22px"></span></span>
                             <span class="kd-kpi__meta" id="kpiPatternHits">&nbsp;</span>
                         </span>
                     </a>
@@ -155,7 +155,7 @@ const Dashboard = {
                             </div>
                             <a class="kd-link" href="/cases" data-page="cases">Review cases <i class="fas fa-arrow-right"></i></a>
                         </header>
-                        <div class="kd-chart-box kd-chart-box--fill" id="alertsByRuleBox">
+                        <div class="kd-chart-box kd-chart-box--fill is-loading" id="alertsByRuleBox">
                             <canvas id="alertsByRuleChart" aria-label="Alerts by rule" role="img"></canvas>
                         </div>
                     </section>
@@ -167,8 +167,8 @@ const Dashboard = {
                                 <p class="aml-subtitle">How unresolved alerts and customers split by risk</p>
                             </div>
                         </header>
-                        <div class="kd-split" id="openAlertBands"></div>
-                        <div class="kd-split" id="customerRiskBands"></div>
+                        <div class="kd-split" id="openAlertBands">${Skeleton.lines(4)}</div>
+                        <div class="kd-split" id="customerRiskBands">${Skeleton.lines(4)}</div>
                     </section>
                 </div>
 
@@ -186,7 +186,7 @@ const Dashboard = {
                                 <span><span class="kd-swatch" style="background:#fb923c"></span> Low</span>
                             </div>
                         </header>
-                        <div class="kd-chart-box kd-chart-box--fill">
+                        <div class="kd-chart-box kd-chart-box--fill is-loading">
                             <canvas id="alertVolumeChart" aria-label="Alerts created per day by risk band" role="img"></canvas>
                         </div>
                     </section>
@@ -214,7 +214,7 @@ const Dashboard = {
                                 <p class="aml-subtitle">All alerts by workflow status</p>
                             </div>
                         </header>
-                        <div class="kd-split" id="caseStatusSplit"></div>
+                        <div class="kd-split" id="caseStatusSplit">${Skeleton.lines(4)}</div>
                     </section>
 
                     <section class="card kd-panel">
@@ -309,6 +309,7 @@ const Dashboard = {
     },
 
     markUpdated() {
+        $(".kd-chart-box").removeClass("is-loading");  // the charts are drawn, or have reported why not
         $("#kdUpdatedAt").text(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
     },
 
@@ -844,11 +845,10 @@ const Dashboard = {
         $('.chart-container, .bar-chart-kyro-container, .kyro-donut-container').each(function() {
             if (!$(this).find('.chart-loading-overlay').length) {
                 $(this).css('position', 'relative').append(`
-                    <div class="chart-loading-overlay">
-                        <div>
-                            <div class="chart-spinner"></div>
-                            <div class="loading-text">Loading chart data...</div>
-                        </div>
+                    <div class="chart-loading-overlay sk-chart" role="status" aria-busy="true">
+                        <span class="visually-hidden">Loading the chart</span>
+                        <span class="sk" style="height:38%"></span><span class="sk" style="height:62%"></span><span class="sk" style="height:48%"></span>
+                        <span class="sk" style="height:80%"></span><span class="sk" style="height:56%"></span><span class="sk" style="height:70%"></span>
                     </div>
                 `);
             }

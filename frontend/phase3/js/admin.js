@@ -42,7 +42,7 @@ const Admin = {
                 <div class="adm-tabs" role="tablist">
                     ${tabs.map(([key, label]) => `<button type="button" class="adm-tab ${key === this.tab ? 'is-active' : ''}" role="tab" aria-selected="${key === this.tab}" data-tab="${key}">${label}</button>`).join('')}
                 </div>
-                <div id="admBody"></div>
+                <div id="admBody">${Skeleton.panel(6)}</div>
             </div>
         `);
         $(".adm-tab").on("click", (e) => {
@@ -85,7 +85,7 @@ const Admin = {
                             <th class="px-3 py-2">Name</th><th class="px-3 py-2">Username</th><th class="px-3 py-2">Email</th>
                             <th class="px-3 py-2">Role</th><th class="px-3 py-2">Status</th><th class="px-3 py-2">Last sign-in</th><th class="px-3 py-2"></th>
                         </tr></thead>
-                        <tbody id="admUsersBody"><tr><td colspan="7" class="rc-empty">Loading...</td></tr></tbody>
+                        <tbody id="admUsersBody">${Skeleton.rows(7)}</tbody>
                     </table>
                 </div>
             </div>
@@ -303,7 +303,7 @@ const Admin = {
                 <div class="table-responsive">
                     <table class="table table-hover mb-0 fp-table">
                         <thead><tr><th class="px-3 py-2">When</th><th class="px-3 py-2">Who</th><th class="px-3 py-2">Action</th><th class="px-3 py-2">Record</th><th class="px-3 py-2">What changed</th></tr></thead>
-                        <tbody id="admAuditBody"><tr><td colspan="5" class="rc-empty">Loading...</td></tr></tbody>
+                        <tbody id="admAuditBody">${Skeleton.rows(5)}</tbody>
                     </table>
                 </div>
                 <div class="d-flex justify-content-between align-items-center">

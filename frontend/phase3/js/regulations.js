@@ -100,7 +100,7 @@ const Regulations = {
                                     <th class="px-3 py-2"><span class="visually-hidden">Actions</span></th>
                                 </tr>
                             </thead>
-                            <tbody id="regSourcesBody"><tr><td colspan="4" class="rc-empty">Loading sources...</td></tr></tbody>
+                            <tbody id="regSourcesBody">${Skeleton.rows(4)}</tbody>
                         </table>
                     </div>
                 </div>
@@ -134,7 +134,7 @@ const Regulations = {
                                     <th class="px-3 py-2"><span class="visually-hidden">Actions</span></th>
                                 </tr>
                             </thead>
-                            <tbody id="regNoticesBody"><tr><td colspan="6" class="rc-empty">Loading...</td></tr></tbody>
+                            <tbody id="regNoticesBody">${Skeleton.rows(6)}</tbody>
                         </table>
                     </div>
                 </div>
@@ -160,7 +160,7 @@ const Regulations = {
                                     <th class="px-3 py-2"><span class="visually-hidden">Actions</span></th>
                                 </tr>
                             </thead>
-                            <tbody id="regChangesBody"><tr><td colspan="6" class="rc-empty">Loading...</td></tr></tbody>
+                            <tbody id="regChangesBody">${Skeleton.rows(6)}</tbody>
                         </table>
                     </div>
                 </div>
@@ -191,7 +191,7 @@ const Regulations = {
                                     <th class="px-3 py-2"><span class="visually-hidden">Actions</span></th>
                                 </tr>
                             </thead>
-                            <tbody id="regRuleChangesBody"><tr><td colspan="7" class="rc-empty">Loading...</td></tr></tbody>
+                            <tbody id="regRuleChangesBody">${Skeleton.rows(7)}</tbody>
                         </table>
                     </div>
                 </div>
@@ -236,7 +236,7 @@ const Regulations = {
                                     <th class="px-3 py-2"><span class="visually-hidden">Actions</span></th>
                                 </tr>
                             </thead>
-                            <tbody id="regObligationsBody"><tr><td colspan="7" class="rc-empty">Loading obligations...</td></tr></tbody>
+                            <tbody id="regObligationsBody">${Skeleton.rows(7)}</tbody>
                         </table>
                     </div>
                     <div class="d-flex justify-content-between align-items-center p-3" style="border-top: 1px solid #f0f0f0;">
@@ -280,7 +280,7 @@ const Regulations = {
                                     <th class="px-3 py-2"><span class="visually-hidden">Actions</span></th>
                                 </tr>
                             </thead>
-                            <tbody id="regTraceBody"><tr><td colspan="7" class="rc-empty">Loading...</td></tr></tbody>
+                            <tbody id="regTraceBody">${Skeleton.rows(7)}</tbody>
                         </table>
                     </div>
                 </div>

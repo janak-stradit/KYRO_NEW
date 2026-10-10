@@ -52,7 +52,7 @@ const Feeds = {
                                 <th class="px-3 py-2">When</th><th class="px-3 py-2">File</th><th class="px-3 py-2">Contains</th><th class="px-3 py-2">Run</th>
                                 <th class="px-3 py-2 text-end">Rows</th><th class="px-3 py-2 text-end">Loaded</th><th class="px-3 py-2 text-end">Already there</th><th class="px-3 py-2 text-end">Invalid</th>
                             </tr></thead>
-                            <tbody id="feedRunsBody"><tr><td colspan="8" class="rc-empty">Loading...</td></tr></tbody>
+                            <tbody id="feedRunsBody">${Skeleton.rows(8)}</tbody>
                         </table>
                     </div>
                 </div>

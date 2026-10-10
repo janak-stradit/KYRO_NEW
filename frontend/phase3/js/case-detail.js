@@ -30,7 +30,7 @@ const CaseDetail = {
 
     async load() {
         if (!this.id) { this.renderMissing('No case was selected.'); return; }
-        $("#mainContent").html('<div class="kyro-page"><div class="cp-loading"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div></div></div>');
+        $("#mainContent").html(Skeleton.casePage());
 
         let alert;
         try {
@@ -741,7 +741,7 @@ const CaseDetail = {
 
     async generateSummary(alertId) {
         const $button = $("#cpSummaryRefresh").prop("disabled", true);
-        $("#cpSummary").html('<p class="cp-summary__wait"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span>Writing the summary from the facts on this case. This can take up to a minute.</p>');
+        $("#cpSummary").html(`<div role="status" aria-busy="true">${Skeleton.lines(4)}<p class="cp-summary__wait">Writing the summary from the facts on this case. This can take up to a minute.</p></div>`);
         let result;
         try {
             result = await API.postSlow(`/alerts/${alertId}/summary`, {});
@@ -761,6 +761,7 @@ const CaseDetail = {
     // ── Draft narrative ────────────────────────────────────────────────────
     async draftNarrative(alertId) {
         const $button = $("#cpNarrativeDraft").prop("disabled", true).text('Drafting...');
+        $("#cpNarrative").html(`<div role="status" aria-busy="true">${Skeleton.lines(8)}<p class="cp-summary__wait">Drafting the narrative. This can take up to a minute.</p></div>`);
         let result;
         try {
             result = await API.postSlow(`/alerts/${alertId}/draft-narrative`, {});
@@ -1096,7 +1097,7 @@ const CaseDetail = {
                                     <th class="px-3 py-2">Account</th><th class="px-3 py-2">Purpose</th><th class="px-3 py-2">Opened</th><th class="px-3 py-2">Status</th>
                                     <th class="px-3 py-2 text-end">Balance</th><th class="px-3 py-2 text-end">Last 30 days</th><th class="px-3 py-2">Last activity</th>
                                 </tr></thead>
-                                <tbody id="cpAccountsBody"><tr><td colspan="7" class="rc-empty">Loading...</td></tr></tbody>
+                                <tbody id="cpAccountsBody">${Skeleton.rows(7)}</tbody>
                             </table>
                         </div>
                         <p class="cp-owners-note d-none" id="cpTurnoverNote"></p>
@@ -1111,7 +1112,7 @@ const CaseDetail = {
                                 <th class="px-3 py-2">Owner</th><th class="px-3 py-2 text-end">Ownership</th><th class="px-3 py-2">Control</th>
                                 <th class="px-3 py-2">Nationality</th><th class="px-3 py-2">Flags</th><th class="px-3 py-2 text-start">Verification</th>
                             </tr></thead>
-                            <tbody id="cpOwnersBody"><tr><td colspan="6" class="rc-empty">Loading...</td></tr></tbody>
+                            <tbody id="cpOwnersBody">${Skeleton.rows(6)}</tbody>
                         </table>
                     </div>
                     <p class="cp-owners-note d-none" id="cpOwnersNote"><i class="fas fa-triangle-exclamation me-1" aria-hidden="true"></i>Ownership checks are not complete for this customer: an owner is still awaiting verification or is flagged for sanctions.</p>
