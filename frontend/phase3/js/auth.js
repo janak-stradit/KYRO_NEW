@@ -367,10 +367,6 @@ const LoginForm = {
             this.togglePasswordVisibility();
         });
         
-        // Remember me checkbox
-        $("#rememberMe").on("change", (e) => {
-            // Could implement extended session logic here
-        });
     },
     
     setupValidation() {
@@ -418,7 +414,6 @@ const LoginForm = {
     async handleLogin() {
         const username = $("#username").val().trim();
         const password = $("#password").val();
-        const rememberMe = $("#rememberMe").is(":checked");
         $("#loginError").removeClass("is-visible");
         
         // Validate form
@@ -433,22 +428,12 @@ const LoginForm = {
         this.setFormEnabled(false);
         
         try {
-            await Auth.login({
-                username: username,
-                password: password,
-                remember_me: rememberMe
-            });
-            
-            showToast("success", "Login successful", "Welcome back!");
-            
-            // Redirect to dashboard
-            setTimeout(() => {
-                window.location.href = "/dashboard";
-            }, 1000);
+            await Auth.login({ username: username, password: password });
+            window.location.href = "/dashboard";
             
         } catch (error) {
             console.error("Login error:", error);
-            showToast("error", error.message, "Login Failed");
+            // The message is shown in the form, next to the fields it is about
             $("#loginErrorText").text(error.message || "Sign-in failed. Please try again.");
             $("#loginError").addClass("is-visible");
             this.setFormEnabled(true);
@@ -470,12 +455,12 @@ const LoginForm = {
     },
     
     setFormEnabled(enabled) {
-        $("#username, #password, #rememberMe, #loginBtn").prop("disabled", !enabled);
+        $("#username, #password, #loginBtn").prop("disabled", !enabled);
         
         if (enabled) {
-            $("#loginBtn").text('Log In');
+            $("#loginBtn").text('Sign in');
         } else {
-            $("#loginBtn").html('<i class="fas fa-spinner fa-spin me-2"></i>Signing In...');
+            $("#loginBtn").html('<i class="fas fa-spinner fa-spin me-2"></i>Signing in...');
         }
     },
     

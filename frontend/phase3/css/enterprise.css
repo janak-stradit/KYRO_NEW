@@ -653,3 +653,23 @@ body:not(.modal-open) { overflow-x: clip !important; overflow-y: visible !import
 #rqTiles .rq-tile { padding: 12px 14px; }
 .rq-below { margin-top: 16px; }
 #mainContent .rq-below > .kd-panel { height: auto; }
+
+/* ══ Dialogs: one treatment everywhere ═════════════════════════════════════ */
+.modal-content { border: 1px solid var(--kt-border) !important; border-radius: 10px !important; box-shadow: 0 24px 48px rgba(16, 24, 40, 0.18) !important; overflow: hidden; }
+.modal-header { padding: 14px 20px !important; background: #FCFCFD; border-bottom: 1px solid var(--kt-border-soft) !important; align-items: flex-start; }
+.modal-title { font-size: 16px !important; font-weight: 700 !important; color: var(--kt-ink) !important; line-height: 1.3; }
+.modal-header small { font-size: 12.5px; color: #667085 !important; }
+.modal-body { padding: 18px 20px !important; font-size: 13.5px; color: var(--kt-ink); }
+.modal-footer { padding: 12px 20px !important; background: #FCFCFD; border-top: 1px solid var(--kt-border-soft) !important; gap: 8px; }
+.modal-footer > * { margin: 0 !important; }
+.modal .btn { border-radius: 6px; font-weight: 600; font-size: 13.5px; padding: 8px 16px; }
+.modal .btn-primary { background: var(--kt-accent) !important; border-color: var(--kt-accent) !important; color: #fff !important; }
+.modal .btn-primary:hover { background: var(--kt-accent-strong) !important; border-color: var(--kt-accent-strong) !important; }
+.modal .btn-outline-primary, .modal .btn-secondary { background: #fff !important; border: 1px solid #D0D5DD !important; color: var(--kt-ink) !important; }
+.modal .btn-outline-primary:hover, .modal .btn-secondary:hover { background: var(--kt-tint) !important; }
+.modal .form-control, .modal .form-select { border-color: #D0D5DD; border-radius: 6px; font-size: 13.5px; color: var(--kt-ink); min-height: 38px; }
+.modal .form-control:focus, .modal .form-select:focus { border-color: var(--kt-accent); box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.15); }
+.modal label.kx-label, .modal .form-label { margin-bottom: 6px; font-size: 12.5px; font-weight: 600; color: var(--kt-ink); }
+.modal .kx-note { font-size: 12.5px; color: #667085; }
+.modal-backdrop.show { opacity: 0.45; background: #101828; }
+#scheduleReviewModal { z-index: 1055; }

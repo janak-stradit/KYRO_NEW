@@ -591,63 +591,39 @@ const PeriodicReviews = {
             
             const customerOptions = customers.map((cust, idx) => {
                 const code = `CUST-${String(idx + 1).padStart(3, '0')}`;
-                return `<option value="${cust.id}">${code} - ${cust.full_name} (${cust.email})</option>`;
+                return `<option value="${escapeHtml(cust.id)}">${escapeHtml(code)} · ${escapeHtml(cust.full_name)}</option>`;
             }).join('');
             
             const modalHtml = `
-                <div class="modal fade" id="scheduleReviewModal" tabindex="-1" style="z-index: 9999;">
-                    <div class="modal-dialog modal-dialog-centered kyro-modal-dialog">
-                        <div class="modal-content kyro-modal-content">
-                            <div class="modal-header kyro-modal-header">
-                                <div style="display: flex; align-items: center; gap: 14px;">
-                                    <div class="kyro-modal-header-icon">
-                                        <i class="fas fa-calendar-plus"></i>
-                                    </div>
-                                    <div>
-                                        <h5 class="kyro-modal-title">Schedule New Review</h5>
-                                        <p class="kyro-modal-subtitle">Create a periodic KYC compliance review schedule</p>
-                                    </div>
+                <div class="modal fade" id="scheduleReviewModal" tabindex="-1" aria-labelledby="scheduleReviewTitle" aria-hidden="true">
+                    <div class="modal-dialog modal-dialog-centered">
+                        <form class="modal-content kx-modal" id="scheduleReviewForm" novalidate>
+                            <div class="modal-header">
+                                <div>
+                                    <h5 class="modal-title" id="scheduleReviewTitle">Schedule a review</h5>
+                                    <small class="text-muted">A periodic KYC review, due after the chosen interval</small>
                                 </div>
-                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" style="font-size: 12px;"></button>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                             </div>
-                            <div class="modal-body kyro-modal-body">
-                                <form id="scheduleReviewForm">
-                                    <!-- CUST ID -->
-                                    <div class="kyro-form-group">
-                                        <label class="kyro-form-label">
-                                            <i class="fas fa-id-card" style="color: #FF8D28;"></i>
-                                            <span>CUST ID</span>
-                                        </label>
-                                        <select class="kyro-form-select" id="scheduleCustomerId" required>
-                                            <option value="">Select CUST ID</option>
-                                            ${customerOptions}
-                                        </select>
-                                    </div>
-                                    
-                                    <!-- Review Frequency (Months) -->
-                                    <div class="kyro-form-group">
-                                        <label class="kyro-form-label">
-                                            <i class="fas fa-clock" style="color: #FF8D28;"></i>
-                                            <span>Review Frequency (Months)</span>
-                                        </label>
-                                        <select class="kyro-form-select" id="scheduleFrequency" required>
-                                            <option value="">Select Frequency</option>
-                                            <option value="3">3 Months</option>
-                                            <option value="6">6 Months</option>
-                                            <option value="12">12 Months</option>
-                                        </select>
-                                    </div>
-                                </form>
+                            <div class="modal-body">
+                                <label class="kx-label" for="scheduleCustomerId">Customer</label>
+                                <select class="form-select mb-3" id="scheduleCustomerId" required>
+                                    <option value="">Select a customer...</option>
+                                    ${customerOptions}
+                                </select>
+                                <label class="kx-label" for="scheduleFrequency">Review due in</label>
+                                <select class="form-select" id="scheduleFrequency" required>
+                                    <option value="">Select an interval...</option>
+                                    <option value="3">3 months</option>
+                                    <option value="6">6 months</option>
+                                    <option value="12">12 months</option>
+                                </select>
                             </div>
-                            <div class="modal-footer kyro-modal-footer">
-                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" style="font-size: 14px; padding: 10px 20px; border-radius: 10px; font-weight: 500;">
-                                    Cancel
-                                </button>
-                                <button type="button" class="btn" id="confirmScheduleBtn" style="background: #FF8D28; color: white; font-size: 14px; padding: 10px 24px; border-radius: 10px; font-weight: 600; box-shadow: 0 4px 14px rgba(255, 141, 40, 0.35); transition: transform 0.15s, background 0.15s;">
-                                    <i class="fas fa-calendar-check me-2"></i>Schedule Review
-                                </button>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-outline-primary" data-bs-dismiss="modal">Cancel</button>
+                                <button type="submit" class="btn btn-primary" id="confirmScheduleBtn">Schedule review</button>
                             </div>
-                        </div>
+                        </form>
                     </div>
                 </div>
             `;
@@ -661,7 +637,8 @@ const PeriodicReviews = {
             modal.show();
             
             // Handle form submission
-            $("#confirmScheduleBtn").on("click", () => {
+            $("#scheduleReviewForm").on("submit", (e) => {
+                e.preventDefault();
                 this.handleScheduleSubmit(modal);
             });
         } catch (error) {
@@ -677,7 +654,7 @@ const PeriodicReviews = {
         
         // Validate
         if (!customerId || !frequency) {
-            showToast("warning", "Please select CUST ID and Review Frequency");
+            showToast("warning", "Choose the customer and when the review is due.");
             return;
         }
 
@@ -688,7 +665,7 @@ const PeriodicReviews = {
         
         try {
             // Show loading
-            $("#confirmScheduleBtn").prop("disabled", true).html('<i class="fas fa-spinner fa-spin me-2"></i>Scheduling...');
+            $("#confirmScheduleBtn").prop("disabled", true).text('Scheduling...');
             
             // Call API with customer_id as query parameter
             const response = await API.post(`/kyc-reviews?customer_id=${customerId}&review_type=PERIODIC`);

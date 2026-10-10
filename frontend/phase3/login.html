@@ -30,15 +30,15 @@
         /* Enterprise split-screen sign-in. Template typography and icons,
            KYRO colours. */
         :root {
-            --kt-accent: #FF8D28;
-            --kt-accent-strong: #f97316;
+            --kt-accent: #F97316;
+            --kt-accent-strong: #EA580C;
             --kt-ink: #1c2430;
-            --kt-body: #4b5563;
-            --kt-muted: #6b7280;
-            --kt-dark: #1a1a1a;
-            --kt-tint: #FFF3EA;
-            --kt-border: #FFDCC2;
-            --kt-field: #E5E1DD;
+            --kt-body: #475467;
+            --kt-muted: #667085;
+            --kt-dark: #1C2430;
+            --kt-tint: #F2F4F7;
+            --kt-border: #E1E5EA;
+            --kt-field: #D0D5DD;
         }
         * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
         html, body { height: 100%; }
@@ -170,11 +170,7 @@
         }
         .auth-help.is-visible { display: block; }
 
-        .auth-remember { display: flex; align-items: center; gap: 10px; margin: 4px 0 28px; padding-left: 0; min-height: 0; font-size: 14px; }
-        .auth-remember .form-check-input { margin: 0; float: none; width: 18px; height: 18px; border-color: #c7c9ce; cursor: pointer; }
-        .auth-remember .form-check-input:checked { background-color: var(--kt-accent); border-color: var(--kt-accent); }
-        .auth-remember .form-check-input:focus { box-shadow: 0 0 0 3px rgba(255, 141, 40, 0.2); border-color: var(--kt-accent); }
-        .auth-remember label { cursor: pointer; }
+        .btn-login { margin-top: 12px; }
 
         .btn-login {
             height: 52px;
@@ -319,12 +315,8 @@
                         Passwords are managed by your organization. Contact your KYRO administrator to have your password reset.
                     </div>
 
-                    <div class="auth-remember form-check">
-                        <input class="form-check-input" type="checkbox" id="rememberMe" name="rememberMe">
-                        <label class="form-check-label" for="rememberMe">Keep me signed in for 30 days</label>
-                    </div>
 
-                    <button type="submit" class="btn btn-primary w-100 btn-login" id="loginBtn">Log In</button>
+                    <button type="submit" class="btn btn-primary w-100 btn-login" id="loginBtn">Sign in</button>
 
                     <p class="auth-secure"><i class="fas fa-lock"></i> Secure, encrypted session with role-based access</p>
                 </form>
@@ -377,7 +369,7 @@
     
     <!-- KYRO Application Scripts -->
     <script src="js/utils.js?v=9999"></script>
-    <script src="js/auth.js?v=20261007b"></script>
+    <script src="js/auth.js?v=20261010c"></script>
     
     <script>
         $(document).ready(function() {
