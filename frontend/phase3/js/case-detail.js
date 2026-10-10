@@ -342,18 +342,10 @@ const CaseDetail = {
     // ── Case clock (filled from the timeline response) ─────────────────────
     renderClock(clock) {
         const days = (n) => `${n} day${n === 1 ? '' : 's'}`;
-        const sinceDays = (iso) => Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 86400000));
-        const chips = [];
-        if (clock.closed_at) {
-            chips.push(`<span class="cd-chip cd-chip--muted" title="Target for ${clock.risk_band}-risk cases: ${days(clock.target_days)}">Closed after ${days(clock.age_days)}</span>`);
-        } else {
-            chips.push(`<span class="cd-chip cd-chip--${clock.overdue ? 'high' : 'muted'}" title="Target for ${clock.risk_band}-risk cases: ${days(clock.target_days)}">${clock.overdue ? 'Overdue: open' : 'Open'} ${days(clock.age_days)} &middot; target ${clock.target_days}</span>`);
-            if (clock.assigned_at) {
-                const n = sinceDays(clock.assigned_at);
-                chips.push(`<span class="cd-chip cd-chip--muted">Assigned ${n ? `${days(n)} ago` : 'today'}</span>`);
-            }
-        }
-        $("#cpClock").html(chips.join(' '));
+        const target = `target ${days(clock.target_days)}`;
+        $("#cpClock").html(clock.closed_at
+            ? `Closed after ${days(clock.age_days)} <small>${target}</small>`
+            : `${clock.overdue ? '<span class="cd-chip cd-chip--high">Overdue</span> ' : ''}${days(clock.age_days)} <small>${target}</small>`);
     },
 
     // ── Why each rule exists ───────────────────────────────────────────────
@@ -880,18 +872,23 @@ const CaseDetail = {
         $("#mainContent").html(`
             <div class="kyro-page cp">
                 <div class="cp-sticky">
-                <button type="button" class="cp-back" id="cpBack"><i class="fas fa-arrow-left"></i> Work queue</button>
+                <nav class="cp-crumbs" aria-label="Breadcrumb">
+                    <button type="button" class="cp-back" id="cpBack">Review Cases</button>
+                    <i class="fas fa-chevron-right" aria-hidden="true"></i>
+                    <span>${escapeHtml(c.customerId)}</span>
+                    <i class="fas fa-chevron-right" aria-hidden="true"></i>
+                    <span aria-current="page">Case ${escapeHtml(String(alert.id).slice(0, 8))}</span>
+                </nav>
                 <header class="cp-head">
                     <div class="rc-customer">
                         <span class="rc-customer__avatar cp-head__avatar" aria-hidden="true">${escapeHtml(displayName.split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?')}</span>
                         <div>
                             <h1 class="cp-head__title">${escapeHtml(displayName)}</h1>
                             <p class="cp-head__meta">
-                                ${escapeHtml(c.customerId)} &middot; Case ${escapeHtml(String(alert.id).slice(0, 8))}
                                 <span class="badge" style="background:${statusBg};color:${statusFg};">${escapeHtml(this.human(c.status))}</span>
                                 ${customer.sanctions_flag ? '<span class="cd-chip cd-chip--high">Sanctions</span>' : ''}
                                 ${customer.pep_flag ? '<span class="cd-chip cd-chip--medium">PEP</span>' : ''}
-                                <span id="cpClock"></span>
+                                ${customer.adverse_media_flag ? '<span class="cd-chip cd-chip--medium">Adverse media</span>' : ''}
                             </p>
                         </div>
                     </div>
@@ -903,6 +900,15 @@ const CaseDetail = {
                         <button type="button" class="btn btn-outline-primary" id="cpExport"><i class="fas fa-file-arrow-down me-2"></i>Export report</button>
                     </div>
                 </header>
+                <dl class="cp-facts">
+                    <div><dt>Risk score</dt><dd><strong class="cp-facts__score cp-facts__score--${band}">${isFinite(score) ? score : '—'}</strong> ${escapeHtml(this.human(c.riskLevel))}</dd></div>
+                    <div><dt>Owner</dt><dd>${escapeHtml(c.assignedTo)}</dd></div>
+                    <div><dt>Case age</dt><dd id="cpClock">${open ? escapeHtml(Cases.age(alert.created_at)) : 'Closed'}</dd></div>
+                    <div><dt>Alert type</dt><dd>${escapeHtml(this.human(alert.alert_type))}</dd></div>
+                    <div><dt>Recommended action</dt><dd>${escapeHtml(this.human(alert.recommended_action))}</dd></div>
+                    <div><dt>Customer</dt><dd>${escapeHtml(this.human(customer.customer_type))}${customer.country ? ` &middot; ${escapeHtml(customer.country)}` : ''}</dd></div>
+                    <div><dt>Customer rating</dt><dd><span class="cd-chip cd-chip--${String(customer.risk_level || 'low').toLowerCase()}">${escapeHtml(this.human(customer.risk_level))}</span></dd></div>
+                </dl>
                     <ol class="cp-stages" id="cpStages" aria-label="Case stage"></ol>
                     <div class="cp-tabs" role="tablist" aria-label="Case sections">
                         <button type="button" class="cp-tab" role="tab" id="cpTab-overview" data-tab="overview" aria-controls="cpPane-overview">Overview</button>
@@ -914,7 +920,6 @@ const CaseDetail = {
 
                 <div class="cp-pane" id="cpPane-overview" role="tabpanel" aria-labelledby="cpTab-overview" data-pane="overview">
                     <div class="cp-glance">
-                        <button type="button" class="cp-glance__tile" data-tab="overview"><i class="fas fa-gauge-high" aria-hidden="true"></i><span>Risk score</span><strong class="cp-glance__value--${band}">${isFinite(score) ? score : '—'}</strong><small>${escapeHtml(c.riskLevel.toLowerCase())} risk</small></button>
                         <button type="button" class="cp-glance__tile" data-tab="activity"><i class="fas fa-flag" aria-hidden="true"></i><span>Flagged transactions</span><strong id="cpGlanceFlagged">—</strong><small id="cpGlanceFlaggedNote">&nbsp;</small></button>
                         <button type="button" class="cp-glance__tile" data-tab="overview"><i class="fas fa-bell" aria-hidden="true"></i><span>Other open alerts</span><strong>${otherCount.toLocaleString()}</strong><small>on this customer</small></button>
                         <button type="button" class="cp-glance__tile" data-tab="investigation"><i class="fas fa-pen" aria-hidden="true"></i><span>Notes</span><strong id="cpGlanceNotes">—</strong><small id="cpGlanceNotesNote">&nbsp;</small></button>
@@ -930,17 +935,7 @@ const CaseDetail = {
                     </section>
                     <div class="cp-grid">
                     <section class="card kd-panel">
-                        <header class="kd-panel__head"><div><h2>Why this case was flagged</h2><p class="aml-subtitle">Opened ${escapeHtml(formatDateTime(alert.created_at))}${open ? `, waiting ${escapeHtml(Cases.age(alert.created_at))}` : ''}</p></div></header>
-                        <div class="cd-score cd-score--${band}">
-                            <div class="cd-score__value"><span>Risk score</span><strong>${isFinite(score) ? score : '—'}<small>/100</small></strong></div>
-                            <div class="cd-score__meter" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${isFinite(score) ? score : 0}" aria-label="Risk score"><span style="width: ${isFinite(score) ? Math.max(0, Math.min(100, score)) : 0}%"></span></div>
-                            <div class="cd-score__meta"><span class="cd-chip cd-chip--${band}">${escapeHtml(c.riskLevel)} risk</span></div>
-                        </div>
-                        <div class="cd-grid">
-                            ${kv('Alert type', escapeHtml(this.human(alert.alert_type)))}
-                            ${kv('Recommended action', escapeHtml(this.human(alert.recommended_action)))}
-                            ${kv('Owner', escapeHtml(c.assignedTo))}
-                        </div>
+                        <header class="kd-panel__head"><div><h2>Rules that fired</h2><p class="aml-subtitle">Opened ${escapeHtml(formatDateTime(alert.created_at))}${open ? `, waiting ${escapeHtml(Cases.age(alert.created_at))}` : ''}</p></div></header>
                         ${rules.length ? `
                         <ul class="cd-rules">
                             ${rules.map(r => `
