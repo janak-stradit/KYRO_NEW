@@ -98,6 +98,20 @@ class AlertAssign(BaseModel):
     assigned_to: uuid.UUID
 
 
+class AlertBulkAssign(BaseModel):
+    """Give several alerts one owner: the alerts listed, or every unresolved alert of one customer."""
+
+    assigned_to: uuid.UUID
+    alert_ids: list[uuid.UUID] = Field(default_factory=list, max_length=500)
+    customer_id: uuid.UUID | None = None
+
+    @model_validator(mode="after")
+    def _one_target(self) -> "AlertBulkAssign":
+        if bool(self.alert_ids) == bool(self.customer_id):
+            raise ValueError("Give either alert_ids or a customer_id")
+        return self
+
+
 class AlertResolve(BaseModel):
     """Final disposition. `is_false_positive` is derived from the outcome."""
 

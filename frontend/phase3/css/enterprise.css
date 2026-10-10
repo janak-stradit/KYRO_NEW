@@ -803,3 +803,9 @@ body:not(.modal-open) { overflow-x: clip !important; overflow-y: visible !import
 
 /* Loading: spinners in the accent colour, not Bootstrap blue */
 .spinner-border.text-primary, #mainContent .spinner-border { color: var(--kt-accent) !important; }
+
+/* Work queue: selecting several alerts */
+.rq-check-col { width: 44px; }
+#mainContent .rc-table-card .table > :not(caption) > * > .rq-check-col { padding-right: 0 !important; }
+.rq-bulk { display: flex; align-items: center; gap: 10px; padding: 10px 23px; background: #FFF7ED; border-top: 1px solid #FED7AA; border-bottom: 1px solid #FED7AA; font-size: 13.5px; color: var(--kt-ink); }
+.rq-bulk > span { margin-right: 4px; }

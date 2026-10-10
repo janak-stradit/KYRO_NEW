@@ -28,6 +28,7 @@ from app.schemas.alert import (
     RESOLUTION_OUTCOMES,
     RESOLUTION_REASONS,
     AlertAssign,
+    AlertBulkAssign,
     AlertEscalate,
     AlertOut,
     AlertQA,
@@ -490,6 +491,48 @@ def get_alert(alert_id: uuid.UUID, db: Session = Depends(get_db), user: User = D
     return visible_alert_or_404(db, user, alert_id)
 
 
+def _assignee_or_422(db: Session, user_id: uuid.UUID) -> User:
+    assignee = db.get(User, user_id)
+    if assignee is None or not assignee.is_active or not _can_own_cases(assignee.role):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Cases can only be assigned to an active user whose role works cases")
+    return assignee
+
+
+def _assign(db: Session, alert: AlertModel, assignee: User, actor: User) -> None:
+    alert.assigned_to = assignee.id
+    if alert.status == "OPEN":  # an escalated or in-review alert keeps its status under a new owner
+        alert.status = "ASSIGNED"
+    log_action(db, entity_type="ALERT", entity_id=alert.id, action="UPDATE", performed_by=actor.id,
+               new_values={"assigned_to": str(assignee.id)})
+
+
+@router.put("/bulk-assign")
+def bulk_assign(
+    data: AlertBulkAssign,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission("alerts.assign")),
+) -> dict:
+    """Assign several unresolved alerts in one step. Alerts the user may not see, or that are resolved, are left alone."""
+    assignee = _assignee_or_422(db, data.assigned_to)
+    query = db.query(AlertModel).filter(AlertModel.status.in_(_UNRESOLVED), *alert_conditions(user))
+    if data.customer_id is not None:
+        query = query.filter(AlertModel.customer_id == data.customer_id)
+        requested = None
+    else:
+        query = query.filter(AlertModel.id.in_(data.alert_ids))
+        requested = len(set(data.alert_ids))
+    alerts = query.all()
+    changed = [a for a in alerts if a.assigned_to != assignee.id]
+    for alert in changed:
+        _assign(db, alert, assignee, user)
+    db.commit()
+    return {
+        "assigned": len(changed), "already_with_owner": len(alerts) - len(changed),
+        "skipped": (requested - len(alerts)) if requested is not None else 0,
+        "assigned_to_name": assignee.full_name or assignee.username,
+    }
+
+
 @router.put("/{alert_id}/assign", response_model=AlertOut)
 def assign(
     alert_id: uuid.UUID,
@@ -498,12 +541,9 @@ def assign(
     user: User = Depends(require_permission("alerts.assign")),
 ) -> AlertModel:
     alert = visible_alert_or_404(db, user, alert_id)
-    assignee = db.get(User, data.assigned_to)
-    if assignee is None or not assignee.is_active or not _can_own_cases(assignee.role):
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Cases can only be assigned to an active user whose role works cases")
-    alert.assigned_to = data.assigned_to
-    alert.status = "ASSIGNED"
-    log_action(db, entity_type="ALERT", entity_id=alert.id, action="UPDATE", performed_by=user.id, new_values={"assigned_to": str(data.assigned_to)})
+    if alert.status == "RESOLVED":
+        raise HTTPException(status.HTTP_409_CONFLICT, "A resolved alert cannot be reassigned")
+    _assign(db, alert, _assignee_or_422(db, data.assigned_to), user)
     db.commit()
     db.refresh(alert)
     return alert

@@ -233,3 +233,36 @@ def test_header_search_finds_customers_the_user_may_see(client, auth_headers, db
     assert [r["customer_id"] for r in find(lead, customer_id=taken["customer_id"]).json()] == [taken["customer_id"]]
     assert find(lead, q="r").json() == [] and find(lead, q="no such customer").json() == []
     assert find(viewer, q="risky").status_code == 403
+
+
+def test_several_alerts_are_assigned_in_one_step(client, auth_headers, db_session):
+    lead, _ = _user(client, db_session, "TEAM_LEAD", "bulk.lead")
+    l1, analyst = _user(client, db_session, "L1_ANALYST", "bulk.l1")
+    _, auditor = _user(client, db_session, "AUDITOR", "bulk.auditor")
+    first = _create_alert_via_sanctions_hit(client, auth_headers, "bulk.one@example.com")
+    second = _create_alert_via_sanctions_hit(client, auth_headers, "bulk.two@example.com")
+    customer_id = uuid.UUID(first["customer_id"])
+    extra = Alert(customer_id=customer_id, risk_score=70, triggered_rules={"rules": ["R006"]}, status="ESCALATED")
+    closed = Alert(customer_id=customer_id, risk_score=70, triggered_rules={"rules": ["R006"]}, status="RESOLVED")
+    db_session.add_all([extra, closed])
+    db_session.commit()
+    url = "/api/v1/alerts/bulk-assign"
+
+    assert client.put(url, json={"assigned_to": str(analyst.id), "customer_id": str(customer_id)}, headers=l1).status_code == 403
+    assert client.put(url, json={"assigned_to": str(auditor.id), "customer_id": str(customer_id)}, headers=lead).status_code == 422
+    assert client.put(url, json={"assigned_to": str(analyst.id)}, headers=lead).status_code == 422  # nothing to assign
+    assert client.put(url, json={"assigned_to": str(analyst.id), "customer_id": str(customer_id), "alert_ids": [first["id"]]},
+                      headers=lead).status_code == 422
+
+    whole = client.put(url, json={"assigned_to": str(analyst.id), "customer_id": str(customer_id)}, headers=lead)
+    assert whole.status_code == 200, whole.text
+    assert whole.json() == {"assigned": 2, "already_with_owner": 0, "skipped": 0, "assigned_to_name": analyst.full_name}
+    db_session.expire_all()
+    assert db_session.get(Alert, uuid.UUID(first["id"])).status == "ASSIGNED"
+    assert db_session.get(Alert, extra.id).status == "ESCALATED" and db_session.get(Alert, extra.id).assigned_to == analyst.id
+    assert db_session.get(Alert, closed.id).assigned_to is None  # resolved alerts are left alone
+
+    picked = client.put(url, json={"assigned_to": str(analyst.id), "alert_ids": [first["id"], second["id"], str(closed.id), str(uuid.uuid4())]},
+                        headers=lead)
+    assert picked.json() == {"assigned": 1, "already_with_owner": 1, "skipped": 2, "assigned_to_name": analyst.full_name}
+    assert client.put(f"/api/v1/alerts/{closed.id}/assign", json={"assigned_to": str(analyst.id)}, headers=lead).status_code == 409

@@ -140,6 +140,11 @@ const Cases = {
                             </button>
                         </div>
                     </div>
+                    <div class="rq-bulk d-none" id="rqBulkBar" role="status">
+                        <span><strong id="rqBulkCount">0</strong> selected</span>
+                        <button type="button" class="btn btn-sm btn-primary" id="rqBulkAssign"><i class="fas fa-user-plus me-1"></i>Assign</button>
+                        <button type="button" class="btn btn-sm rc-actions__view" id="rqBulkClear">Clear</button>
+                    </div>
                     <div class="table-responsive">
                         <table class="table table-hover mb-0 rq-table">
                             <thead id="casesTableHead">
@@ -362,6 +367,76 @@ const Cases = {
         ) || '<li class="kd-empty">No open alerts.</li>');
     },
 
+    selected: new Set(),
+
+    updateBulkBar() {
+        const n = this.selected.size;
+        $("#rqBulkBar").toggleClass("d-none", n === 0);
+        $("#rqBulkCount").text(n.toLocaleString());
+        const boxes = $(".rq-select");
+        $("#rqSelectAll").prop("checked", boxes.length > 0 && boxes.filter(":checked").length === boxes.length);
+    },
+
+    /** Choose one owner for several alerts: `payload` is { alert_ids } or { customer_id }. */
+    async showBulkAssignModal({ title, subtitle, payload }) {
+        let assignees;
+        try {
+            assignees = await API.get('/alerts/assignees');
+        } catch (error) {
+            showToast('error', 'Could not load the list of users.');
+            return;
+        }
+        const me = (Auth.getUser() || {}).id;
+        $("#bulkAssignModal").remove();
+        $("body").append(`
+            <div class="modal fade" id="bulkAssignModal" tabindex="-1" aria-labelledby="bulkAssignTitle" aria-hidden="true">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content kx-modal">
+                        <div class="modal-header">
+                            <div>
+                                <h5 class="modal-title" id="bulkAssignTitle">${escapeHtml(title)}</h5>
+                                <small class="text-muted">${escapeHtml(subtitle)}</small>
+                            </div>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <label class="kx-label" for="bulkAssignUser">Owner</label>
+                            <select class="form-select" id="bulkAssignUser">
+                                <option value="">Select a person...</option>
+                                ${assignees.map(u => `<option value="${escapeHtml(u.id)}">${escapeHtml(u.name)}${u.id === me ? ' (you)' : ''} · ${escapeHtml(this.human(u.role))}</option>`).join('')}
+                            </select>
+                            <p class="kx-note">Resolved alerts are left as they are. Each assignment is recorded in the audit log.</p>
+                            <div class="text-danger small mt-2 d-none" id="bulkAssignError" role="alert"></div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-outline-primary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="button" class="btn btn-primary" id="bulkAssignConfirm">Assign</button>
+                        </div>
+                    </div>
+                </div>
+            </div>`);
+        const modalEl = document.getElementById('bulkAssignModal');
+        new bootstrap.Modal(modalEl).show();
+        $("#bulkAssignConfirm").on("click", async () => {
+            const userId = $("#bulkAssignUser").val();
+            if (!userId) { $("#bulkAssignError").text('Select who should own these alerts.').removeClass("d-none"); return; }
+            const $btn = $("#bulkAssignConfirm").prop("disabled", true);
+            try {
+                const r = await API.put('/alerts/bulk-assign', { ...payload, assigned_to: userId });
+                closeModalSafely(modalEl);
+                const extra = [r.already_with_owner ? `${r.already_with_owner} already theirs` : '', r.skipped ? `${r.skipped} skipped` : ''].filter(Boolean).join(', ');
+                showToast('success', `${r.assigned} alert${r.assigned === 1 ? '' : 's'} assigned to ${r.assigned_to_name}${extra ? ` (${extra})` : ''}.`);
+                this.selected = new Set();
+                this.refreshAfterChange();
+            } catch (xhr) {
+                const detail = xhr && xhr.responseJSON && xhr.responseJSON.detail;
+                $("#bulkAssignError").text(typeof detail === 'string' ? detail : 'Could not assign the alerts.').removeClass("d-none");
+                $btn.prop("disabled", false);
+            }
+        });
+        $(modalEl).on("hidden.bs.modal", function() { setTimeout(() => $(this).remove(), 0); });
+    },
+
     groupBy: 'customer',
 
     /** One row per customer, unless the queue is narrowed to one customer or a status other than unresolved. */
@@ -370,6 +445,7 @@ const Cases = {
     },
 
     ALERT_HEAD: `<tr>
+        <th class="px-3 py-3 rq-check-col"><input type="checkbox" class="form-check-input" id="rqSelectAll" aria-label="Select every alert on this page"></th>
         <th class="px-3 py-3">Risk</th><th class="px-3 py-3">Customer</th><th class="px-3 py-3">Why it was flagged</th>
         <th class="px-3 py-3">Status</th><th class="px-3 py-3">Waiting</th><th class="px-3 py-3">Owner</th>
         <th class="px-3 py-3"><span class="visually-hidden">Actions</span></th></tr>`,
@@ -388,7 +464,7 @@ const Cases = {
             data = await API.get('/alerts/queue/customers', params);
         } catch (error) {
             this.totalCases = 0;
-            $("#casesTableBody").html('<tr><td colspan="7" class="rc-empty"><i class="fas fa-triangle-exclamation"></i><strong>Could not load the queue</strong><span>Check your connection and select Refresh.</span></td></tr>');
+            $("#casesTableBody").html('<tr><td colspan="8" class="rc-empty"><i class="fas fa-triangle-exclamation"></i><strong>Could not load the queue</strong><span>Check your connection and select Refresh.</span></td></tr>');
             $("#resultsCount").text('');
             this.renderPaginationControls();
             return;
@@ -401,7 +477,7 @@ const Cases = {
         $("#resultsCount").text(total ? `Showing ${start.toLocaleString()}–${end.toLocaleString()} of ${total.toLocaleString()} customers with unresolved alerts` : 'No matching customers');
         this.renderPaginationControls();
         if (!data.items.length) {
-            $("#casesTableBody").html('<tr><td colspan="7" class="rc-empty"><i class="fas fa-folder-open"></i><strong>No customers match these filters</strong><span>Try clearing the search or filters.</span></td></tr>');
+            $("#casesTableBody").html('<tr><td colspan="8" class="rc-empty"><i class="fas fa-folder-open"></i><strong>No customers match these filters</strong><span>Try clearing the search or filters.</span></td></tr>');
             return;
         }
         const band = (score) => (score >= 80 ? 'high' : score >= 60 ? 'medium' : 'low');
@@ -440,6 +516,10 @@ const Cases = {
                             <button type="button" class="btn btn-sm rc-actions__view rq-more" data-customer="${escapeHtml(g.customer_id)}" data-name="${escapeHtml(name)}">
                                 All ${g.open_alerts.toLocaleString()}
                             </button>
+                            ${Auth.can('alerts.assign') ? `
+                            <button type="button" class="btn btn-sm rc-actions__icon rq-assign-all" data-customer="${escapeHtml(g.customer_id)}" data-name="${escapeHtml(name)}" data-count="${g.open_alerts}" title="Assign all ${g.open_alerts} open alerts" aria-label="Assign all ${g.open_alerts} open alerts for ${escapeHtml(name)}">
+                                <i class="fas fa-user-plus"></i>
+                            </button>` : ''}
                         </div>
                     </td>
                 </tr>`;
@@ -453,6 +533,9 @@ const Cases = {
         });
         if (this.groupedView()) return this.fetchCustomerGroups();
         $("#casesTableHead").html(this.ALERT_HEAD);
+        $("#casesTableHead .rq-check-col").toggleClass("d-none", !Auth.can('alerts.assign'));
+        this.selected = new Set();
+        this.updateBulkBar();
         const f = this.filters;
         const params = { page: this.pagination.currentPage, page_size: this.pagination.pageSize, status_filter: f.status, sort: f.sort };
         if (f.q) params.q = f.q;
@@ -469,7 +552,7 @@ const Cases = {
             // Never substitute sample data: an empty or wrong queue is worse than an honest error
             this.casesData = [];
             this.totalCases = 0;
-            $("#casesTableBody").html('<tr><td colspan="7" class="rc-empty"><i class="fas fa-triangle-exclamation"></i><strong>Could not load the queue</strong><span>Check your connection and select Refresh.</span></td></tr>');
+            $("#casesTableBody").html('<tr><td colspan="8" class="rc-empty"><i class="fas fa-triangle-exclamation"></i><strong>Could not load the queue</strong><span>Check your connection and select Refresh.</span></td></tr>');
             $("#resultsCount").text('');
             this.renderPaginationControls();
             return;
@@ -509,7 +592,7 @@ const Cases = {
         this.renderPaginationControls();
 
         if (!this.casesData.length) {
-            $("#casesTableBody").html('<tr><td colspan="7" class="rc-empty"><i class="fas fa-folder-open"></i><strong>No alerts match these filters</strong><span>Try clearing the search or filters.</span></td></tr>');
+            $("#casesTableBody").html('<tr><td colspan="8" class="rc-empty"><i class="fas fa-folder-open"></i><strong>No alerts match these filters</strong><span>Try clearing the search or filters.</span></td></tr>');
             return;
         }
 
@@ -533,6 +616,7 @@ const Cases = {
 
             return `
                 <tr>
+                    ${mayAssign ? `<td class="px-3 py-3 rq-check-col">${canAct(c) ? `<input type="checkbox" class="form-check-input rq-select" data-case="${escapeHtml(c.caseId)}" aria-label="Select the alert for ${escapeHtml(displayName)}">` : ''}</td>` : ''}
                     <td class="px-3 py-3">
                         <span class="rq-score rq-score--${band}" title="${escapeHtml(this.human(c.riskLevel))} risk">${isFinite(Number(a.risk_score)) ? Number(a.risk_score) : '—'}</span>
                     </td>
@@ -760,6 +844,34 @@ const Cases = {
             self.pagination.currentPage = 1;
             self.fetchCasesData();
         });
+        $(document).off("change.rqsel click.rqsel")
+            .on("change.rqsel", ".rq-select", function() {
+                const id = $(this).data("case");
+                if (this.checked) self.selected.add(id); else self.selected.delete(id);
+                self.updateBulkBar();
+            })
+            .on("change.rqsel", "#rqSelectAll", function() {
+                const on = this.checked;
+                $(".rq-select").each(function() {
+                    this.checked = on;
+                    if (on) self.selected.add($(this).data("case")); else self.selected.delete($(this).data("case"));
+                });
+                self.updateBulkBar();
+            })
+            .on("click.rqsel", "#rqBulkClear", () => { self.selected = new Set(); $(".rq-select, #rqSelectAll").prop("checked", false); self.updateBulkBar(); })
+            .on("click.rqsel", "#rqBulkAssign", () => self.showBulkAssignModal({
+                title: `Assign ${self.selected.size} alert${self.selected.size === 1 ? '' : 's'}`,
+                subtitle: 'The alerts ticked in the queue',
+                payload: { alert_ids: [...self.selected] }
+            }))
+            .on("click.rqsel", ".rq-assign-all", function() {
+                const n = Number($(this).data("count"));
+                self.showBulkAssignModal({
+                    title: `Assign ${n} open alert${n === 1 ? '' : 's'}`,
+                    subtitle: `Every unresolved alert for ${$(this).data("name")}`,
+                    payload: { customer_id: $(this).data("customer") }
+                });
+            });
         $(".rq-group").on("click", function() {
             self.groupBy = $(this).data("group");
             self.pagination.currentPage = 1;
