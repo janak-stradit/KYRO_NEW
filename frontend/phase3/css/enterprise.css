@@ -673,3 +673,37 @@ body:not(.modal-open) { overflow-x: clip !important; overflow-y: visible !import
 .modal .kx-note { font-size: 12.5px; color: #667085; }
 .modal-backdrop.show { opacity: 0.45; background: #101828; }
 #scheduleReviewModal { z-index: 1055; }
+
+/* ══ Cards and panels: 5px more room, and no outline ═══════════════════════
+   A card is set off from the page by its white surface and a soft shadow. */
+#mainContent .card.kd-panel, #mainContent .rc-table-card,
+#mainContent .kd-kpi, #mainContent .rq-tile, #mainContent .cp-glance__tile,
+#mainContent .cp-stat, #mainContent .kd-workstat {
+    border: 0 !important;
+}
+#mainContent .card.kd-panel, #mainContent .rc-table-card,
+#mainContent .kd-kpi, #mainContent .rq-tile, #mainContent .cp-glance__tile {
+    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.08), 0 1px 2px rgba(16, 24, 40, 0.04) !important;
+}
+#mainContent .cp-glance__tile:hover, #mainContent .rq-tile:hover { box-shadow: 0 4px 10px rgba(16, 24, 40, 0.10) !important; }
+
+/* Panels: 18px -> 23px */
+#mainContent .kd-panel { padding: 0 23px 23px !important; }
+#mainContent .kd-panel > *:first-child:not(.kd-panel__head) { margin-top: 23px; }
+#mainContent .kd-panel > .kd-panel__head { margin: 0 -23px 21px; padding: 17px 23px; min-height: 68px; }
+#mainContent .cp-summary { border-left: 0 !important; }
+
+/* Table cards: the toolbar and the first and last columns line up with the panel padding */
+#mainContent .rc-table-card > .rc-toolbar { padding: 17px 23px; }
+#mainContent .rc-table-card .table > :not(caption) > * > *:first-child { padding-left: 23px !important; }
+#mainContent .rc-table-card .table > :not(caption) > * > *:last-child { padding-right: 23px !important; }
+#mainContent .rc-table-card > .d-flex, #mainContent .rc-table-card .cp-tx-more, #mainContent .rc-table-card .cp-owners-note { padding-left: 23px !important; padding-right: 23px !important; }
+
+/* Tiles: +5px all round */
+#mainContent .kd-kpi { padding: 19px 21px !important; }
+#mainContent .rq-tile, #rqTiles .rq-tile { padding: 17px 19px; }
+#mainContent .cp-glance__tile { padding: 19px 21px; }
+#mainContent .cp-glance__tile > i { top: 17px; right: 17px; }
+#mainContent .cp-stat, #mainContent .kd-workstat { padding: 15px 17px; }
+#mainContent .cd-score { padding: 17px 19px; border: 0; }
+#mainContent .cp-empty { padding: 17px 19px; }
