@@ -405,7 +405,7 @@ const Dashboard = {
             const riskClass = (score) => (score >= 70 ? "high" : score >= 40 ? "medium" : "low");
             $list.html(alerts.slice(0, 6).map((a) => `
                 <li>
-                    <a class="kd-alert" href="/cases" data-page="cases">
+                    <a class="kd-alert" href="/case?id=${encodeURIComponent(a.id)}" data-page="cases" data-case="${this.escapeHtml(a.id)}">
                         <span class="kd-alert__score kd-alert__score--${riskClass(a.risk_score)}" title="Risk score">${Number(a.risk_score || 0)}</span>
                         <span class="kd-alert__body">
                             <strong>${this.escapeHtml(a.customer_name || "Unknown customer")}</strong>
@@ -785,6 +785,13 @@ const Dashboard = {
         // Dashboard cards/links navigate inside the app instead of reloading
         $(document).on("click", ".kd a[data-page]", (e) => {
             e.preventDefault();
+            const caseId = $(e.currentTarget).data("case");
+            if (caseId && Auth.can('cases.view')) {
+                // One route serves every case, so tell the case page directly when it is already open
+                if (App.currentPage === 'case') CaseDetail.open(caseId);
+                else App.navigateTo('case', { id: caseId });
+                return;
+            }
             App.navigateTo($(e.currentTarget).data("page"));
         });
         

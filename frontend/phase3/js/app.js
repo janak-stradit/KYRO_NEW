@@ -239,8 +239,11 @@ const App = {
             throw new Error(`Page handler not found: ${pageName}`);
         }
         
+        // Also on a direct visit or a reload, which do not pass through updateNavigation()
+        document.title = `${this.PAGE_TITLES[pageName] || capitalizeFirst(pageName)} · KYRO`;
+
         // Show loading state
-        showLoading("#mainContent", `Loading ${capitalizeFirst(pageName)}...`);
+        showLoading("#mainContent", `Loading ${this.PAGE_TITLES[pageName] || capitalizeFirst(pageName)}...`);
         
         try {
             console.log(`📄 Loading page: ${pageName}`, pageHandler);
@@ -305,7 +308,7 @@ const App = {
         $(`.navbar .nav-link[data-page="${pageName}"], .kyro-navbar .nav-link[data-page="${pageName}"]`).addClass("active");
         
         // Update page title
-        document.title = `KYRO - ${capitalizeFirst(pageName)}`;
+        document.title = `${this.PAGE_TITLES[pageName] || capitalizeFirst(pageName)} · KYRO`;
         
         // Close mobile menu/navbar if open
         const navbarLinksEl = document.getElementById("kyroNavbarLinks");
@@ -368,6 +371,11 @@ const App = {
         return paramString ? `?${paramString}` : "";
     },
     
+    PAGE_TITLES: {
+        dashboard: 'Dashboard', 'periodic-reviews': 'Periodic Reviews', cases: 'Review Cases', case: 'Case', patterns: 'Behavior Patterns',
+        regulations: 'Regulations', feeds: 'Data Feeds', admin: 'Users and Access', profile: 'My Profile'
+    },
+
     // ── Header search: customers by name or CUST code ──────────────────────
     search: { items: [], active: -1, timer: null, seq: 0 },
 

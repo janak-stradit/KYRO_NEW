@@ -772,3 +772,21 @@ body:not(.modal-open) { overflow-x: clip !important; overflow-y: visible !import
 /* The search box replaces the older header input; keep earlier rules from resizing it */
 .kyro-navbar .ks #globalSearch { width: 100% !important; display: block !important; height: 34px; padding: 0 34px 0 32px !important; border-radius: 6px !important; border: 1px solid rgba(255, 255, 255, 0.16) !important; }
 .kyro-navbar .ks #globalSearch:focus { border-color: var(--kt-accent) !important; }
+
+/* Header search below 1200px: an icon that opens into the box when used */
+@media (max-width: 1199.98px) {
+    .ks { display: block; width: 36px; }
+    .ks__key { display: none; }
+    .kyro-navbar .ks #globalSearch { padding: 0 !important; color: transparent; cursor: pointer; }
+    .kyro-navbar .ks #globalSearch::placeholder { color: transparent; }
+    .ks__icon { left: 11px; }
+    .ks:focus-within { position: absolute; right: 12px; left: auto; top: 11px; width: min(320px, calc(100vw - 24px)); z-index: 1061; }
+    .ks:focus-within #globalSearch { padding: 0 12px 0 32px !important; color: #fff; cursor: text; background: #2A3442 !important; }
+    .ks:focus-within #globalSearch::placeholder { color: #98A2B3; }
+    .ks__panel { left: auto; right: 0; }
+}
+@media (max-width: 1199.98px) {
+    .ks:focus-within { z-index: 2000; }
+    .ks:focus-within #globalSearch { background: #2A3442 !important; opacity: 1; }
+    .kyro-navbar:has(.ks:focus-within) .kn-wrap, .kyro-navbar:has(.ks:focus-within) #userMenuDropdown { visibility: hidden; }
+}

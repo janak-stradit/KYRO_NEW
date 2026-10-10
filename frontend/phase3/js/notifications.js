@@ -44,6 +44,15 @@ const Notifications = {
 
         $(document).on("click", "#notificationList a[data-page]", (e) => {
             e.preventDefault();
+            const caseId = $(e.currentTarget).data("case");
+            if (caseId && Auth.can('cases.view')) {
+                // One route serves every case, so tell the case page directly when it is already open
+                if (App.currentPage === 'case') CaseDetail.open(caseId);
+                else App.navigateTo('case', { id: caseId });
+                const menu = bootstrap.Dropdown.getInstance(document.getElementById('notificationsDropdown'));
+                if (menu) menu.hide();
+                return;
+            }
             this.close();
             if (window.App && App.navigateTo) {
                 App.navigateTo($(e.currentTarget).data("page"));
@@ -155,7 +164,7 @@ const Notifications = {
             const time = typeof formatRelativeTime === "function" ? formatRelativeTime(a.created_at) : "";
             return `
                 <li>
-                    <a class="kn-item${unread ? " is-unread" : ""}" href="/cases" data-page="cases">
+                    <a class="kn-item${unread ? " is-unread" : ""}" href="/case?id=${encodeURIComponent(a.id)}" data-page="cases" data-case="${escapeHtml(String(a.id))}">
                         <span class="kn-item__score kn-item__score--${this.riskClass(a.risk_score)}" title="Risk score">${Number(a.risk_score) || 0}</span>
                         <span class="kn-item__body">
                             <strong>${this.escape(a.customer_name || "Unknown customer")}</strong>

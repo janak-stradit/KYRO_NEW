@@ -14,7 +14,7 @@ const CaseDetail = {
         // Keep the Review Cases tab highlighted: a case belongs to the queue
         $('.nav-link[data-page]').removeClass('active');
         $('.nav-link[data-page="cases"]').addClass('active');
-        document.title = 'KYRO - Case';
+        document.title = 'Case · KYRO';
         // Assign / Resolve dialogs are shared with the queue; refresh this page after they save
         Cases.afterChange = () => this.load();
         await this.load();
@@ -55,6 +55,7 @@ const CaseDetail = {
         const score = Number(alert.risk_score);
         const riskLevel = score >= 80 ? 'HIGH' : score >= 60 ? 'MEDIUM' : 'LOW';
         const owner = (assignees || []).find(u => u.id === alert.assigned_to);
+        document.title = `${(customer && customer.full_name) || 'Case'} · Case ${String(alert.id).slice(0, 8)} · KYRO`;
         this.caseData = {
             caseId: alert.id,
             customerId: Cases.customerCodes[customerId] || '—',
