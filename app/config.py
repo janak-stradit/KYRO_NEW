@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from pydantic import SecretStr
+from pydantic import AliasChoices, Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -60,11 +60,14 @@ class Settings(BaseSettings):
     # Off and mocked by default: nothing is sent to an LLM until both
     # KYRO_AI_ENABLED=true and KYRO_LLM_MOCK=false are set explicitly.
     kyro_ai_enabled: bool = False
-    kyro_llm_mock: bool = True
+    # KYRO_MOCK_LLM is accepted as another spelling of KYRO_LLM_MOCK
+    kyro_llm_mock: bool = Field(default=True, validation_alias=AliasChoices("KYRO_LLM_MOCK", "KYRO_MOCK_LLM"))
     kyro_llm_base_url: str = ""
     kyro_llm_api_key: SecretStr = SecretStr("")
     kyro_llm_model: str = "claude-haiku-4-5-20251001"
-    kyro_llm_timeout_seconds: int = 30
+    kyro_llm_timeout_seconds: int = Field(
+        default=30, validation_alias=AliasChoices("KYRO_LLM_TIMEOUT_SECONDS", "KYRO_LLM_READ_TIMEOUT_SECONDS")
+    )
 
     # When true, PUT /rule-configs is refused and rule thresholds can only
     # change through an approved change request (/changes/rules).

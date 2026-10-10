@@ -108,10 +108,18 @@ def client(db_session, monkeypatch):
     # at the test session too, so they see the test's data and cannot write to
     # (or run real ingestion against) the shared database.
     import app.database
-    import app.ml.training.pipeline
     import app.routers.alerts
 
-    for module in (app.database, app.ml.training.pipeline, app.routers.alerts):
+    modules = [app.database, app.routers.alerts]
+    try:
+        import app.ml.training.pipeline
+
+        modules.append(app.ml.training.pipeline)
+    except ImportError:
+        # scikit-learn cannot be loaded on this machine (e.g. blocked by Windows
+        # Smart App Control); everything except the ML tests can still run.
+        pass
+    for module in modules:
         monkeypatch.setattr(module, "SessionLocal", lambda: _TestSession(db_session))
     with TestClient(fastapi_app) as test_client:
         yield test_client

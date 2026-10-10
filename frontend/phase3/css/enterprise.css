@@ -505,3 +505,6 @@ body:not(.modal-open) { overflow-x: clip !important; overflow-y: visible !import
 .cp-sticky .cp-head__title { font-size: 20px; }
 #mainContent .kd-panel--dark > .kd-panel__head { background: transparent; border-bottom-color: rgba(255, 255, 255, 0.12); }
 #mainContent .card.kd-panel.kd-panel--dark { background: var(--kt-dark); border-color: var(--kt-dark) !important; }
+
+.cp-summary__wait { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 13.5px; color: #475467; }
+.cp-summary__wait .spinner-border { color: var(--kt-accent); flex: 0 0 auto; }

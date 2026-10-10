@@ -3,7 +3,7 @@ id: cases.summary
 version: 1
 feature: case_summary
 response_format: text
-max_tokens: 300
+max_tokens: 700
 ---
 ## system
 You summarise an AML case for a compliance analyst who is about to open it.

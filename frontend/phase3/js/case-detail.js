@@ -668,10 +668,10 @@ const CaseDetail = {
 
     async generateSummary(alertId) {
         const $button = $("#cpSummaryRefresh").prop("disabled", true);
-        $("#cpSummary").html('<div class="kd-skeleton"></div>');
+        $("#cpSummary").html('<p class="cp-summary__wait"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span>Writing the summary from the facts on this case. This can take up to a minute.</p>');
         let result;
         try {
-            result = await API.post(`/alerts/${alertId}/summary`, {});
+            result = await API.postSlow(`/alerts/${alertId}/summary`, {});
         } catch (xhr) {
             const off = xhr && xhr.status === 409;
             if (this.id === alertId) {
@@ -690,7 +690,7 @@ const CaseDetail = {
         const $button = $("#cpNarrativeDraft").prop("disabled", true).text('Drafting...');
         let result;
         try {
-            result = await API.post(`/alerts/${alertId}/draft-narrative`, {});
+            result = await API.postSlow(`/alerts/${alertId}/draft-narrative`, {});
         } catch (xhr) {
             $button.prop("disabled", false).text('Draft narrative');
             return;

@@ -152,7 +152,7 @@ const Documents = {
         $("#docExtract").on("click", async () => {
             const $btn = $("#docExtract").prop("disabled", true).text('Reading...');
             try {
-                this.doc = await API.post(`/documents/${doc.id}/extract`);
+                this.doc = await API.postSlow(`/documents/${doc.id}/extract`);
                 this.renderReview();
                 showToast('success', `${this.doc.extractions.length} field${this.doc.extractions.length === 1 ? '' : 's'} read from the document.`);
             } catch (xhr) { /* API layer reports the reason (e.g. AI features are disabled) */ }

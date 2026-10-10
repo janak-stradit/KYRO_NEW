@@ -408,7 +408,7 @@ const KyroChat = {
     async askRegulatory(question) {
         let result;
         try {
-            result = await API.post('/regulatory/ask', { question });
+            result = await API.postSlow('/regulatory/ask', { question });
         } catch (error) {
             return null;
         }

@@ -155,6 +155,28 @@ const API = {
     },
 
     /**
+     * POST to an endpoint that waits on the AI model: one attempt (a retry
+     * would run the model again) and a wait long enough for a slow answer.
+     */
+    async postSlow(endpoint, data = {}) {
+        this.clearCache();
+        return new Promise((resolve, reject) => {
+            $.ajax({
+                url: `${this.baseUrl}${endpoint}`,
+                method: "POST",
+                headers: this.getHeaders(),
+                data: JSON.stringify(data),
+                timeout: 150000,
+                success: resolve,
+                error: (xhr) => {
+                    this.handleError(xhr, endpoint);
+                    reject(xhr);
+                }
+            });
+        });
+    },
+
+    /**
      * POST request
      */
     async post(endpoint, data = {}) {

@@ -283,7 +283,7 @@ const Regulations = {
         $("#regProposeMappings").on("click", async (e) => {
             const $btn = $(e.currentTarget).prop("disabled", true);
             try {
-                const r = await API.post('/regulatory/mappings/propose');
+                const r = await API.postSlow('/regulatory/mappings/propose');
                 showToast('success', r.obligations_processed
                     ? `${r.mappings_proposed} mapping(s) proposed for ${r.obligations_processed} obligation(s).`
                     : 'Every confirmed obligation already has a mapping or a proposal.');
@@ -773,7 +773,7 @@ const Regulations = {
         const original = $btn.html();
         $btn.prop("disabled", true).text('Working...');
         try {
-            const r = await API.post(`/regulatory/obligations/extract?source_id=${encodeURIComponent($btn.data("id"))}`);
+            const r = await API.postSlow(`/regulatory/obligations/extract?source_id=${encodeURIComponent($btn.data("id"))}`);
             showToast('success', r.sections_processed
                 ? `${r.obligations_proposed} obligation(s) proposed from ${r.sections_processed} section(s).`
                 : 'Every section of this source already has obligations.');
