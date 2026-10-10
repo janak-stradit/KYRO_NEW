@@ -28,7 +28,32 @@ const Regulations = {
         this.filters = { status: 'PROPOSED', category: '', q: '' };
         this.renderLayout();
         this.setupListeners();
+        $(".reg-tab").on("click", (e) => this.showTab($(e.currentTarget).data("tab")));
+        $(".kyro-page-tabs").on("keydown", (e) => {
+            if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+            const next = this.TABS[(this.TABS.indexOf(this.tab) + (e.key === 'ArrowRight' ? 1 : this.TABS.length - 1)) % this.TABS.length];
+            this.showTab(next);
+            $(`#regTab-${next}`).trigger("focus");
+        });
+        this.showTab(this.tab);
         await Promise.all([this.loadSources(), this.loadSummary(), this.loadObligations(), this.loadTraceability(), this.loadChanges(), this.loadRuleChanges(), this.loadNotices()]);
+    },
+
+    TABS: ['sources', 'rulemaking', 'changes', 'obligations', 'coverage'],
+    tab: 'sources',
+
+    showTab(name) {
+        if (!this.TABS.includes(name)) name = 'sources';
+        this.tab = name;
+        this.TABS.forEach(t => {
+            $(`#regTab-${t}`).toggleClass("is-active", t === name).attr({ "aria-selected": String(t === name), tabindex: t === name ? 0 : -1 });
+            $(`#regPane-${t}`).prop("hidden", t !== name);
+        });
+    },
+
+    /** The small number on a tab: items waiting for someone. */
+    setCount(tab, n) {
+        $(`#regCount-${tab}`).text(n ? Number(n).toLocaleString() : '');
     },
 
     renderLayout() {
@@ -49,6 +74,15 @@ const Regulations = {
                     </div>` : ''}
                 </div>
 
+                <div class="kyro-page-tabs cp-tabs" role="tablist" aria-label="Regulations sections">
+                    <button type="button" class="cp-tab reg-tab" role="tab" id="regTab-sources" data-tab="sources" aria-controls="regPane-sources">Sources <span class="cp-tab__count" id="regCount-sources"></span></button>
+                    <button type="button" class="cp-tab reg-tab" role="tab" id="regTab-rulemaking" data-tab="rulemaking" aria-controls="regPane-rulemaking">Rulemaking <span class="cp-tab__count" id="regCount-rulemaking"></span></button>
+                    <button type="button" class="cp-tab reg-tab" role="tab" id="regTab-changes" data-tab="changes" aria-controls="regPane-changes">Changes <span class="cp-tab__count" id="regCount-changes"></span></button>
+                    <button type="button" class="cp-tab reg-tab" role="tab" id="regTab-obligations" data-tab="obligations" aria-controls="regPane-obligations">Obligations <span class="cp-tab__count" id="regCount-obligations"></span></button>
+                    <button type="button" class="cp-tab reg-tab" role="tab" id="regTab-coverage" data-tab="coverage" aria-controls="regPane-coverage">Coverage <span class="cp-tab__count" id="regCount-coverage"></span></button>
+                </div>
+
+                <div class="cp-pane" id="regPane-sources" role="tabpanel" aria-labelledby="regTab-sources" hidden>
                 <div class="card border-0 rc-table-card mb-4">
                     <div class="rc-toolbar">
                         <div class="rc-toolbar__title">
@@ -70,7 +104,9 @@ const Regulations = {
                         </table>
                     </div>
                 </div>
+                </div>
 
+                <div class="cp-pane" id="regPane-rulemaking" role="tabpanel" aria-labelledby="regTab-rulemaking" hidden>
                 <div class="card border-0 rc-table-card mb-4">
                     <div class="rc-toolbar">
                         <div class="rc-toolbar__title">
@@ -102,7 +138,9 @@ const Regulations = {
                         </table>
                     </div>
                 </div>
+                </div>
 
+                <div class="cp-pane" id="regPane-changes" role="tabpanel" aria-labelledby="regTab-changes" hidden>
                 <div class="card border-0 rc-table-card mb-4">
                     <div class="rc-toolbar">
                         <div class="rc-toolbar__title">
@@ -157,7 +195,9 @@ const Regulations = {
                         </table>
                     </div>
                 </div>
+                </div>
 
+                <div class="cp-pane" id="regPane-obligations" role="tabpanel" aria-labelledby="regTab-obligations" hidden>
                 <div class="card border-0 rc-table-card">
                     <div class="rc-toolbar">
                         <div class="rc-toolbar__title">
@@ -207,7 +247,9 @@ const Regulations = {
                         </div>
                     </div>
                 </div>
+                </div>
 
+                <div class="cp-pane" id="regPane-coverage" role="tabpanel" aria-labelledby="regTab-coverage" hidden>
                 <div class="card border-0 rc-table-card mt-4">
                     <div class="rc-toolbar">
                         <div class="rc-toolbar__title">
@@ -241,6 +283,7 @@ const Regulations = {
                             <tbody id="regTraceBody"><tr><td colspan="7" class="rc-empty">Loading...</td></tr></tbody>
                         </table>
                     </div>
+                </div>
                 </div>
             </div>
         `);
@@ -373,7 +416,13 @@ const Regulations = {
                         <div><span>Quote not found in source</span><strong>${s.unverified_quotes}</strong></div>
                     </div>
                 </div>`);
+            this.setCount('obligations', n('PROPOSED'));
         } catch (error) { $("#regSummary").empty(); }
+        // What is waiting under the Changes tab
+        try {
+            const open = await API.get('/changes/summary');
+            this.setCount('changes', (open.regulatory_open || 0) + (open.rule_changes_pending || 0));
+        } catch (error) { /* counts are a convenience */ }
     },
 
     async loadObligations() {
@@ -440,6 +489,7 @@ const Regulations = {
             $("#regNoticesBody").html('<tr><td colspan="6" class="rc-empty">Could not load notices.</td></tr>');
             return;
         }
+        if (status === 'NEW') this.setCount('rulemaking', notices.length);
         const reviewer = this.canReview('changes.assess');
         const today = new Date().toISOString().slice(0, 10);
         const statusChip = { ACTION_REQUIRED: ['high', 'Action required'], NO_ACTION: ['muted', 'No action needed'], CLOSED: ['low', 'Closed'] };

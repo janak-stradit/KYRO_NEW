@@ -726,3 +726,21 @@ body:not(.modal-open) { overflow-x: clip !important; overflow-y: visible !import
     .cp-tabs { margin-left: -4px; }
     .cp-tab { padding: 10px 10px; }
 }
+
+/* Page-level tabs: part of the header band */
+.kyro-page-head:has(+ .kyro-page-tabs) { margin-bottom: 0 !important; padding-bottom: 8px !important; }
+.kyro-page-head:has(+ .kyro-page-tabs)::after { display: none; }
+.kyro-page-tabs {
+    position: relative; margin: 0 0 20px; background: var(--kt-band);
+    box-shadow: 0 0 0 100vmax var(--kt-band); clip-path: inset(0 -100vmax -1px);
+}
+.kyro-page-tabs::after { content: ""; position: absolute; left: -100vmax; right: -100vmax; bottom: 0; height: 1px; background: var(--kt-border); }
+.kyro-page-tabs .cp-tab { position: relative; z-index: 1; }
+
+/* Navigation on narrower screens: one line, tighter, and the search box gives way first */
+.kyro-mainnav .nav-link { white-space: nowrap; }
+@media (max-width: 1399.98px) {
+    .kyro-mainnav .nav-link { padding-left: 9px !important; padding-right: 9px !important; font-size: 13px !important; }
+    .kyro-navbar #globalSearch { width: 170px !important; }
+}
+@media (max-width: 1199.98px) { .kyro-navbar #globalSearch { display: none; } .kyro-navbar #globalSearch + i { display: none; } }
