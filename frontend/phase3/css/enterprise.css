@@ -707,3 +707,22 @@ body:not(.modal-open) { overflow-x: clip !important; overflow-y: visible !import
 #mainContent .cp-stat, #mainContent .kd-workstat { padding: 15px 17px; }
 #mainContent .cd-score { padding: 17px 19px; border: 0; }
 #mainContent .cp-empty { padding: 17px 19px; }
+
+/* ── Narrow screens ───────────────────────────────────────────────────── */
+@media (max-width: 1199.98px) { .cp-glance { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 767.98px) {
+    .cp-glance { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    #mainContent .rc-toolbar .form-select, #mainContent .rc-toolbar .form-control {
+        height: 40px; min-height: 40px; padding-top: 8px; padding-bottom: 8px; line-height: 1.4; font-size: 14px;
+    }
+    #mainContent .rc-toolbar { align-items: stretch; }
+    #mainContent .kd-panel { padding: 0 16px 16px !important; }
+    #mainContent .kd-panel > .kd-panel__head { margin: 0 -16px 16px; padding: 14px 16px; }
+    #mainContent .rc-table-card > .rc-toolbar { padding: 14px 16px; }
+    #mainContent .rc-table-card .table > :not(caption) > * > *:first-child { padding-left: 16px !important; }
+    .cp-sticky .cp-head__actions { width: 100%; }
+    .cp-sticky .cp-head__actions .btn { flex: 1 1 auto; }
+    .cp-act, .kd-workstats { grid-template-columns: minmax(0, 1fr); }
+    .cp-tabs { margin-left: -4px; }
+    .cp-tab { padding: 10px 10px; }
+}

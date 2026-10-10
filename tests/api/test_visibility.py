@@ -189,3 +189,25 @@ def test_dashboard_my_work_is_shaped_by_role(client, auth_headers, db_session):
     assert work(mlro)["awaiting_quality_check"] == 0  # not the cases they resolved themselves
 
     assert client.get("/api/v1/dashboard/my-work", headers=viewer).status_code == 403
+
+
+def test_cases_are_assigned_only_to_people_who_work_them(client, auth_headers, db_session):
+    lead, _ = _user(client, db_session, "TEAM_LEAD", "own.lead")
+    _, analyst = _user(client, db_session, "L1_ANALYST", "own.l1")
+    _, auditor = _user(client, db_session, "AUDITOR", "own.auditor")
+    _, viewer = _user(client, db_session, "EXECUTIVE_VIEWER", "own.exec")
+    _, qa = _user(client, db_session, "QA_REVIEWER", "own.qa")
+    _, gone = _user(client, db_session, "L1_ANALYST", "own.gone")
+    gone.is_active = False
+    db_session.commit()
+    alert = _create_alert_via_sanctions_hit(client, auth_headers, "own.case@example.com")
+    url = f"/api/v1/alerts/{alert['id']}/assign"
+
+    offered = {a["id"] for a in client.get("/api/v1/alerts/assignees", headers=lead).json()}
+    assert str(analyst.id) in offered
+    assert not offered & {str(auditor.id), str(viewer.id), str(qa.id), str(gone.id)}
+
+    for person in (auditor, viewer, qa, gone):
+        assert client.put(url, json={"assigned_to": str(person.id)}, headers=lead).status_code == 422, person.username
+    assert client.put(url, json={"assigned_to": str(uuid.uuid4())}, headers=lead).status_code == 422
+    assert client.put(url, json={"assigned_to": str(analyst.id)}, headers=lead).status_code == 200

@@ -21,7 +21,7 @@ from app.models.alert import Alert as AlertModel
 from app.models.customer import Customer
 from app.models.alert_request import AlertRequest
 from app.models.user import User
-from app.permissions import has_permission
+from app.permissions import has_permission, is_read_only
 from app.visibility import alert_conditions, alert_visible, visible_alert_or_404
 from app.schemas.alert import (
     OUTCOME_REASONS,
@@ -448,11 +448,19 @@ def alert_queue_summary(db: Session = Depends(get_db), user: User = Depends(get_
     }
 
 
+_CASE_WORK = ("alerts.close_false_positive", "alerts.close", "alerts.escalate", "sar.approve")
+
+
+def _can_own_cases(role: str) -> bool:
+    """A case needs an owner who can act on it: not a read-only role, and able to clear, close or escalate."""
+    return not is_read_only(role) and any(has_permission(role, p) for p in _CASE_WORK)
+
+
 @router.get("/assignees")
 def list_assignees(db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> list[dict]:
     """Active users an alert can be assigned to."""
     users = db.query(User).filter(User.is_active.is_(True)).order_by(User.full_name, User.username).all()
-    return [{"id": str(u.id), "name": u.full_name or u.username, "role": u.role} for u in users]
+    return [{"id": str(u.id), "name": u.full_name or u.username, "role": u.role} for u in users if _can_own_cases(u.role)]
 
 
 @router.get("/resolution-options", response_model=ResolutionOptions)
@@ -490,6 +498,9 @@ def assign(
     user: User = Depends(require_permission("alerts.assign")),
 ) -> AlertModel:
     alert = visible_alert_or_404(db, user, alert_id)
+    assignee = db.get(User, data.assigned_to)
+    if assignee is None or not assignee.is_active or not _can_own_cases(assignee.role):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Cases can only be assigned to an active user whose role works cases")
     alert.assigned_to = data.assigned_to
     alert.status = "ASSIGNED"
     log_action(db, entity_type="ALERT", entity_id=alert.id, action="UPDATE", performed_by=user.id, new_values={"assigned_to": str(data.assigned_to)})
