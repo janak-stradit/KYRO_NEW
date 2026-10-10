@@ -336,6 +336,76 @@ def alert_queue(
     return {"items": items, "total": total, "page": pagination.page, "page_size": pagination.page_size}
 
 
+@router.get("/queue/customers")
+def alert_queue_by_customer(
+    pagination: PaginationParams = Depends(),
+    risk: str | None = Query(None, pattern="^(high|medium|low)$"),
+    rule: str | None = Query(None, max_length=20),
+    assignment: str | None = Query(None, pattern="^(unassigned|mine)$"),
+    q: str | None = Query(None, max_length=100),
+    attention: str | None = Query(None, pattern="^(overdue|awaiting_information)$"),
+    sort: str = Query("priority", pattern="^(priority|newest|oldest)$"),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> dict:
+    """
+    The unresolved queue, one row per customer: how many alerts are open, the
+    highest score, how long the oldest has waited and which rules fired. One
+    review of the customer usually settles several alerts.
+    """
+    base = _queue_filters(
+        db, user, status_filter="UNRESOLVED", risk=risk, rule=rule, assignment=assignment, customer_id=None, q=q, attention=attention,
+    )
+    alerts_count, top_score = func.count(AlertModel.id), func.max(AlertModel.risk_score)
+    oldest, newest = func.min(AlertModel.created_at), func.max(AlertModel.created_at)
+    groups = base.with_entities(
+        Customer.id, alerts_count.label("alerts"), top_score.label("top"), oldest.label("oldest"),
+        func.sum(case((AlertModel.risk_score >= 80, 1), else_=0)).label("high"),
+        func.sum(case((_overdue_condition(), 1), else_=0)).label("overdue"),
+        func.count(func.distinct(AlertModel.assigned_to)).label("owners"),
+        func.sum(case((AlertModel.assigned_to.is_(None), 1), else_=0)).label("unassigned"),
+    ).group_by(Customer.id)
+    total = groups.count()
+    order = {
+        "priority": (top_score.desc(), alerts_count.desc(), oldest.asc(), Customer.id),
+        "oldest": (oldest.asc(), Customer.id),
+        "newest": (newest.desc(), Customer.id),
+    }[sort]
+    page = groups.order_by(*order).offset(pagination.offset).limit(pagination.limit).all()
+
+    customer_ids = [row[0] for row in page]
+    customers = {c.id: c for c in db.query(Customer).filter(Customer.id.in_(customer_ids))} if customer_ids else {}
+    # The alerts behind each row, for the rules that fired, the owner and the case to open first
+    details: dict[uuid.UUID, dict] = {cid: {"rules": {}, "owners": set(), "top": None} for cid in customer_ids}
+    if customer_ids:
+        for alert, _ in base.filter(AlertModel.customer_id.in_(customer_ids)).order_by(AlertModel.risk_score.desc(), AlertModel.created_at):
+            d = details[alert.customer_id]
+            if d["top"] is None:
+                d["top"] = alert.id
+            rules = alert.triggered_rules.get("rules") if isinstance(alert.triggered_rules, dict) else None
+            for code in set(rules or []):
+                d["rules"][str(code)] = d["rules"].get(str(code), 0) + 1
+            if alert.assigned_to:
+                d["owners"].add(alert.assigned_to)
+    owner_ids = {o for d in details.values() for o in d["owners"]}
+    names = {u.id: u.full_name or u.username for u in db.query(User).filter(User.id.in_(owner_ids))} if owner_ids else {}
+
+    items = []
+    for customer_id, alerts, top, oldest_at, high, overdue, _, unassigned in page:
+        customer, d = customers.get(customer_id), details[customer_id]
+        owners = sorted(names.get(o, "Unknown user") for o in d["owners"])
+        items.append({
+            "customer_id": str(customer_id), "customer_name": customer.full_name if customer else "Unknown customer",
+            "customer_pep": bool(customer and customer.pep_flag), "customer_sanctions": bool(customer and customer.sanctions_flag),
+            "customer_risk_level": customer.risk_level if customer else None,
+            "open_alerts": alerts, "high_risk_alerts": int(high or 0), "overdue_alerts": int(overdue or 0),
+            "unassigned_alerts": int(unassigned or 0), "max_risk_score": top, "oldest_created_at": oldest_at.isoformat(),
+            "rules": [{"rule": r, "alerts": n} for r, n in sorted(d["rules"].items(), key=lambda kv: (-kv[1], kv[0]))],
+            "owners": owners, "top_alert_id": str(d["top"]) if d["top"] else None,
+        })
+    return {"items": items, "total": total, "page": pagination.page, "page_size": pagination.page_size}
+
+
 @router.get("/queue/summary")
 def alert_queue_summary(db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> dict:
     """Headline numbers for the work queue: what is waiting, how risky, how old, and where it concentrates."""

@@ -79,33 +79,16 @@ const Cases = {
                 <div class="rq-tiles" id="rqTiles" aria-label="Queue summary"></div>
 
                 <!-- Where the work concentrates -->
-                <div class="kd-grid kd-grid--halves mb-4">
-                    <section class="card kd-panel">
-                        <header class="kd-panel__head">
-                            <div>
-                                <h2>Customers with the most open alerts</h2>
-                                <p class="aml-subtitle">Reviewing one customer can clear many alerts at once</p>
-                            </div>
-                        </header>
-                        <ul class="kd-bars" id="rqTopCustomers"><li class="kd-skeleton"></li><li class="kd-skeleton"></li><li class="kd-skeleton"></li></ul>
-                    </section>
-                    <section class="card kd-panel">
-                        <header class="kd-panel__head">
-                            <div>
-                                <h2>Open alerts by rule</h2>
-                                <p class="aml-subtitle">Select a rule to see only its alerts</p>
-                            </div>
-                        </header>
-                        <ul class="kd-bars" id="rqByRule"><li class="kd-skeleton"></li><li class="kd-skeleton"></li><li class="kd-skeleton"></li></ul>
-                    </section>
-                </div>
-
                 <!-- The queue -->
                 <div class="card border-0 rc-table-card">
                     <div class="rc-toolbar">
                         <div class="rc-toolbar__title">
                             <h2>Work queue</h2>
                             <small class="text-muted" id="resultsCount">&nbsp;</small>
+                        </div>
+                        <div class="cp-seg" role="group" aria-label="How to list the queue">
+                            <button type="button" class="rq-group is-active" data-group="customer" aria-pressed="true">By customer</button>
+                            <button type="button" class="rq-group" data-group="alert" aria-pressed="false">By alert</button>
                         </div>
                         <div class="rc-toolbar__controls">
                             <div class="rc-search">
@@ -156,7 +139,7 @@ const Cases = {
                     </div>
                     <div class="table-responsive">
                         <table class="table table-hover mb-0 rq-table">
-                            <thead>
+                            <thead id="casesTableHead">
                                 <tr>
                                     <th class="px-3 py-3">Risk</th>
                                     <th class="px-3 py-3">Customer</th>
@@ -185,6 +168,18 @@ const Cases = {
                             <button type="button" class="btn btn-sm btn-outline-primary" id="nextPage">Next</button>
                         </div>
                     </div>
+                </div>
+
+                <div class="rq-below">
+                    <section class="card kd-panel">
+                        <header class="kd-panel__head">
+                            <div>
+                                <h2>Open alerts by rule</h2>
+                                <p class="aml-subtitle">Select a rule to see only its alerts</p>
+                            </div>
+                        </header>
+                        <ul class="kd-bars" id="rqByRule"><li class="kd-skeleton"></li><li class="kd-skeleton"></li><li class="kd-skeleton"></li></ul>
+                    </section>
                 </div>
 
                 <!-- False-positive baseline per rule (compliance officers and admins) -->
@@ -360,7 +355,97 @@ const Cases = {
         ) || '<li class="kd-empty">No open alerts.</li>');
     },
 
+    groupBy: 'customer',
+
+    /** One row per customer, unless the queue is narrowed to one customer or a status other than unresolved. */
+    groupedView() {
+        return this.groupBy === 'customer' && !this.filters.customerId && this.filters.status === 'UNRESOLVED';
+    },
+
+    ALERT_HEAD: `<tr>
+        <th class="px-3 py-3">Risk</th><th class="px-3 py-3">Customer</th><th class="px-3 py-3">Why it was flagged</th>
+        <th class="px-3 py-3">Status</th><th class="px-3 py-3">Waiting</th><th class="px-3 py-3">Owner</th>
+        <th class="px-3 py-3"><span class="visually-hidden">Actions</span></th></tr>`,
+    CUSTOMER_HEAD: `<tr>
+        <th class="px-3 py-3">Top score</th><th class="px-3 py-3">Customer</th><th class="px-3 py-3">Open alerts</th>
+        <th class="px-3 py-3">Rules that fired</th><th class="px-3 py-3">Longest waiting</th><th class="px-3 py-3">Owner</th>
+        <th class="px-3 py-3"><span class="visually-hidden">Actions</span></th></tr>`,
+
+    async fetchCustomerGroups() {
+        const f = this.filters;
+        const params = { page: this.pagination.currentPage, page_size: this.pagination.pageSize, sort: f.sort };
+        ['q', 'risk', 'rule', 'assignment', 'attention'].forEach(k => { if (f[k]) params[k] = f[k]; });
+        $("#casesTableHead").html(this.CUSTOMER_HEAD);
+        let data;
+        try {
+            data = await API.get('/alerts/queue/customers', params);
+        } catch (error) {
+            this.totalCases = 0;
+            $("#casesTableBody").html('<tr><td colspan="7" class="rc-empty"><i class="fas fa-triangle-exclamation"></i><strong>Could not load the queue</strong><span>Check your connection and select Refresh.</span></td></tr>');
+            $("#resultsCount").text('');
+            this.renderPaginationControls();
+            return;
+        }
+        this.casesData = [];
+        this.totalCases = data.total;
+        const total = data.total;
+        const start = total ? (this.pagination.currentPage - 1) * this.pagination.pageSize + 1 : 0;
+        const end = Math.min(this.pagination.currentPage * this.pagination.pageSize, total);
+        $("#resultsCount").text(total ? `Showing ${start.toLocaleString()}–${end.toLocaleString()} of ${total.toLocaleString()} customers with unresolved alerts` : 'No matching customers');
+        this.renderPaginationControls();
+        if (!data.items.length) {
+            $("#casesTableBody").html('<tr><td colspan="7" class="rc-empty"><i class="fas fa-folder-open"></i><strong>No customers match these filters</strong><span>Try clearing the search or filters.</span></td></tr>');
+            return;
+        }
+        const band = (score) => (score >= 80 ? 'high' : score >= 60 ? 'medium' : 'low');
+        $("#casesTableBody").html(data.items.map(g => {
+            const name = g.customer_name;
+            const code = this.customerCodes[g.customer_id] || '';
+            const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?';
+            const owner = g.owners.length === 0 ? 'Unassigned' : g.owners.length === 1 ? g.owners[0] : `${g.owners.length} people`;
+            return `
+                <tr>
+                    <td class="px-3 py-3"><span class="rq-score rq-score--${band(g.max_risk_score)}">${g.max_risk_score}</span></td>
+                    <td class="px-3 py-3">
+                        <div class="rc-customer">
+                            <span class="rc-customer__avatar" aria-hidden="true">${escapeHtml(initials)}</span>
+                            <span class="rc-customer__text">
+                                <strong>${escapeHtml(name)}</strong>
+                                <small>${escapeHtml(code)}${g.customer_sanctions ? ' <span class="cd-chip cd-chip--high">Sanctions</span>' : ''}${g.customer_pep ? ' <span class="cd-chip cd-chip--medium">PEP</span>' : ''}</small>
+                            </span>
+                        </div>
+                    </td>
+                    <td class="px-3 py-3 text-nowrap"><strong>${g.open_alerts.toLocaleString()}</strong>${g.high_risk_alerts ? ` <small class="text-muted">${g.high_risk_alerts} high risk</small>` : ''}</td>
+                    <td class="px-3 py-3">
+                        <div class="rq-rules">
+                            ${g.rules.slice(0, 4).map(r => `<span class="rq-rule" title="${escapeHtml(r.rule)}">${escapeHtml((this.RULES[r.rule] || [r.rule])[0])}${r.alerts > 1 ? ` <b>${r.alerts}</b>` : ''}</span>`).join('')}
+                            ${g.rules.length > 4 ? `<span class="rq-rule rq-rule--more">+${g.rules.length - 4}</span>` : ''}
+                            ${g.rules.length ? '' : '<span class="text-muted">No rule recorded</span>'}
+                        </div>
+                    </td>
+                    <td class="px-3 py-3 text-nowrap" title="Oldest unresolved alert created ${escapeHtml(new Date(g.oldest_created_at).toLocaleString())}">${escapeHtml(this.age(g.oldest_created_at))}${g.overdue_alerts ? ` <span class="cd-chip cd-chip--high">${g.overdue_alerts} overdue</span>` : ''}</td>
+                    <td class="px-3 py-3 ${g.owners.length ? '' : 'text-muted'}">${escapeHtml(owner)}${g.owners.length && g.unassigned_alerts ? `<br><small class="text-muted">${g.unassigned_alerts} unassigned</small>` : ''}</td>
+                    <td class="px-3 py-3">
+                        <div class="rc-actions">
+                            <button type="button" class="btn btn-sm rc-actions__view view-case-btn" data-case="${escapeHtml(g.top_alert_id)}" title="Open this customer's highest-risk case">
+                                <i class="far fa-eye me-1"></i>Open top case
+                            </button>
+                            <button type="button" class="btn btn-sm rc-actions__view rq-more" data-customer="${escapeHtml(g.customer_id)}" data-name="${escapeHtml(name)}">
+                                All ${g.open_alerts.toLocaleString()}
+                            </button>
+                        </div>
+                    </td>
+                </tr>`;
+        }).join(''));
+    },
+
     async fetchCasesData() {
+        $(".rq-group").each((_, el) => {
+            const on = $(el).data("group") === this.groupBy;
+            $(el).toggleClass("is-active", on).attr("aria-pressed", String(on));
+        });
+        if (this.groupedView()) return this.fetchCustomerGroups();
+        $("#casesTableHead").html(this.ALERT_HEAD);
         const f = this.filters;
         const params = { page: this.pagination.currentPage, page_size: this.pagination.pageSize, status_filter: f.status, sort: f.sort };
         if (f.q) params.q = f.q;
@@ -665,6 +750,11 @@ const Cases = {
 
         $("#pageSizeSelect").on("change", function() {
             self.pagination.pageSize = parseInt($(this).val(), 10);
+            self.pagination.currentPage = 1;
+            self.fetchCasesData();
+        });
+        $(".rq-group").on("click", function() {
+            self.groupBy = $(this).data("group");
             self.pagination.currentPage = 1;
             self.fetchCasesData();
         });

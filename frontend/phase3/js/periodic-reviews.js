@@ -105,9 +105,9 @@ const PeriodicReviews = {
                         customerName: displayName,
                         riskLevel: review.risk_level_after || 'MEDIUM',
                         lastReview: (review.completed_date || lookup?.lastReview)
-                            ? new Date(review.completed_date || lookup.lastReview).toLocaleDateString()
+                            ? formatDate(review.completed_date || lookup.lastReview)
                             : 'Never',
-                        nextReview: nextReviewDate.toLocaleDateString(),
+                        nextReview: formatDate(nextReviewDate),
                         dueIn: Math.abs(dueInDays),
                         overdue: dueInDays < 0,
                         frequency: frequency,
@@ -207,51 +207,16 @@ const PeriodicReviews = {
 
                     <!-- Table -->
                     <table class="table table-hover mb-0" id="reviewsTable" style="margin: 0;">
-                        <thead style="background: transparent; border-bottom: 1px solid var(--aml-border);">
+                        <thead>
                             <tr>
-                                <th style="padding: 14px 28px; font-size: 12px; font-weight: 600; color: var(--aml-muted); border: none; text-transform: uppercase; letter-spacing: 0.3px;">
-                                    <div style="display: flex; align-items: center; gap: 6px;">
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-                                        Customer ID
-                                    </div>
-                                </th>
-                                <th style="padding: 14px 20px; font-size: 12px; font-weight: 600; color: var(--aml-muted); border: none; text-transform: uppercase; letter-spacing: 0.3px;">
-                                    <div style="display: flex; align-items: center; gap: 6px;">
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
-                                        Risk Level
-                                    </div>
-                                </th>
-                                <th style="padding: 14px 20px; font-size: 12px; font-weight: 600; color: var(--aml-muted); border: none; text-transform: uppercase; letter-spacing: 0.3px;">
-                                    <div style="display: flex; align-items: center; gap: 6px;">
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-                                        Last KYC Review
-                                    </div>
-                                </th>
-                                <th style="padding: 14px 20px; font-size: 12px; font-weight: 600; color: var(--aml-muted); border: none; text-transform: uppercase; letter-spacing: 0.3px;">
-                                    <div style="display: flex; align-items: center; gap: 6px;">
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-                                        Next Review
-                                    </div>
-                                </th>
-                                <th style="padding: 14px 20px; font-size: 12px; font-weight: 600; color: var(--aml-muted); border: none; text-transform: uppercase; letter-spacing: 0.3px;">
-                                    <div style="display: flex; align-items: center; gap: 6px;">
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-                                        Due In
-                                    </div>
-                                </th>
-                                <th style="padding: 14px 20px; font-size: 12px; font-weight: 600; color: var(--aml-muted); border: none; text-transform: uppercase; letter-spacing: 0.3px;">
-                                    <div style="display: flex; align-items: center; gap: 6px;">
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
-                                        Frequency
-                                    </div>
-                                </th>
-                                <th style="padding: 14px 20px; font-size: 12px; font-weight: 600; color: var(--aml-muted); border: none; text-transform: uppercase; letter-spacing: 0.3px;">
-                                    <div style="display: flex; align-items: center; gap: 6px;">
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
-                                        Status
-                                    </div>
-                                </th>
-                                <th style="padding: 14px 28px; font-size: 12px; font-weight: 600; color: var(--aml-muted); border: none; text-align: center; text-transform: uppercase; letter-spacing: 0.3px;">Actions</th>
+                                <th class="px-3 py-2">Customer</th>
+                                <th class="px-3 py-2">Risk rating</th>
+                                <th class="px-3 py-2">Last review</th>
+                                <th class="px-3 py-2">Next review</th>
+                                <th class="px-3 py-2">Due</th>
+                                <th class="px-3 py-2">Frequency</th>
+                                <th class="px-3 py-2">Status</th>
+                                <th class="px-3 py-2 text-end">Actions</th>
                             </tr>
                         </thead>
                         <tbody></tbody>
@@ -486,33 +451,14 @@ const PeriodicReviews = {
                         </span>
                     </div>
                 </td>
-                <td style="padding: 14px 20px;">
-                    <span style="font-size: 13px; padding: 5px 11px; border-radius: 8px; font-weight: 600; display: inline-block; ${riskColors[review.riskLevel]}">
-                        ${review.riskLevel}
-                    </span>
-                </td>
-                <td style="padding: 14px 20px; font-size: 14px; color: var(--aml-text);">${review.lastReview}</td>
-                <td style="padding: 14px 20px;">
-                    <div style="font-size: 14px; color: var(--aml-text); font-weight: 500;">${review.nextReview}</div>
-                    <div style="font-size: 12px; color: #ef4444; margin-top: 2px;">${review.overdue ? '○ Overdue' : ''}</div>
-                </td>
-                <td style="padding: 14px 20px;">
-                    <span style="font-size: 13px; padding: 5px 11px; border-radius: 8px; font-weight: 600; display: inline-block; ${dueColor}">
-                        ${dueStatus}
-                    </span>
-                </td>
-                <td style="padding: 14px 20px;">
-                    <span style="font-size: 13px; padding: 5px 11px; border-radius: 8px; font-weight: 600; display: inline-block; background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd;">
-                        ${review.frequency}
-                    </span>
-                </td>
-                <td style="padding: 14px 20px;">
-                    <span style="font-size: 13px; padding: 5px 11px; border-radius: 8px; font-weight: 600; display: inline-block; ${statusColors[review.status]}">
-                        ${review.status === 'Inactive' ? 'Completed' : review.reviewStatus === 'IN_PROGRESS' ? 'In progress' : 'Scheduled'}
-                    </span>
-                </td>
+                <td class="px-3 py-3"><span class="cd-chip cd-chip--${String(review.riskLevel || 'low').toLowerCase()}">${escapeHtml(String(review.riskLevel || '').charAt(0) + String(review.riskLevel || '').slice(1).toLowerCase())}</span></td>
+                <td class="px-3 py-3 text-nowrap">${escapeHtml(String(review.lastReview || '—'))}</td>
+                <td class="px-3 py-3 text-nowrap">${escapeHtml(String(review.nextReview || '—'))}</td>
+                <td class="px-3 py-3 text-nowrap">${review.status !== 'Active' ? '<span class="text-muted">—</span>' : `<span class="cd-chip cd-chip--${review.overdue ? 'high' : review.dueIn <= 7 ? 'medium' : 'muted'}">${review.overdue ? `${review.dueIn} days overdue` : `in ${review.dueIn} days`}</span>`}</td>
+                <td class="px-3 py-3 text-nowrap">${escapeHtml(String(review.frequency || '—'))}</td>
+                <td class="px-3 py-3"><span class="cd-chip cd-chip--${review.status === 'Inactive' ? 'low' : review.reviewStatus === 'IN_PROGRESS' ? 'medium' : 'muted'}">${review.status === 'Inactive' ? 'Completed' : review.reviewStatus === 'IN_PROGRESS' ? 'In progress' : 'Scheduled'}</span></td>
                 <td class="px-3 py-3">
-                    <div class="rc-actions">
+                    <div class="rc-actions justify-content-end">
                         ${review.status !== 'Active' ? '<span class="text-muted" style="font-size: 13px;">Done</span>' : !Auth.can('kyc.review') ? '' : `
                         ${review.reviewStatus === 'IN_PROGRESS' ? '' : `
                         <button type="button" class="btn btn-sm rc-actions__icon start-review-btn" data-id="${escapeHtml(review.id)}" title="Mark as in progress" aria-label="Start review for ${escapeHtml(displayName)}">

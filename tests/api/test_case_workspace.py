@@ -338,3 +338,28 @@ def test_sample_profiles_are_repeatable_and_marked_as_sample():
     account = account_profile(account_id, "TRADING")
     assert account == account_profile(account_id, "TRADING")
     assert account["sample_data"] is True and len(account["account_number"]) == 8 and "trading" in account["purpose"].lower()
+
+
+def test_queue_by_customer_groups_the_open_alerts(client, auth_headers, compliance_headers, analyst_user, db_session):
+    first = _create_alert_via_sanctions_hit(client, auth_headers, "group.one@example.com")
+    second = _create_alert_via_sanctions_hit(client, auth_headers, "group.two@example.com")
+    extra = Alert(customer_id=uuid.UUID(first["customer_id"]), risk_score=95, triggered_rules={"rules": ["R006", "R001"]}, status="OPEN")
+    closed = Alert(customer_id=uuid.UUID(first["customer_id"]), risk_score=99, triggered_rules={"rules": ["R010"]}, status="RESOLVED")
+    db_session.add_all([extra, closed])
+    db_session.commit()
+    client.put(f"/api/v1/alerts/{second['id']}/assign", json={"assigned_to": str(analyst_user.id)}, headers=auth_headers)
+
+    data = client.get("/api/v1/alerts/queue/customers", headers=compliance_headers).json()
+    rows = {r["customer_id"]: r for r in data["items"]}
+    assert data["total"] == 2 and set(rows) == {first["customer_id"], second["customer_id"]}
+    one, two = rows[first["customer_id"]], rows[second["customer_id"]]
+    assert one["open_alerts"] == 2 and one["unassigned_alerts"] == 2 and one["owners"] == []  # the resolved alert is not counted
+    assert one["max_risk_score"] == max(95, first["risk_score"]) and one["customer_name"] == "Risky Corp"
+    assert {r["rule"]: r["alerts"] for r in one["rules"]}["R006"] == 2 and "R010" not in {r["rule"] for r in one["rules"]}
+    assert one["top_alert_id"] in (first["id"], str(extra.id))
+    assert two["open_alerts"] == 1 and two["owners"] == [analyst_user.full_name] and two["unassigned_alerts"] == 0
+
+    mine = client.get("/api/v1/alerts/queue/customers", params={"assignment": "mine"}, headers=auth_headers).json()
+    assert [r["customer_id"] for r in mine["items"]] == [second["customer_id"]]
+    by_rule = client.get("/api/v1/alerts/queue/customers", params={"rule": "R001"}, headers=compliance_headers).json()
+    assert [r["customer_id"] for r in by_rule["items"]] == [first["customer_id"]] and by_rule["items"][0]["open_alerts"] == 1

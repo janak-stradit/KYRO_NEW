@@ -631,3 +631,25 @@ body:not(.modal-open) { overflow-x: clip !important; overflow-y: visible !import
 .cp-summary__text { max-width: 150ch; }
 #mainContent .kyro-dashboard-container, #mainContent .kyro-page.kyro-dashboard-container { padding-top: 0 !important; margin-top: 0 !important; }
 #mainContent .kyro-dashboard-container > .kd-welcome:first-child { margin-top: 0 !important; }
+
+/* Case header, condensed while scrolled */
+.cp-sticky.is-condensed .cp-crumbs, .cp-sticky.is-condensed .cp-facts, .cp-sticky.is-condensed .cp-stages { display: none; }
+.cp-sticky.is-condensed { padding-top: 8px; box-shadow: 0 0 0 100vmax var(--kt-band), 0 2px 6px rgba(16, 24, 40, 0.08); }
+.cp-sticky.is-condensed .cp-head { padding-bottom: 4px !important; }
+.cp-sticky.is-condensed .cp-head__title { font-size: 17px; margin: 0; display: inline-block; margin-right: 10px; }
+.cp-sticky.is-condensed .cp-head__meta { display: inline-flex; }
+.cp-sticky.is-condensed .cp-head__avatar { flex-basis: 32px !important; width: 32px !important; height: 32px !important; font-size: 12px !important; }
+.cp-sticky.is-condensed .cp-tabs { margin-top: 0; }
+.cp-sticky.is-condensed .cp-tab { padding: 8px 16px; }
+#mainContent #reviewsTable td { vertical-align: middle; }
+
+/* Work queue: customer / alert switch */
+.rc-toolbar .cp-seg { flex: 0 0 auto; }
+.rq-rule b { font-weight: 700; margin-left: 2px; color: var(--kt-ink); }
+#mainContent .rc-actions .rq-more { margin: 0; text-decoration: none; }
+
+/* Work queue page: tiles in one row on wide screens; the rule breakdown sits under the queue */
+@media (min-width: 1500px) { #rqTiles { grid-template-columns: repeat(8, minmax(0, 1fr)); } }
+#rqTiles .rq-tile { padding: 12px 14px; }
+.rq-below { margin-top: 16px; }
+#mainContent .rq-below > .kd-panel { height: auto; }

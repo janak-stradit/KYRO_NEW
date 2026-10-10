@@ -313,7 +313,7 @@ const CaseDetail = {
             $(`#cpPane-${t}`).prop("hidden", t !== name);
         });
         if (name === 'activity' && this.activityChart) this.activityChart.resize();
-        if (scroll) window.scrollTo({ top: 0 });
+        if (scroll) { $(".cp-sticky").removeClass("is-condensed"); window.scrollTo({ top: 0 }); }
     },
 
     /** The small number on a tab: things waiting in that section. */
@@ -1143,6 +1143,15 @@ const CaseDetail = {
             const next = order[(order.indexOf(this.tab) + (e.key === 'ArrowRight' ? 1 : order.length - 1)) % order.length];
             this.showTab(next);
             $(`#cpTab-${next}`).trigger("focus");
+        });
+        // Scrolled into the page, the header keeps the name, actions and tabs and drops the rest.
+        // Two thresholds, because condensing changes the page height.
+        $(window).off("scroll.cp").on("scroll.cp", () => {
+            const $sticky = $(".cp-sticky");
+            if (!$sticky.length) { $(window).off("scroll.cp"); return; }
+            const y = window.scrollY;
+            if (y > 220) $sticky.addClass("is-condensed");
+            else if (y < 40) $sticky.removeClass("is-condensed");
         });
         if (this.tabFor !== alert.id) { this.tab = 'overview'; this.tabFor = alert.id; }
         this.showTab(this.tab, false);
