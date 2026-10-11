@@ -256,3 +256,23 @@ Migrations: `0021` audit types (done in S1; the emergency access table moves to 
 - Masking errs on the side of hiding: mixed letter-and-digit tokens such as "COVID19" are treated as references.
 
 End-to-end flow, from transaction to resolution: `docs/TRANSACTION_TO_RESOLUTION_WORKFLOW.md`.
+
+## 17. Sprint 5 log (11 Oct 2026)
+
+**Done**
+- **Identifiers on watchlist entries:** the OFAC (`idList`), UN (`INDIVIDUAL_DOCUMENT`) and UK OFSI (passport, national
+  ID, company and IMO columns) adapters keep passport, national ID, tax, registration and IMO numbers, typed and
+  normalised (migration `0026`, GIN-indexed `identifier_values`). OFSI entries are backfilled from stored rows; source
+  file hashes are cleared so OFAC and UN are re-read at the next refresh.
+- **Identifiers in matching:** customers' identifiers come from their metadata, owners' from
+  `identification_type/number`. The same number on both sides finds the entry even under another name (at least a
+  potential match) and adds `SCREENING_IDENTIFIER_BOOST`; the same kind of number with a different value takes off
+  `SCREENING_IDENTIFIER_PENALTY` and is shown to the analyst as a conflict. Both are policy.
+- **Screening baseline:** `GET /api/v1/watchlists/screening-baseline` — a dry run that writes nothing, comparing
+  matches with today's policy against matches without phonetic and identifier scoring.
+
+**Not done (carried forward)**
+- End-to-end scenario tests across roles (§9) and the gap log they produce.
+- Per-list thresholds.
+
+**Next:** rules engine work, planned in `RULES_ENGINE_ENTERPRISE_PLAN.md` and `RULES_ENGINE_IMPLEMENTATION_PHASES.md`.

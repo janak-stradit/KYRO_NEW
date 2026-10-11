@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -21,6 +21,7 @@ from app.schemas.watchlist import (
     WatchlistIngestionRunOut,
     WatchlistSourceOut,
 )
+from app.services import screening_service
 from app.services.watchlist_ingestion_service import ingest_all_enabled
 
 router = APIRouter(prefix="/api/v1/watchlists", tags=["watchlists"], dependencies=[Depends(get_current_user)])
@@ -29,6 +30,16 @@ router = APIRouter(prefix="/api/v1/watchlists", tags=["watchlists"], dependencie
 @router.get("/sources", response_model=list[WatchlistSourceOut])
 def list_sources(db: Session = Depends(get_db)) -> list[WatchlistSource]:
     return db.query(WatchlistSource).order_by(WatchlistSource.code).all()
+
+
+@router.get("/screening-baseline")
+def screening_baseline(
+    limit: int = Query(500, ge=1, le=20000),
+    db: Session = Depends(get_db),
+    _: User = Depends(require_permission("watchlists.ingest", "rules.approve")),
+) -> dict:
+    """Dry run, nothing written: matches per customer with today's screening policy and without phonetic or identifier scoring."""
+    return screening_service.screening_baseline(db, limit=limit)
 
 
 @router.post("/ingest", response_model=IngestResponse, status_code=status.HTTP_202_ACCEPTED)

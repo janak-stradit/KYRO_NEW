@@ -47,6 +47,8 @@ def _entity_values(source_id, record, run_id: str, now: datetime) -> dict:
         "list_version": run_id,
         "last_seen_at": now,
         **search_columns(record.primary_name, record.aka_names),
+        "identifiers": record.identifiers or None,
+        "identifier_values": sorted({i["normalized"] for i in record.identifiers}) or None,
     }
 
 

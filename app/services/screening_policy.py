@@ -9,6 +9,11 @@ jurisdiction), like deadline_service.py.
                               the same but is spelt differently; 0 turns
                               phonetic matching off. Kept below the confirmed
                               score, so sound alone never confirms a match.
+  SCREENING_IDENTIFIER_BOOST  added when a passport, national ID, tax,
+                              registration or IMO number is the same on both
+                              sides; such a match is never below the potential score
+  SCREENING_IDENTIFIER_PENALTY  taken off when both sides hold the same kind
+                              of number and the numbers differ
 """
 from __future__ import annotations
 
@@ -27,6 +32,8 @@ def defaults() -> dict[str, Any]:
         "SCREENING_CONFIRMED_SCORE": settings.watchlist_confirmed_match_score,
         "SCREENING_POTENTIAL_SCORE": settings.watchlist_potential_match_score,
         "SCREENING_PHONETIC_SCORE": 85.0,
+        "SCREENING_IDENTIFIER_BOOST": 15.0,
+        "SCREENING_IDENTIFIER_PENALTY": 15.0,
     }
 
 
@@ -39,6 +46,8 @@ def validate(key: str, value: Any) -> str | None:
         return f"{key} must be a score from 50 to 100"
     if key == "SCREENING_PHONETIC_SCORE" and not (_number(value) and (value == 0 or 50 <= value < 100)):
         return "SCREENING_PHONETIC_SCORE must be 0 (off) or a score from 50 to 99"
+    if key in ("SCREENING_IDENTIFIER_BOOST", "SCREENING_IDENTIFIER_PENALTY") and not (_number(value) and 0 <= value <= 50):
+        return f"{key} must be from 0 to 50"
     return None
 
 
@@ -50,4 +59,8 @@ def policy(db: Session, customer: Customer | None = None) -> dict[str, float]:
     phonetic = float(rules["SCREENING_PHONETIC_SCORE"])
     # Sound alone may raise a name to review, never to a confirmed match
     phonetic = min(phonetic, confirmed - 0.01) if phonetic else 0.0
-    return {"confirmed": confirmed, "potential": potential, "phonetic": phonetic}
+    return {
+        "confirmed": confirmed, "potential": potential, "phonetic": phonetic,
+        "identifier_boost": float(rules["SCREENING_IDENTIFIER_BOOST"]),
+        "identifier_penalty": float(rules["SCREENING_IDENTIFIER_PENALTY"]),
+    }

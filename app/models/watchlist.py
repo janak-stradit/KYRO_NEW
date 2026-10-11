@@ -10,7 +10,7 @@ from datetime import date, datetime
 from sqlalchemy import (
     Boolean, CheckConstraint, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func,
 )
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, SCHEMA, TimestampMixin, UUIDPrimaryKeyMixin
@@ -67,6 +67,10 @@ class WatchlistEntity(Base, UUIDPrimaryKeyMixin):
     # Candidate search (screening_service.py): normalised aliases, and how every name sounds
     alias_text: Mapped[str | None] = mapped_column(Text)
     phonetic_text: Mapped[str | None] = mapped_column(Text)
+    # Passport, national ID, tax, registration and IMO numbers from the list ({type, value, normalized, country}),
+    # and their normalised values for exact lookup
+    identifiers: Mapped[list | None] = mapped_column(JSONB)
+    identifier_values: Mapped[list[str] | None] = mapped_column(ARRAY(Text))
 
 
 class WatchlistIngestionRun(Base, UUIDPrimaryKeyMixin):

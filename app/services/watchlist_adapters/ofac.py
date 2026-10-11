@@ -10,7 +10,7 @@ from datetime import date, datetime
 from typing import Iterator
 from xml.etree import ElementTree as ET
 
-from app.services.watchlist_adapters.base import WatchlistRecord
+from app.services.watchlist_adapters.base import WatchlistRecord, identifier
 
 _ENTITY_TYPE_MAP = {
     "individual": "INDIVIDUAL",
@@ -94,6 +94,12 @@ def parse_ofac_xml(raw_bytes: bytes) -> Iterator[WatchlistRecord]:
             dob_raw = _text(elem, "{*}dateOfBirthList/{*}dateOfBirthItem/{*}dateOfBirth")
             place_of_birth = _text(elem, "{*}placeOfBirthList/{*}placeOfBirthItem/{*}placeOfBirth")
             remarks = _text(elem, "{*}remarks")
+            identifiers = [
+                found for found in (
+                    identifier(_text(i, "{*}idType"), _text(i, "{*}idNumber"), _text(i, "{*}idCountry"))
+                    for i in elem.findall("{*}idList/{*}id")
+                ) if found
+            ]
 
             yield WatchlistRecord(
                 external_id=uid,
@@ -106,6 +112,7 @@ def parse_ofac_xml(raw_bytes: bytes) -> Iterator[WatchlistRecord]:
                 addresses=addresses,
                 programs=programs,
                 remarks=remarks,
+                identifiers=identifiers,
                 raw_data={"uid": uid, "sdn_type": sdn_type, "dob_raw": dob_raw},
             )
         finally:

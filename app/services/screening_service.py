@@ -35,6 +35,7 @@ from app.models.beneficial_ownership import BeneficialOwner
 from app.models.customer import Customer, PEPSanctionsScreening
 from app.models.watchlist import WatchlistEntity
 from app.services import screening_policy
+from app.services.watchlist_adapters.base import identifier, identifier_type
 
 _DOB_MATCH_BOOST = 8.0
 _CANDIDATE_LIMIT = 25
@@ -139,16 +140,60 @@ def search_columns(primary_name: str, aka_names: list[str] | None) -> dict[str, 
     }
 
 
+def subject_identifiers(metadata: dict | None, *pairs: tuple[str | None, str | None]) -> list[dict]:
+    """
+    Identifiers held for a customer or owner: (label, number) pairs from record fields, and any
+    passport, national ID, tax, registration or IMO number in its metadata.
+    """
+    found = [i for i in (identifier(label, value) for label, value in pairs) if i]
+
+    def walk(node, key: str = "") -> None:
+        if isinstance(node, dict):
+            for k, v in node.items():
+                walk(v, str(k))
+        elif isinstance(node, list):
+            for v in node:
+                walk(v, key)
+        elif isinstance(node, (str, int)) and not isinstance(node, bool) and identifier_type(key.replace("_", " ")) != "OTHER":
+            entry = identifier(key.replace("_", " "), str(node))
+            if entry:
+                found.append(entry)
+
+    walk(metadata or {})
+    unique: dict[tuple[str, str], dict] = {}
+    for entry in found:
+        unique.setdefault((entry["type"], entry["normalized"]), entry)
+    return list(unique.values())
+
+
 @dataclass
 class MatchResult:
     entity: WatchlistEntity
     score: float
     matched_name: str
     dob_match: bool
+    identifier_match: str | None = None  # the identifier both sides hold, e.g. "PASSPORT AB123456"
+    identifier_conflict: str | None = None  # e.g. "PASSPORT: AB123456 here, X9876543 on the list"
+
+
+def _compare_identifiers(subject: list[dict], listed: list[dict]) -> tuple[str | None, str | None]:
+    """(match, conflict): a number held on both sides, or the same kind of number held on both sides but different."""
+    listed_values = {i["normalized"]: i for i in listed}
+    for mine in subject:
+        if mine["normalized"] in listed_values:
+            return f'{listed_values[mine["normalized"]]["type"]} {mine["value"]}', None
+    for mine in subject:
+        if mine["type"] == "OTHER":
+            continue
+        theirs = [i for i in listed if i["type"] == mine["type"]]
+        if theirs:
+            return None, f'{mine["type"]}: {mine["value"]} on record, {", ".join(i["value"] for i in theirs)} on the list'
+    return None, None
 
 
 def score_match(
     customer_name: str, customer_dob: date | None, entity: WatchlistEntity, phonetic_score: float = _DEFAULT_PHONETIC_SCORE,
+    *, identifiers: list[dict] | None = None, rules: dict[str, float] | None = None,
 ) -> MatchResult:
     normalized_customer = normalize_name(customer_name)
     candidates = [entity.primary_name, *(entity.aka_names or [])]
@@ -163,11 +208,22 @@ def score_match(
 
     dob_match = bool(customer_dob and entity.date_of_birth and customer_dob == entity.date_of_birth)
     score = min(100.0, best_score + (_DOB_MATCH_BOOST if dob_match else 0.0))
-    return MatchResult(entity=entity, score=score, matched_name=best_name, dob_match=dob_match)
+
+    matched_id, conflict = _compare_identifiers(identifiers or [], entity.identifiers or [])
+    if matched_id and rules:
+        # The same passport or registration number is strong evidence, whatever the spelling of the name
+        score = max(min(100.0, score + rules["identifier_boost"]), rules["potential"])
+    elif conflict and rules:
+        score = max(0.0, score - rules["identifier_penalty"])
+    return MatchResult(entity=entity, score=score, matched_name=best_name, dob_match=dob_match,
+                       identifier_match=matched_id, identifier_conflict=conflict)
 
 
-def _candidate_entities(db: Session, name: str) -> list[WatchlistEntity]:
-    """Active list entries whose primary name looks alike, whose aliases contain a similar name, or whose names sound alike."""
+def _candidate_entities(db: Session, name: str, identifier_values: list[str] | None = None) -> list[WatchlistEntity]:
+    """
+    Active list entries whose primary name looks alike, whose aliases contain a similar name, whose
+    names sound alike, or that hold one of the same identifier numbers.
+    """
     normalized_name = normalize_name(name)
     if not normalized_name:
         return []
@@ -189,11 +245,14 @@ def _candidate_entities(db: Session, name: str) -> list[WatchlistEntity]:
                 UNION ALL
                 SELECT id, word_similarity(:pk, phonetic_text) FROM app.watchlist_entities
                 WHERE is_active = true AND :pk <> '' AND :pk <% phonetic_text
+                UNION ALL
+                SELECT id, 1.0 FROM app.watchlist_entities
+                WHERE is_active = true AND identifier_values && CAST(:ids AS text[])
             )
             SELECT id FROM hits GROUP BY id ORDER BY max(s) DESC LIMIT :limit
             """
         ),
-        {"q": normalized_name, "pk": phonetic_key(name), "limit": _CANDIDATE_LIMIT},
+        {"q": normalized_name, "pk": phonetic_key(name), "ids": list(identifier_values or []), "limit": _CANDIDATE_LIMIT},
     ).scalars().all()
     if not ids:
         return []
@@ -202,11 +261,14 @@ def _candidate_entities(db: Session, name: str) -> list[WatchlistEntity]:
     return [by_id[i] for i in ids if i in by_id]
 
 
-def _matches_for(db: Session, name: str, dob: date | None, rules: dict[str, float]) -> list[MatchResult]:
-    candidates = _candidate_entities(db, name)
+def _matches_for(
+    db: Session, name: str, dob: date | None, rules: dict[str, float], identifiers: list[dict] | None = None,
+) -> list[MatchResult]:
+    identifiers = identifiers or []
+    candidates = _candidate_entities(db, name, [i["normalized"] for i in identifiers])
     if not candidates:
         return []
-    results = [score_match(name, dob, entity, rules["phonetic"]) for entity in candidates]
+    results = [score_match(name, dob, entity, rules["phonetic"], identifiers=identifiers, rules=rules) for entity in candidates]
     results = [r for r in results if r.score >= rules["potential"]]
     results.sort(key=lambda r: r.score, reverse=True)
     return results
@@ -220,6 +282,8 @@ def _match_details(result: MatchResult) -> dict:
         "external_id": result.entity.external_id,
         "programs": result.entity.programs,
         "dob_match": result.dob_match,
+        "identifier_match": result.identifier_match,
+        "identifier_conflict": result.identifier_conflict,
     }
 
 
@@ -231,7 +295,8 @@ def screen_customer(db: Session, customer: Customer, *, triggered_by: str = "SYS
     customer.last_screened_at = datetime.now(timezone.utc)
 
     rules = screening_policy.policy(db, customer)
-    results = _matches_for(db, customer.full_name, customer.date_of_birth, rules)
+    identifiers = subject_identifiers(customer.customer_metadata)
+    results = _matches_for(db, customer.full_name, customer.date_of_birth, rules, identifiers)
     if not results:
         db.flush()
         return []
@@ -270,7 +335,8 @@ def screen_beneficial_owner(
 
     customer = db.get(Customer, owner.customer_id)
     rules = screening_policy.policy(db, customer)
-    results = _matches_for(db, owner.full_name, owner.date_of_birth, rules)
+    identifiers = subject_identifiers(None, (owner.identification_type, owner.identification_number))
+    results = _matches_for(db, owner.full_name, owner.date_of_birth, rules, identifiers)
     if not results:
         db.flush()
         return []
@@ -298,3 +364,44 @@ def screen_beneficial_owner(
 
     db.flush()
     return created
+
+
+def screening_baseline(db: Session, *, limit: int = 500) -> dict:
+    """
+    A dry run over up to `limit` customers that writes nothing: how many would get a confirmed or
+    potential match with today's policy, and how many without phonetic and identifier scoring. Used to
+    judge the effect on alert volume before a re-screen or a policy change.
+    """
+    customers = (
+        db.query(Customer).filter(Customer.kyc_status != "REJECTED").order_by(Customer.id).limit(limit).all()
+    )
+    current = {"confirmed": 0, "potential": 0}
+    names_only = {"confirmed": 0, "potential": 0}
+    phonetic_only = identifier_matches = identifier_conflicts = 0
+    for customer in customers:
+        rules = screening_policy.policy(db, customer)
+        identifiers = subject_identifiers(customer.customer_metadata)
+        results = _matches_for(db, customer.full_name, customer.date_of_birth, rules, identifiers)
+        plain_rules = {**rules, "phonetic": 0.0, "identifier_boost": 0.0, "identifier_penalty": 0.0}
+        plain = _matches_for(db, customer.full_name, customer.date_of_birth, plain_rules)
+
+        def tally(counts: dict, matches: list[MatchResult], rule_set: dict) -> None:
+            if any(m.score >= rule_set["confirmed"] for m in matches):
+                counts["confirmed"] += 1
+            elif matches:
+                counts["potential"] += 1
+
+        tally(current, results, rules)
+        tally(names_only, plain, plain_rules)
+        plain_ids = {m.entity.id for m in plain}
+        phonetic_only += any(m.entity.id not in plain_ids and not m.identifier_match for m in results)
+        identifier_matches += any(m.identifier_match for m in results)
+        identifier_conflicts += any(m.identifier_conflict for m in results)
+    return {
+        "customers_screened": len(customers),
+        "with_current_policy": current,
+        "without_phonetic_or_identifiers": names_only,
+        "customers_found_only_by_sound": phonetic_only,
+        "customers_with_identifier_match": identifier_matches,
+        "customers_with_identifier_conflict": identifier_conflicts,
+    }

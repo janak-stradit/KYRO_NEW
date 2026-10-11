@@ -17,7 +17,7 @@ from collections import OrderedDict
 from datetime import date, datetime
 from typing import Iterator
 
-from app.services.watchlist_adapters.base import WatchlistRecord
+from app.services.watchlist_adapters.base import WatchlistRecord, identifier
 
 _FIELD_ALIASES: dict[str, tuple[str, ...]] = {
     "group_id": ("groupid", "groupidnumber", "id"),
@@ -38,7 +38,24 @@ _FIELD_ALIASES: dict[str, tuple[str, ...]] = {
     "regime": ("regime",),
     "programme": ("programme", "program"),
     "other_information": ("otherinformation", "comments", "remarks"),
+    "passport": ("passportnumber", "passportno", "passportdetails", "passport"),
+    "national_id": ("nationalidentificationnumber", "nationalidentitynumber", "nationalidnumber", "nationalidentificationdetails", "ninumber"),
+    "company_number": ("companynumber", "businessregistrationnumber", "registrationnumber", "companyregistrationnumber"),
+    "imo": ("imonumber", "imo", "currentbelievedflagofshipimonumber"),
 }
+
+_IDENTIFIER_FIELDS = (("passport", "Passport"), ("national_id", "National ID"), ("company_number", "Registration"), ("imo", "IMO"))
+
+
+def row_identifiers(rows: list[dict], header_map: dict[str, str]) -> list[dict]:
+    """Passport, national ID, company and IMO numbers from every row of one group, without repeats."""
+    found: dict[tuple[str, str], dict] = {}
+    for row in rows:
+        for field, label in _IDENTIFIER_FIELDS:
+            entry = identifier(label, _get(row, header_map, field))
+            if entry:
+                found.setdefault((entry["type"], entry["normalized"]), entry)
+    return list(found.values())
 
 
 def _normalize_header(header: str) -> str:
@@ -135,5 +152,6 @@ def parse_uk_ofsi_csv(raw_bytes: bytes) -> Iterator[WatchlistRecord]:
             addresses=addresses,
             programs=[p for p in (regime, programme) if p],
             remarks=_get(primary_row, header_map, "other_information"),
+            identifiers=row_identifiers(rows, header_map),
             raw_data={"rows": rows},
         )

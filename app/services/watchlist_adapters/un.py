@@ -9,7 +9,7 @@ from datetime import date, datetime
 from typing import Iterator
 from xml.etree import ElementTree as ET
 
-from app.services.watchlist_adapters.base import WatchlistRecord
+from app.services.watchlist_adapters.base import WatchlistRecord, identifier
 
 _NAME_FIELDS = ("{*}FIRST_NAME", "{*}SECOND_NAME", "{*}THIRD_NAME", "{*}FOURTH_NAME")
 
@@ -61,6 +61,13 @@ def _extract(elem: ET.Element, *, alias_tag: str, address_tag: str, dob_containe
             p for p in (_text(pob_node, "{*}CITY"), _text(pob_node, "{*}COUNTRY")) if p
         ) or None
 
+    identifiers = [
+        found for found in (
+            identifier(_text(doc, "{*}TYPE_OF_DOCUMENT"), _text(doc, "{*}NUMBER"), _text(doc, "{*}ISSUING_COUNTRY"))
+            for doc in elem.findall("{*}INDIVIDUAL_DOCUMENT")
+        ) if found
+    ]
+
     list_type = _text(elem, "{*}UN_LIST_TYPE")
     reference_number = _text(elem, "{*}REFERENCE_NUMBER")
 
@@ -74,6 +81,7 @@ def _extract(elem: ET.Element, *, alias_tag: str, address_tag: str, dob_containe
         addresses=addresses,
         programs=[list_type] if list_type else [],
         remarks=_text(elem, "{*}COMMENTS1"),
+        identifiers=identifiers,
         raw_data={"reference_number": reference_number, "un_list_type": list_type},
     )
 
