@@ -95,6 +95,8 @@ const CaseDetail = {
         this.loadAccounts(alert.customer_id);
         this.loadScreening(alert.customer_id);
         this.loadRequests(alert.id);
+        this.loadNarratives(alert.id);
+        if (alert.potential_sar) this.loadDeadlines(alert.id);
         if (customer.customer_type && customer.customer_type !== 'INDIVIDUAL') this.loadOwners(alert.customer_id);
     },
 
@@ -338,6 +340,24 @@ const CaseDetail = {
                 <span class="cp-stage__text"><strong>${escapeHtml(st.label)}</strong><small>${escapeHtml(note)}<span class="visually-hidden">${st.done ? ' (done)' : st.current ? '' : ' (not reached)'}</span></small></span>
             </li>`;
         }).join(''));
+    },
+
+    // ── SAR deadlines (only returned to roles that see SAR work) ────────────
+    async loadDeadlines(alertId) {
+        let data;
+        try {
+            data = await API.get(`/alerts/${alertId}/deadlines`);
+        } catch (error) { return; }
+        if (this.id !== alertId || !data.sar || !data.sar.potential_sar) return;
+        const label = { ON_TRACK: 'On track', DUE_SOON: 'Due soon', OVERDUE: 'Overdue', MET: 'Met', MISSED: 'Missed',
+            OPEN: 'Open', FILED: 'Filed', FILED_LATE: 'Filed late', NO_FIXED_DEADLINE: 'No fixed deadline' };
+        const tone = { OVERDUE: 'high', MISSED: 'high', FILED_LATE: 'high', DUE_SOON: 'medium' };
+        const chip = s => `<span class="cd-chip cd-chip--${tone[s] || 'low'}">${escapeHtml(label[s] || s)}</span>`;
+        const due = d => d ? escapeHtml(new Date(d).toLocaleDateString()) : '—';
+        const { decision, filing } = data.sar;
+        $("#cpSarClock").html(`
+            ${decision ? `MLRO decision ${chip(decision.status)} <small>by ${due(decision.due_at)}</small><br>` : ''}
+            ${filing ? `Filing ${chip(filing.status)} <small>${filing.due_at ? `by ${due(filing.due_at)}` : ''}</small>` : ''}`);
     },
 
     // ── Case clock (filled from the timeline response) ─────────────────────
@@ -732,7 +752,10 @@ const CaseDetail = {
             $("#cpSummaryMeta").text(`${mock ? 'Built by the template from the facts on file; an AI model is not connected' : 'Written by the AI model from the facts on file, names removed before sending'} · ${formatDateTime(alert.summary_at)}`);
             return;
         }
-        if (Auth.can('alerts.escalate')) {
+        if (alert.restricted) {
+            $("#cpSummaryRefresh").remove();
+            $("#cpSummary").html(this.empty('This case is with the MLRO. Any summary written since is restricted.'));
+        } else if (Auth.can('alerts.escalate')) {
             this.generateSummary(alert.id);  // first visit to this case: write it once and keep it
         } else {
             $("#cpSummary").html(this.empty('No summary has been written for this case yet.'));
@@ -758,54 +781,77 @@ const CaseDetail = {
         this.renderSummary(result);
     },
 
-    // ── Draft narrative ────────────────────────────────────────────────────
-    async draftNarrative(alertId) {
-        const $button = $("#cpNarrativeDraft").prop("disabled", true).text('Drafting...');
-        $("#cpNarrative").html(`<div role="status" aria-busy="true">${Skeleton.lines(8)}<p class="cp-summary__wait">Drafting the narrative. This can take up to a minute.</p></div>`);
-        let result;
+    // ── Narrative: every draft and edit is kept as a version ───────────────
+    async loadNarratives(alertId) {
+        let data;
         try {
-            result = await API.postSlow(`/alerts/${alertId}/draft-narrative`, {});
-        } catch (xhr) {
-            $button.prop("disabled", false).text('Draft narrative');
+            data = await API.get(`/alerts/${alertId}/narratives`);
+        } catch (error) { return; }
+        if (this.id !== alertId) return;
+        if (data.restricted) {
+            $("#cpNarrativeDraft").remove();
+            $("#cpNarrative").html(this.empty('This case is with the MLRO. Its narrative is restricted to the people who decide on SARs.'));
             return;
         }
-        if (this.id !== alertId) return;
-        $button.prop("disabled", false).text('Draft again');
+        const latest = data.versions[0];
+        if (latest) this.showNarrative(alertId, latest.text, latest, data.versions.length);
+    },
+
+    showNarrative(alertId, text, version, count) {
+        const source = !version ? ''
+            : version.source === 'EDITED' ? `Version ${version.version}, edited by ${version.by || 'an investigator'} on ${formatDateTime(version.at)}`
+            : `Version ${version.version}, ${version.provider === 'mock'
+                ? 'arranged from the facts on file by the built-in template; it adds nothing to the facts'
+                : 'drafted by the AI model from the facts on file, with names removed before sending; check every statement'} (${formatDateTime(version.at)})`;
+        $("#cpNarrativeDraft").text('Draft again');
         $("#cpNarrative").html(`
-            <p class="cp-narrative__source">${result.mock
-                ? 'Arranged from the facts on file by the built-in template. It is not written by an AI model and adds nothing to the facts.'
-                : 'Drafted by the AI model from the facts on file, with names removed before sending. Check every statement before using it.'}</p>
-            <label class="visually-hidden" for="cpNarrativeText">Draft narrative</label>
-            <textarea class="form-control cp-narrative__text" id="cpNarrativeText" rows="14">${escapeHtml(result.narrative)}</textarea>
+            <p class="cp-narrative__source">${escapeHtml(source)}${count > 1 ? ` &middot; ${count} versions kept` : ''}</p>
+            <label class="visually-hidden" for="cpNarrativeText">Narrative</label>
+            <textarea class="form-control cp-narrative__text" id="cpNarrativeText" rows="14" ${Auth.can('alerts.escalate') ? '' : 'readonly'}>${escapeHtml(text)}</textarea>
             <div class="cp-note__foot">
-                <span class="kx-note">Edit the draft, then copy it or keep it on the case as a note.</span>
+                <span class="kx-note">Saving keeps a new version; earlier versions are not changed.</span>
                 <span>
                     <button type="button" class="btn btn-sm btn-outline-primary" id="cpNarrativeCopy">Copy</button>
-                    <button type="button" class="btn btn-sm btn-primary" id="cpNarrativeSave">Save as note</button>
+                    ${Auth.can('alerts.escalate') ? '<button type="button" class="btn btn-sm btn-primary" id="cpNarrativeSave">Save version</button>' : ''}
                 </span>
             </div>
         `);
         $("#cpNarrativeCopy").on("click", async () => {
             try {
                 await navigator.clipboard.writeText($("#cpNarrativeText").val());
-                showToast('success', 'Draft copied.');
+                showToast('success', 'Narrative copied.');
             } catch (error) {
                 $("#cpNarrativeText").trigger("select");
                 showToast('error', 'Copying is blocked by the browser. The text is selected: press Ctrl+C.');
             }
         });
         $("#cpNarrativeSave").on("click", async () => {
-            const text = ($("#cpNarrativeText").val() || '').trim();
-            if (!text) return;
-            if (text.length > 4000) { showToast('error', 'A note can hold 4,000 characters. Shorten the draft first.'); return; }
+            const body = ($("#cpNarrativeText").val() || '').trim();
+            if (!body) return;
             $("#cpNarrativeSave").prop("disabled", true);
             try {
-                await API.post(`/alerts/${alertId}/notes`, { body: text });
-                showToast('success', 'Draft saved as a note.');
-                await this.loadTimeline(alertId);
-            } catch (xhr) { /* reported by the API layer */ }
-            $("#cpNarrativeSave").prop("disabled", false);
+                await API.post(`/alerts/${alertId}/narratives`, { text: body });
+                showToast('success', 'Narrative saved as a new version.');
+                await this.loadNarratives(alertId);
+            } catch (xhr) {
+                $("#cpNarrativeSave").prop("disabled", false);
+            }
         });
+    },
+
+    // ── Draft narrative ────────────────────────────────────────────────────
+    async draftNarrative(alertId) {
+        const $button = $("#cpNarrativeDraft").prop("disabled", true).text('Drafting...');
+        $("#cpNarrative").html(`<div role="status" aria-busy="true">${Skeleton.lines(8)}<p class="cp-summary__wait">Drafting the narrative. This can take up to a minute.</p></div>`);
+        try {
+            await API.postSlow(`/alerts/${alertId}/draft-narrative`, {});
+        } catch (xhr) {
+            $button.prop("disabled", false).text('Draft narrative');
+            return;
+        }
+        if (this.id !== alertId) return;
+        $button.prop("disabled", false);
+        await this.loadNarratives(alertId);
     },
 
     /** Quality check on a resolved case: the recorded result, and the form for those who may check it. */
@@ -888,6 +934,8 @@ const CaseDetail = {
                             <h1 class="cp-head__title">${escapeHtml(displayName)}</h1>
                             <p class="cp-head__meta">
                                 <span class="badge" style="background:${statusBg};color:${statusFg};">${escapeHtml(this.human(c.status))}</span>
+                                ${alert.potential_sar ? '<span class="cd-chip cd-chip--high">Potential SAR</span>' : ''}
+                                ${alert.restricted ? '<span class="cd-chip cd-chip--muted" title="Notes and decisions recorded since the escalation are restricted to the people who decide on SARs">With the MLRO &middot; details restricted</span>' : ''}
                                 ${customer.sanctions_flag ? '<span class="cd-chip cd-chip--high">Sanctions</span>' : ''}
                                 ${customer.pep_flag ? '<span class="cd-chip cd-chip--medium">PEP</span>' : ''}
                                 ${customer.adverse_media_flag ? '<span class="cd-chip cd-chip--medium">Adverse media</span>' : ''}
@@ -906,6 +954,7 @@ const CaseDetail = {
                     <div><dt>Risk score</dt><dd><strong class="cp-facts__score cp-facts__score--${band}">${isFinite(score) ? score : '—'}</strong> ${escapeHtml(this.human(c.riskLevel))}</dd></div>
                     <div><dt>Owner</dt><dd>${escapeHtml(c.assignedTo)}</dd></div>
                     <div><dt>Case age</dt><dd id="cpClock">${open ? escapeHtml(Cases.age(alert.created_at)) : 'Closed'}</dd></div>
+                    ${alert.potential_sar ? '<div><dt>SAR deadlines</dt><dd id="cpSarClock">…</dd></div>' : ''}
                     <div><dt>Alert type</dt><dd>${escapeHtml(this.human(alert.alert_type))}</dd></div>
                     <div><dt>Recommended action</dt><dd>${escapeHtml(this.human(alert.recommended_action))}</dd></div>
                     <div><dt>Customer</dt><dd>${escapeHtml(this.human(customer.customer_type))}${customer.country ? ` &middot; ${escapeHtml(customer.country)}` : ''}</dd></div>
@@ -1072,7 +1121,7 @@ const CaseDetail = {
                     <div class="cp-grid">
                     <section class="card kd-panel">
                         <header class="kd-panel__head"><div><h2>Draft narrative</h2><p class="aml-subtitle">Who, what, when, where and why, from the facts on this case</p></div>
-                            ${Auth.can('alerts.escalate') ? '<button type="button" class="btn btn-sm rc-actions__view" id="cpNarrativeDraft">Draft narrative</button>' : ''}</header>
+                            ${Auth.can('alerts.escalate') && !alert.restricted ? '<button type="button" class="btn btn-sm rc-actions__view" id="cpNarrativeDraft">Draft narrative</button>' : ''}</header>
                         <div id="cpNarrative">${this.empty(Auth.can('alerts.escalate')
                             ? 'Select "Draft narrative" to assemble a first draft from the customer, the alert, the flagged transactions, your notes and requests.'
                             : 'Your role cannot draft a narrative.')}</div>

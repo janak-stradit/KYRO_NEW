@@ -374,6 +374,7 @@ def my_work(db: Session = Depends(get_db), user: User = Depends(get_current_user
     if has_permission(user.role, "sar.approve"):
         escalated = open_alerts.filter(Alert.status == "ESCALATED")
         result["escalated"] = {"count": escalated.count(), "items": rows(escalated, 4)}
+        result["sar_deadlines"] = deadline_service.sar_deadline_counts(open_alerts.filter(Alert.sar_candidate_at.isnot(None)).all())
     if has_permission(user.role, "alerts.qa"):
         result["awaiting_quality_check"] = db.query(Alert).filter(
             Alert.status == "RESOLVED", Alert.qa_result.is_(None), Alert.resolved_by != user.id, *visible

@@ -92,6 +92,10 @@ class AlertOut(BaseModel):
     summary_at: datetime | None = None
     summary_provider: str | None = None
     ml_version: str | None = None
+    # Set by services/sar_confidentiality.py for the user asking
+    compliance_status: Literal["IN_PROGRESS", "WITH_MLRO", "CLOSED"] | None = None
+    restricted: bool = False  # SAR content withheld from this user
+    potential_sar: bool | None = None  # only for roles that see SAR work
 
 
 class AlertAssign(BaseModel):

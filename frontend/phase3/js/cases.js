@@ -726,6 +726,11 @@ const Cases = {
                                 <p class="kx-note my-2">Select an outcome to see its reasons.</p>
                             </div>
 
+                            <label class="form-check mb-3 d-none" id="resolvePotentialSarGroup">
+                                <input class="form-check-input" type="checkbox" id="resolvePotentialSar">
+                                <span class="form-check-label">Potential SAR: starts the MLRO decision clock and the filing deadline, and restricts the case notes to the people who decide on SARs</span>
+                            </label>
+
                             <div class="mb-3 d-none" id="resolveSarGroup">
                                 <label class="kx-label" for="resolveSarReference">SAR/STR filing reference</label>
                                 <input type="text" class="form-control" id="resolveSarReference" maxlength="100">
@@ -754,6 +759,7 @@ const Cases = {
             const outcome = options.outcomes.find(o => o.code === $(this).val());
             $("#resolveOutcomeHelp").text(outcome ? outcome.label : '');
             $("#resolveSarGroup").toggleClass("d-none", !outcome || outcome.code !== 'SAR_FILED');
+            $("#resolvePotentialSarGroup").toggleClass("d-none", !outcome || outcome.code !== 'ESCALATED');
             $("#resolveReasons").html(outcome ? outcome.reasons.map(code => `
                 <label class="form-check">
                     <input class="form-check-input resolve-reason" type="checkbox" value="${escapeHtml(code)}">
@@ -774,7 +780,9 @@ const Cases = {
             const $btn = $("#confirmResolveBtn").prop("disabled", true);
             try {
                 const updated = outcome === 'ESCALATED'
-                    ? await API.put(`/alerts/${caseData.caseId}/escalate`, { resolution_notes: notes, reasons })
+                    ? await API.put(`/alerts/${caseData.caseId}/escalate`, {
+                        resolution_notes: notes, reasons, potential_sar: $("#resolvePotentialSar").is(":checked")
+                    })
                     : await API.put(`/alerts/${caseData.caseId}/resolve`, {
                         outcome, reasons, resolution_notes: notes,
                         sar_reference: $("#resolveSarReference").val().trim() || null

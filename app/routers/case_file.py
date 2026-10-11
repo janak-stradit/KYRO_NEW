@@ -26,10 +26,11 @@ from app.models.customer import Customer, PEPSanctionsScreening
 from app.models.document import Document
 from app.models.obligation import Obligation
 from app.models.obligation_mapping import ObligationMapping
+from app.models.sar_narrative import SarNarrative
 from app.models.transaction import Transaction
 from app.models.user import User
 from app.models.watchlist import WatchlistEntity, WatchlistSource
-from app.services import customer_risk_service, deadline_service, pattern_service, rule_config_service
+from app.services import customer_risk_service, deadline_service, pattern_service, rule_config_service, sar_confidentiality
 from app.services.audit_service import log_action
 from app.services.control_catalogue import CONTROLS
 from app.visibility import (
@@ -137,9 +138,15 @@ def _case_stages(alert: Alert, events: list[dict[str, Any]]) -> list[dict[str, A
 
 @router.get("/alerts/{alert_id}/timeline")
 def case_timeline(alert_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> dict[str, Any]:
-    """Everything that has happened on the case, newest first: notes, decisions and documents."""
-    alert = visible_alert_or_404(db, user, alert_id)
-    notes = db.query(AlertNote).filter(AlertNote.alert_id == alert.id).all()
+    """
+    Everything that has happened on the case, newest first: notes, decisions and documents.
+    On a potential SAR, roles without "sar.view" do not see the notes written after the
+    escalation, nor the reasons and notes recorded with the escalation or the decision.
+    """
+    alert = visible_alert_or_404(db, user, alert_id, emergency_read=True)
+    restricted = sar_confidentiality.restricted_for(user, alert)
+    notes = [n for n in db.query(AlertNote).filter(AlertNote.alert_id == alert.id).all()
+             if sar_confidentiality.note_visible(user, alert, n.created_at)]
     audits = db.query(AuditLog).filter(AuditLog.entity_type == "ALERT", AuditLog.entity_id == alert.id).all()
     documents = db.query(Document).filter(Document.alert_id == alert.id).all()
     requests = db.query(AlertRequest).filter(AlertRequest.alert_id == alert.id).all()
@@ -163,7 +170,11 @@ def case_timeline(alert_id: uuid.UUID, db: Session = Depends(get_db), user: User
     }]
     events += [{"kind": "note", "id": str(n.id), "at": n.created_at, "by": who(n.author_id), "title": "Note", "detail": n.body} for n in notes]
     for audit in audits:
+        if audit.action == "VIEW":
+            continue
         kind, title, detail = _audit_event(audit, names)
+        if restricted and kind in ("escalated", "resolved"):
+            title, detail = ("Passed to the MLRO" if kind == "escalated" else "Closed"), None
         events.append({"kind": kind, "at": audit.performed_at, "by": who(audit.performed_by), "title": title, "detail": detail})
     events += [{
         "kind": "document", "at": d.uploaded_at, "by": who(d.uploaded_by), "title": f"Document uploaded: {d.filename}",
@@ -180,6 +191,7 @@ def case_timeline(alert_id: uuid.UUID, db: Session = Depends(get_db), user: User
     events.sort(key=lambda e: e["at"], reverse=True)
     return {
         "alert_id": str(alert.id), "note_count": len(notes), "clock": _case_clock(alert, audits),
+        "compliance_status": sar_confidentiality.compliance_status(alert), "restricted": restricted,
         "stages": _case_stages(alert, events),
         "events": [{**e, "at": e["at"].isoformat()} for e in events],
     }
@@ -249,7 +261,8 @@ def case_history(
                 "id": str(a.id), "created_at": a.created_at.isoformat(),
                 "resolved_at": a.resolved_at.isoformat() if a.resolved_at else None,
                 "risk_score": a.risk_score, "rules": _rules(a), "outcome": a.resolution_outcome,
-                "reasons": a.resolution_reasons or [], "sar_reference": a.sar_reference,
+                **({"outcome": None, "reasons": [], "sar_reference": None} if sar_confidentiality.restricted_for(user, a) else
+                   {"reasons": a.resolution_reasons or [], "sar_reference": a.sar_reference}),
             }
             for a in resolved[:HISTORY_LIMIT]
         ],
@@ -620,6 +633,63 @@ def _sensitive_names(db: Session, customer: Customer) -> dict[str, str]:
     return names
 
 
+def _sar_work_alert(db: Session, user: User, alert_id: uuid.UUID) -> Alert:
+    """The alert, unless it is a potential or filed SAR and this user's role does not do SAR work."""
+    alert = visible_alert_or_404(db, user, alert_id)
+    if sar_confidentiality.restricted_for(user, alert):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "This case is with the MLRO; its narrative and summary are restricted")
+    return alert
+
+
+def _next_version(db: Session, alert_id: uuid.UUID) -> int:
+    latest = db.query(SarNarrative.version).filter(SarNarrative.alert_id == alert_id).order_by(SarNarrative.version.desc()).first()
+    return (latest[0] if latest else 0) + 1
+
+
+def _narrative_out(n: SarNarrative, names: dict[uuid.UUID, str]) -> dict[str, Any]:
+    return {
+        "id": str(n.id), "version": n.version, "text": n.text, "source": n.source, "provider": n.provider,
+        "by": names.get(n.created_by), "at": n.created_at.isoformat(),
+    }
+
+
+class NarrativeIn(BaseModel):
+    text: str = Field(min_length=1, max_length=20000)
+
+    @field_validator("text")
+    @classmethod
+    def _not_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Write the narrative before saving it")
+        return value
+
+
+@router.get("/alerts/{alert_id}/narratives")
+def list_narratives(alert_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> dict[str, Any]:
+    """Every version of the case narrative, newest first."""
+    alert = visible_alert_or_404(db, user, alert_id)
+    if sar_confidentiality.restricted_for(user, alert):
+        return {"restricted": True, "versions": []}
+    rows = db.query(SarNarrative).filter(SarNarrative.alert_id == alert.id).order_by(SarNarrative.version.desc()).all()
+    names = {u.id: u.full_name or u.username for u in db.query(User).filter(User.id.in_({r.created_by for r in rows if r.created_by}))}
+    return {"restricted": False, "versions": [_narrative_out(r, names) for r in rows]}
+
+
+@router.post("/alerts/{alert_id}/narratives", status_code=status.HTTP_201_CREATED)
+def save_narrative(
+    alert_id: uuid.UUID, data: NarrativeIn, db: Session = Depends(get_db),
+    user: User = Depends(require_permission("alerts.escalate")),
+) -> dict[str, Any]:
+    """Save the investigator's text as a new version. Earlier versions are kept."""
+    alert = _sar_work_alert(db, user, alert_id)
+    row = SarNarrative(alert_id=alert.id, version=_next_version(db, alert.id), text=data.text, source="EDITED", created_by=user.id)
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return _narrative_out(row, {user.id: user.full_name or user.username})
+
+
 @router.post("/alerts/{alert_id}/draft-narrative")
 def draft_narrative(
     alert_id: uuid.UUID,
@@ -627,7 +697,7 @@ def draft_narrative(
     user: User = Depends(require_permission("alerts.escalate")),
 ) -> dict[str, Any]:
     """A first draft of the case narrative from the facts on file, for the analyst to check and edit."""
-    alert = visible_alert_or_404(db, user, alert_id)
+    alert = _sar_work_alert(db, user, alert_id)
     customer = _customer_or_404(db, alert.customer_id)
     facts = _case_facts(db, alert, customer)
     try:
@@ -639,9 +709,14 @@ def draft_narrative(
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from None
     except AIProviderError as exc:
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(exc)) from None
+    text = result.text.strip()
+    row = SarNarrative(alert_id=alert.id, version=_next_version(db, alert.id), text=text, source="AI_DRAFT",
+                       provider=result.provider, ai_interaction_id=result.interaction_id, created_by=user.id)
+    db.add(row)
+    db.commit()
     return {
-        "narrative": result.text.strip(), "provider": result.provider, "mock": result.provider == "mock",
-        "interaction_id": str(result.interaction_id), "facts": facts,
+        "narrative": text, "provider": result.provider, "mock": result.provider == "mock",
+        "interaction_id": str(result.interaction_id), "facts": facts, "version": row.version,
     }
 
 
@@ -652,7 +727,7 @@ def generate_summary(
     user: User = Depends(require_permission("alerts.escalate")),
 ) -> dict[str, Any]:
     """Write a short summary of the case from the facts on file and keep it on the alert."""
-    alert = visible_alert_or_404(db, user, alert_id)
+    alert = _sar_work_alert(db, user, alert_id)
     customer = _customer_or_404(db, alert.customer_id)
     try:
         result = AIGateway(db).run(

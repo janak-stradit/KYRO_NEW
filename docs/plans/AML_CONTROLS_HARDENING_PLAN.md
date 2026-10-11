@@ -202,3 +202,29 @@ Migrations: `0021` audit types (done in S1; the emergency access table moves to 
 - Notices at the warning threshold and on breach (needs a notification channel), deadline chips in the queue and
   case page, and a "Potential SAR" option on the escalate dialog (the API supports it).
 - Values in `deadline_service.defaults()` are proposals; Compliance must confirm them (decision 4–5 in §11).
+
+## 15. Sprint 3 log (11 Oct 2026)
+
+**Done**
+- **SAR confidentiality** (`app/services/sar_confidentiality.py`): a case escalated as a potential SAR stays visible
+  to the team, but roles without `sar.view` get it with the escalation notes and reasons, notes written after the
+  escalation, summaries written after it and all narratives withheld. Every alert response carries
+  `compliance_status` (`IN_PROGRESS` / `WITH_MLRO` / `CLOSED`) and `restricted`; `potential_sar` is returned only to
+  roles with `sar.view`. Applied to the alert, list, queue, timeline and customer case-history endpoints.
+- **Stored narratives** (`sar_narratives`, migration `0023`): every AI draft and every edit is a new version;
+  nothing is overwritten. Once a case is SAR-sensitive, reading, editing, drafting narratives and regenerating the
+  summary need `sar.view`.
+- **UI:** "Potential SAR" option on the escalate dialog; "Potential SAR" and "With the MLRO · details restricted"
+  chips on the case page; SAR decision and filing deadlines in the case header; narrative panel shows the latest
+  version and saves new ones; the MLRO's dashboard shows open potential SARs, overdue decisions and filings due
+  within 7 days or overdue.
+
+**Changed from the plan**
+- No separate `sar.content` permission: `sar.view` already marks exactly the roles that do SAR work, and a second
+  permission held by the same roles would add nothing. Revisit if Compliance wants, e.g., auditors to see that a
+  SAR exists but not its content.
+- No `sar_sensitive` column: `sar_candidate_at` (potential SAR) and `resolution_outcome = SAR_FILED` already say it.
+- Breach "notices" are on the MLRO's dashboard; email or chat notifications need a delivery channel KYRO does not
+  have yet.
+
+**Next (S4):** AI attestation and wider masking (WS5); phonetic and transliteration screening (WS4).

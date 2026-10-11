@@ -35,7 +35,7 @@ from app.schemas.alert import (
     ResolutionOptions,
 )
 from app.schemas.common import Page
-from app.services import customer_risk_service, deadline_service, feedback_service
+from app.services import customer_risk_service, deadline_service, feedback_service, sar_confidentiality
 from app.services.audit_service import log_action
 from app.utils.security import decode_token
 
@@ -57,6 +57,11 @@ def _get_alert_or_404(db: Session, alert_id: uuid.UUID) -> AlertModel:
     return alert
 
 
+def _out(alert: AlertModel, user: User) -> dict:
+    """An alert as this user may see it (services/sar_confidentiality.py)."""
+    return sar_confidentiality.mask_alert(AlertOut.model_validate(alert).model_dump(mode="json"), alert, user)
+
+
 @router.get("", response_model=Page[AlertOut])
 def list_alerts(
     pagination: PaginationParams = Depends(),
@@ -72,7 +77,7 @@ def list_alerts(
         query = query.filter(AlertModel.customer_id == customer_id)
     total = query.count()
     items = query.order_by(AlertModel.created_at.desc()).offset(pagination.offset).limit(pagination.limit).all()
-    return Page(items=items, total=total, page=pagination.page, page_size=pagination.page_size)
+    return Page(items=[_out(a, user) for a in items], total=total, page=pagination.page, page_size=pagination.page_size)
 
 
 def _get_user_from_token(token: str, db: Session) -> User:
@@ -304,7 +309,7 @@ def alert_queue(
 
     items = []
     for alert, customer in rows:
-        item = AlertOut.model_validate(alert).model_dump(mode="json")
+        item = _out(alert, user)
         age_days = ((alert.resolved_at or now) - alert.created_at).days
         requests_open, requests_overdue = open_requests.get(alert.id, (0, 0))
         item.update(
@@ -473,10 +478,10 @@ def disposition_baseline(
 
 
 @router.get("/{alert_id}", response_model=AlertOut)
-def get_alert(alert_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> AlertModel:
+def get_alert(alert_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> dict:
     alert = visible_alert_or_404(db, user, alert_id, emergency_read=True)
     record_sar_view(db, user, alert)
-    return alert
+    return _out(alert, user)
 
 
 @router.get("/{alert_id}/deadlines")
@@ -535,14 +540,14 @@ def assign(
     data: AlertAssign,
     db: Session = Depends(get_db),
     user: User = Depends(require_permission("alerts.assign")),
-) -> AlertModel:
+) -> dict:
     alert = visible_alert_or_404(db, user, alert_id)
     if alert.status == "RESOLVED":
         raise HTTPException(status.HTTP_409_CONFLICT, "A resolved alert cannot be reassigned")
     _assign(db, alert, _assignee_or_422(db, data.assigned_to), user)
     db.commit()
     db.refresh(alert)
-    return alert
+    return _out(alert, user)
 
 
 @router.put("/{alert_id}/resolve", response_model=AlertOut)
@@ -551,7 +556,7 @@ def resolve(
     data: AlertResolve,
     db: Session = Depends(get_db),
     user: User = Depends(require_permission("alerts.close_false_positive", "alerts.close", "sar.approve")),
-) -> AlertModel:
+) -> dict:
     alert = visible_alert_or_404(db, user, alert_id)
     # Each outcome is its own decision: anyone on the queue may clear a false
     # positive, but only the MLRO (or an administrator) may approve a SAR.
@@ -588,7 +593,7 @@ def resolve(
         customer_risk_service.assess_customer(db, customer, performed_by=user.id)
     db.commit()
     db.refresh(alert)
-    return alert
+    return _out(alert, user)
 
 
 @router.put("/{alert_id}/qa", response_model=AlertOut)
@@ -597,7 +602,7 @@ def quality_check(
     data: AlertQA,
     db: Session = Depends(get_db),
     user: User = Depends(require_permission("alerts.qa")),
-) -> AlertModel:
+) -> dict:
     """Record whether a resolved case followed policy. The outcome itself is not changed."""
     alert = visible_alert_or_404(db, user, alert_id)
     if alert.status != "RESOLVED":
@@ -612,7 +617,7 @@ def quality_check(
                new_values={"qa_result": data.result, "qa_notes": data.notes})
     db.commit()
     db.refresh(alert)
-    return alert
+    return _out(alert, user)
 
 
 @router.put("/{alert_id}/escalate", response_model=AlertOut)
@@ -621,7 +626,7 @@ def escalate(
     data: AlertEscalate,
     db: Session = Depends(get_db),
     user: User = Depends(require_permission("alerts.escalate")),
-) -> AlertModel:
+) -> dict:
     alert = visible_alert_or_404(db, user, alert_id)
     if alert.status == "RESOLVED":
         raise HTTPException(status.HTTP_409_CONFLICT, "Alert is already resolved")
@@ -643,4 +648,4 @@ def escalate(
     )
     db.commit()
     db.refresh(alert)
-    return alert
+    return _out(alert, user)

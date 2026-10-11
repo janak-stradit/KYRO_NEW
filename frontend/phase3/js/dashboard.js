@@ -360,7 +360,14 @@ const Dashboard = {
         // The second panel depends on what the role is responsible for
         const blocks = [];
         if (w.escalated) {
+            const sd = w.sar_deadlines;
             blocks.push(`<div class="kx-label">Escalated, awaiting your decision (${w.escalated.count})</div>
+                ${sd && sd.open ? `<div class="kd-workstats">
+                    ${stat("Potential SARs", sd.open)}
+                    ${stat("Decisions overdue", sd.decisions_overdue, true)}
+                    ${stat("Filings due in 7 days", sd.filings_due_soon, true)}
+                    ${stat("Filings overdue", sd.filings_overdue, true)}
+                </div>` : ""}
                 ${w.escalated.items.length ? `<ul class="kd-alerts">${w.escalated.items.map(caseRow).join("")}</ul>` : '<p class="kd-worknote">No escalated cases.</p>'}`);
         }
         if (w.team) {

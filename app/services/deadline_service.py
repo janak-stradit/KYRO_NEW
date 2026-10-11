@@ -141,6 +141,19 @@ def overdue_condition():
     return and_(Alert.status.in_(UNRESOLVED), or_(sla_breached, decision_breached))
 
 
+def sar_deadline_counts(potential_sars: list[Alert], *, within_days: int = 7) -> dict[str, int]:
+    """For the MLRO's dashboard: open potential SARs whose decision is overdue, and filings due soon or overdue."""
+    now = _now()
+    decided_late = sum(1 for a in potential_sars if (now - a.sar_candidate_at).days > (a.sar_decision_days or 0))
+    filing = [a.filing_due_at for a in potential_sars if a.filing_due_at is not None]
+    return {
+        "open": len(potential_sars),
+        "decisions_overdue": decided_late,
+        "filings_overdue": sum(1 for due in filing if due < now),
+        "filings_due_soon": sum(1 for due in filing if now <= due < now + timedelta(days=within_days)),
+    }
+
+
 def summary(db: Session, alert: Alert, customer: Customer | None, *, include_sar: bool) -> dict[str, Any]:
     """Every clock on one case. The SAR clocks are left out for roles that may not see SAR work."""
     warning = int(policy(db, customer)["DEADLINE_WARNING_PERCENT"])

@@ -10,6 +10,8 @@ Generated from `app/permissions.py` by `scripts/role_matrix.py`. Do not edit by 
 - Without `customers.view_all` a role sees only customers that have such a case.
 - A SAR-filed case, its documents and the fact a SAR was filed are visible only with `sar.view`; to anyone else they do not exist (404).
 - Every opening of a SAR-filed case is written to the audit log (`SAR` / `VIEW`).
+- A case escalated as a potential SAR stays visible, but without `sar.view` its escalation notes and reasons, later notes, later summaries and narratives are withheld; its progress shows as a general status (In progress / With the MLRO / Closed).
+- An approved emergency access grant lets one user read one case for a limited time; each use is audited (`EMERGENCY_ACCESS` / `VIEW`).
 
 ## Matrix
 
