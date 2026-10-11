@@ -89,6 +89,19 @@ class Settings(BaseSettings):
     # Longest emergency access an approver may grant to one case
     emergency_access_max_minutes: int = 240
 
+    # ── Rules engine R1 (docs/plans/RULES_ENGINE_IMPLEMENTATION_PHASES.md) ──
+    # Each switch changes what alerts; all start off until Compliance has reviewed a replay.
+    base_currency: str = "USD"
+    fx_rates_url: str = "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml"
+    rules_base_currency_enabled: bool = False   # compare amounts in the base currency
+    rules_noise_reduction_enabled: bool = False  # no per-payment PEP/sanctions hits; weak indicators need a real hit; R010 looks back only
+    rules_consolidate_daily: bool = False       # one open rules alert per customer per day
+
+    # Automatic assignment of new alerts to teams (services/assignment_service.py).
+    # With no teams or routing rules set up, nothing is assigned.
+    auto_assign_enabled: bool = True
+    auto_assign_method: str = "least_loaded"  # least_loaded | round_robin
+
     # Where uploaded KYC documents are kept (local disk in development; use
     # encrypted object storage in production). Never inside the repository tree.
     document_storage_dir: str = "var/documents"

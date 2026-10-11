@@ -21,6 +21,9 @@ from app.models.alert_note import AlertNote
 from app.models.alert_request import AlertRequest
 from app.models.access_control import EmergencyAccessGrant, RoleGrantRequest
 from app.models.sar_narrative import SarNarrative
+from app.models.fx_rate import FxRate
+from app.models.assignment import AssignmentRule, Team, TeamMember
+from app.models.data_foundation import CustomerExpectedActivity, DataReconciliation, TransactionCodeMap
 from app.models.regulatory import RegulatoryIngestionRun, RegulatorySection, RegulatorySource
 
 __all__ = [
@@ -28,6 +31,13 @@ __all__ = [
     "EmergencyAccessGrant",
     "RoleGrantRequest",
     "SarNarrative",
+    "FxRate",
+    "Team",
+    "TeamMember",
+    "AssignmentRule",
+    "TransactionCodeMap",
+    "DataReconciliation",
+    "CustomerExpectedActivity",
     "SCHEMA",
     "Customer",
     "CustomerRiskProfile",

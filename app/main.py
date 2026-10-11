@@ -35,6 +35,7 @@ from app.routers import (
     kyc,
     kyrochat,
     regulatory,
+    rules,
     rule_configs,
     transactions,
     tts,
@@ -124,6 +125,7 @@ app.include_router(alerts.router)
 app.include_router(kyc.router)
 app.include_router(watchlists.router)
 app.include_router(rule_configs.router)
+app.include_router(rules.router)
 app.include_router(regulatory.router)
 app.include_router(change_management.router)
 app.include_router(documents.router)

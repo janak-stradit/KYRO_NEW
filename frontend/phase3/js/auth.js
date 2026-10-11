@@ -324,6 +324,8 @@ const Auth = {
         cases: ['cases.view'],
         'periodic-reviews': ['customers.view_all'],
         patterns: ['cases.view'],
+        rules: ['rules.propose', 'rules.approve', 'alerts.baseline'],
+        process: ['users.manage'],
         feeds: ['feeds.load'],
         admin: ['users.manage', 'audit.read', 'sar.grant_access'],
         case: ['cases.view']

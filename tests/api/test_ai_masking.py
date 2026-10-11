@@ -45,3 +45,13 @@ def test_known_values_come_from_metadata():
     redactor = Redactor(known=known)
     out = redactor.redact("Moved from 14 Baker Street; passport P1234567")
     assert "Baker" not in out and "P1234567" not in out
+
+
+def test_masking_twice_changes_nothing_more():
+    """The gateway masks each variable and then the whole prompt; labels must survive both passes."""
+    redactor = Redactor()
+    text = "Document type: passport\nFields to extract: id_number\nPassport number: X1234567\nRegistration number: 88213377"
+    once = redactor.redact(text)
+    assert redactor.redact(once) == once
+    assert "Passport number: [ID_" in once and "Fields to extract" in once
+    assert redactor.restore(once) == text

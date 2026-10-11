@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from app.config import get_settings
 from app.database import SessionLocal
-from app.ml.training.pipeline import run_training_pipeline
+from app.ml.training.pipeline import LabelDefinitionChanged, run_training_pipeline
 from app.services import feedback_service
 from app.services.alert_service import ML_VERSION
 
@@ -28,7 +28,11 @@ def retrain_if_needed(ml_version: str | None = ML_VERSION) -> dict:
 
     performance = feedback_service.evaluate_performance(feedback)
     if performance["precision"] is not None and performance["precision"] < settings.performance_threshold:
-        result = run_training_pipeline(as_candidate=True, candidate_traffic_pct=CANDIDATE_TRAFFIC_PCT)
+        try:
+            result = run_training_pipeline(as_candidate=True, candidate_traffic_pct=CANDIDATE_TRAFFIC_PCT)
+        except LabelDefinitionChanged as exc:
+            # An automatic retrain never adopts a new label definition; a person must approve it
+            return {"status": "LABEL_CHANGE_NEEDS_APPROVAL", "old_precision": performance["precision"], "detail": str(exc)}
         return {
             "status": "RETRAINING_TRIGGERED",
             "old_precision": performance["precision"],

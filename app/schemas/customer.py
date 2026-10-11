@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field
 KycStatus = Literal["PENDING", "VERIFIED", "REJECTED", "UNDER_REVIEW"]
 RiskLevel = Literal["LOW", "MEDIUM", "HIGH"]
 CustomerType = Literal["INDIVIDUAL", "CORPORATE", "FUND"]
+Segment = Literal["RETAIL", "HNW", "SOLE_TRADER", "SME", "CORPORATE", "FUND", "MSB", "NPO", "CORRESPONDENT"]
 
 
 class CustomerBase(BaseModel):
@@ -22,6 +23,8 @@ class CustomerBase(BaseModel):
     country: str | None = None
     residency_country: str | None = None
     customer_type: CustomerType | None = None
+    # Thresholds are set per segment; derived from customer_type when not given (customer_service.py)
+    segment: Segment | None = None
     customer_metadata: dict[str, Any] | None = None
 
 
@@ -44,6 +47,7 @@ class CustomerUpdate(BaseModel):
     risk_level: RiskLevel | None = None
     risk_score: int | None = Field(default=None, ge=0, le=100)
     customer_type: CustomerType | None = None
+    segment: Segment | None = None
     customer_metadata: dict[str, Any] | None = None
 
 

@@ -87,6 +87,9 @@ def _audit_event(row: AuditLog, names: dict[uuid.UUID, str]) -> tuple[str, str, 
             assignee = names.get(uuid.UUID(str(values["assigned_to"])))
         except ValueError:
             assignee = None
+        if values.get("auto_assigned"):
+            return ("assigned", f"Assigned automatically to {assignee or 'a user'}",
+                    f"Team {values.get('team') or '—'}, rule \"{values.get('assignment_rule') or '—'}\"")
         return "assigned", f"Assigned to {assignee or 'a user'}", None
     if "summary_review" in values:
         review = values["summary_review"]
@@ -482,6 +485,11 @@ def decide_screening(
     if data.decision == "CONFIRMED":
         row.match_status = "CONFIRMED_MATCH"
         if row.screening_type == "SANCTIONS":
+            if not customer.sanctions_flag:
+                from app.services.rules_engine import open_sanctions_case  # imported here to avoid an import cycle
+
+                customer.sanctions_flag = True
+                open_sanctions_case(db, customer, f"Sanctions match confirmed by an analyst (screening {row.id})")
             customer.sanctions_flag = True
         elif row.screening_type == "PEP":
             customer.pep_flag = True

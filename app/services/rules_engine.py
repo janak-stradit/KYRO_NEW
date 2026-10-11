@@ -5,18 +5,28 @@ Each rule inspects a transaction (plus its owning customer and recent
 transaction history) and, if triggered, contributes a severity-weighted
 score. Scores are summed and capped at 100; an Alert is opened when the
 total crosses ALERT_THRESHOLD or any CRITICAL rule fires.
+
+Rules engine R1 (RuleOptions, switched on in settings after a replay review):
+amounts compared in the base currency; no per-payment PEP/sanctions hits;
+weak indicators need a substantive rule; R010 looks back only; one open rules
+alert per customer per day. Every alert records the rule version, the values
+used and its evidence transactions.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import timedelta
+import hashlib
+import json
+from dataclasses import asdict, dataclass
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.models.alert import Alert
 from app.models.customer import Customer
 from app.models.transaction import Transaction, TransactionRiskFlag
+from app.services.audit_service import log_action
 from app.services.rule_config_service import get_effective_config
 
 # Hardcoded fallback values. These stay importable as module attributes
@@ -59,6 +69,36 @@ def resolve_config(db: Session, customer: Customer) -> dict:
     return get_effective_config(db, DEFAULTS, jurisdiction)
 
 
+# Indicators that are not suspicious on their own: with noise reduction on they count
+# only when a substantive rule also fired (docs/plans/RULES_ENGINE_ENTERPRISE_PLAN.md §2)
+WEAK_RULES = frozenset({"R007", "R008", "R009"})
+SANCTIONS_CASE_RULE = "SANCTIONS_CUSTOMER"
+
+
+@dataclass(frozen=True)
+class RuleOptions:
+    """The R1 switches (settings.rules_*). Replay passes its own to compare before and after."""
+
+    base_currency: bool = False
+    noise_reduction: bool = False
+    consolidate_daily: bool = False
+
+    @classmethod
+    def from_settings(cls) -> "RuleOptions":
+        s = get_settings()
+        return cls(s.rules_base_currency_enabled, s.rules_noise_reduction_enabled, s.rules_consolidate_daily)
+
+    def signature(self) -> str:
+        """Which scoring the engine applies; stored with ML models trained on its scores."""
+        return f"legacy-r1;base_ccy={int(self.base_currency)};noise={int(self.noise_reduction)}"
+
+
+def rule_version(cfg: dict, options: RuleOptions) -> str:
+    """A short hash of the effective configuration and switches: equal versions alert identically."""
+    payload = json.dumps({"cfg": cfg, "options": asdict(options)}, sort_keys=True, default=str)
+    return hashlib.sha256(payload.encode()).hexdigest()[:16]
+
+
 @dataclass
 class TriggeredRule:
     rule_id: str
@@ -71,9 +111,12 @@ def _is_high_risk_country(high_risk_countries: set[str], *countries: str | None)
     return any(c and c.strip().upper() in high_risk_countries for c in countries)
 
 
-def evaluate(db: Session, txn: Transaction, customer: Customer, cfg: dict | None = None) -> list[TriggeredRule]:
+def evaluate(
+    db: Session, txn: Transaction, customer: Customer, cfg: dict | None = None, options: RuleOptions | None = None,
+) -> list[TriggeredRule]:
     if cfg is None:
         cfg = resolve_config(db, customer)
+    options = options or RuleOptions.from_settings()
 
     amount_threshold = cfg["AMOUNT_THRESHOLD"]
     velocity_daily_limit = cfg["VELOCITY_DAILY_LIMIT"]
@@ -83,8 +126,14 @@ def evaluate(db: Session, txn: Transaction, customer: Customer, cfg: dict | None
 
     triggered: list[TriggeredRule] = []
 
-    # R001 — Amount Threshold
-    if txn.amount > amount_threshold:
+    # R001 — Amount Threshold, in the base currency when switched on and a rate is known
+    if options.base_currency and txn.amount_base is not None:
+        if float(txn.amount_base) > amount_threshold:
+            triggered.append(TriggeredRule(
+                "R001", "Amount Threshold",
+                f"Transaction {txn.amount} {txn.currency} ({txn.amount_base} {get_settings().base_currency}) > {amount_threshold}", "MEDIUM",
+            ))
+    elif txn.amount > amount_threshold:
         triggered.append(TriggeredRule("R001", "Amount Threshold", f"Transaction {txn.amount} > {amount_threshold}", "MEDIUM"))
 
     # R002 — Velocity Daily
@@ -121,12 +170,16 @@ def evaluate(db: Session, txn: Transaction, customer: Customer, cfg: dict | None
     if _is_high_risk_country(high_risk_countries, txn.meta_country, txn.meta_destination_country, txn.meta_origin_country):
         triggered.append(TriggeredRule("R004", "High Risk Country", "Counterparty in sanctioned/high-risk country", "HIGH"))
 
+    # R005 / R006 describe the customer, not the payment. With noise reduction on they are not
+    # raised on every transaction: PEP status weighs in the customer's rating, and a confirmed
+    # sanctions match opens one customer case (open_sanctions_case).
+
     # R005 — PEP Match
-    if customer.pep_flag:
+    if customer.pep_flag and not options.noise_reduction:
         triggered.append(TriggeredRule("R005", "PEP Match", "Customer is a Politically Exposed Person", "HIGH"))
 
     # R006 — Sanctions Match
-    if customer.sanctions_flag:
+    if customer.sanctions_flag and not options.noise_reduction:
         triggered.append(TriggeredRule("R006", "Sanctions Match", "Customer matched on a sanctions list", "CRITICAL"))
 
     # R007 — New Counterparty
@@ -159,7 +212,9 @@ def evaluate(db: Session, txn: Transaction, customer: Customer, cfg: dict | None
             Transaction.customer_id == txn.customer_id,
             Transaction.id != txn.id,
             Transaction.transaction_date >= txn.transaction_date - timedelta(seconds=rapid_succession_window_seconds),
-            Transaction.transaction_date <= txn.transaction_date + timedelta(seconds=rapid_succession_window_seconds),
+            # Earlier transactions only once noise reduction is on: a batch file loaded in one go is not rapid succession
+            Transaction.transaction_date <= txn.transaction_date
+            + timedelta(seconds=0 if options.noise_reduction else rapid_succession_window_seconds),
         )
         .scalar()
         or 0
@@ -196,7 +251,11 @@ def apply_to_transaction(db: Session, txn: Transaction, customer: Customer) -> t
     """Run all rules against a transaction, persist risk flags, update the
     transaction's risk_score/risk_flags, and open an Alert if warranted."""
     cfg = resolve_config(db, customer)
-    rules = evaluate(db, txn, customer, cfg=cfg)
+    options = RuleOptions.from_settings()
+    from app.services import fx_service  # imported here to avoid an import cycle
+
+    conversion = fx_service.apply(db, txn)
+    rules = evaluate(db, txn, customer, cfg=cfg, options=options)
     score = score_from_rules(rules, severity_weights=cfg["SEVERITY_WEIGHT"])
 
     txn.risk_score = score
@@ -214,6 +273,27 @@ def apply_to_transaction(db: Session, txn: Transaction, customer: Customer) -> t
 
     alert: Alert | None = None
     action = recommended_action_for(rules, score, alert_threshold=cfg["ALERT_THRESHOLD"], edd_threshold=cfg["EDD_THRESHOLD"])
+    if options.noise_reduction and not any(r.rule_id not in WEAK_RULES for r in rules):
+        action = None  # weak indicators alone do not open an alert
+    parameters = {
+        "thresholds": {k: cfg[k] for k in ("AMOUNT_THRESHOLD", "ALERT_THRESHOLD", "EDD_THRESHOLD", "VELOCITY_DAILY_LIMIT",
+                                           "VELOCITY_HOURLY_LIMIT", "RAPID_SUCCESSION_WINDOW_SECONDS")},
+        "options": asdict(options),
+        "rules": [{"rule": r.rule_id, "description": r.description, "severity": r.severity} for r in rules],
+        "amount": float(txn.amount), "currency": txn.currency, "base_currency": get_settings().base_currency,
+        "amount_base": float(conversion.amount_base) if conversion.amount_base is not None else None,
+        "fx_rate": float(conversion.rate) if conversion.rate is not None else None,
+        "fx_stale": conversion.stale, "fx_missing": conversion.missing,
+    }
+    version = rule_version(cfg, options)
+    if action is not None and options.consolidate_daily:
+        alert = _consolidate(db, customer, txn, rules, score, action, parameters, version)
+        if alert is not None:
+            db.flush()
+            from app.services import customer_risk_service  # imported here to avoid an import cycle
+
+            customer_risk_service.assess_customer(db, customer)
+            return rules, score, alert
     if action is not None:
         alert = Alert(
             customer_id=customer.id,
@@ -223,6 +303,9 @@ def apply_to_transaction(db: Session, txn: Transaction, customer: Customer) -> t
             triggered_rules={"rules": [r.rule_id for r in rules]},
             recommended_action=action,
             status="OPEN",
+            rule_version=version,
+            parameters=parameters,
+            evidence_transaction_ids=[txn.id],
         )
         db.add(alert)
 
@@ -231,7 +314,77 @@ def apply_to_transaction(db: Session, txn: Transaction, customer: Customer) -> t
         from app.services import customer_risk_service, deadline_service  # imported here to avoid an import cycle
 
         deadline_service.start_case_clock(db, alert, customer)
+        from app.services import assignment_service  # imported here to avoid an import cycle
+
+        assignment_service.assign_new(db, alert, customer)
         # A new alert can change the customer's rating
 
         customer_risk_service.assess_customer(db, customer)
     return rules, score, alert
+
+
+_ACTION_RANK = {None: 0, "REVIEW": 1, "ENHANCED_DUE_DILIGENCE": 2, "SAR": 3}
+
+
+def _consolidate(
+    db: Session, customer: Customer, txn: Transaction, rules: list[TriggeredRule], score: int, action: str,
+    parameters: dict, version: str,
+) -> Alert | None:
+    """Add this transaction to the customer's open rules alert from today, if there is one."""
+    start_of_day = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    alert = (
+        db.query(Alert)
+        .filter(
+            Alert.customer_id == customer.id, Alert.status.in_(("OPEN", "ASSIGNED", "IN_REVIEW")),
+            Alert.triggered_rules.isnot(None), Alert.created_at >= start_of_day,
+        )
+        .order_by(Alert.created_at.desc())
+        .with_for_update()
+        .first()
+    )
+    if alert is None:
+        return None
+    existing = list((alert.triggered_rules or {}).get("rules") or [])
+    alert.triggered_rules = {"rules": existing + [r.rule_id for r in rules if r.rule_id not in existing]}
+    alert.risk_score = max(alert.risk_score, score)
+    if _ACTION_RANK.get(action, 0) > _ACTION_RANK.get(alert.recommended_action, 0):
+        alert.recommended_action = action
+    alert.evidence_transaction_ids = [*(alert.evidence_transaction_ids or []), txn.id]
+    alert.parameters = {**(alert.parameters or {}), "consolidated": [*((alert.parameters or {}).get("consolidated") or []),
+                                                                      {"transaction_id": str(txn.id), **parameters}]}
+    alert.rule_version = version
+    log_action(db, entity_type="ALERT", entity_id=alert.id, action="UPDATE",
+               new_values={"consolidated_transaction": str(txn.id), "rules": [r.rule_id for r in rules]})
+    return alert
+
+
+def open_sanctions_case(db: Session, customer: Customer, reason: str) -> Alert | None:
+    """
+    With noise reduction on, a customer newly confirmed as sanctioned gets one case, instead of an
+    R006 alert on every payment. Does nothing if such a case is already open, or if the switch is off
+    (R006 then alerts per payment as before).
+    """
+    if not RuleOptions.from_settings().noise_reduction:
+        return None
+    open_case = db.query(Alert.id).filter(
+        Alert.customer_id == customer.id, Alert.status.in_(("OPEN", "ASSIGNED", "IN_REVIEW", "ESCALATED")),
+        Alert.triggered_rules["rules"].contains([SANCTIONS_CASE_RULE]),
+    ).first()
+    if open_case is not None:
+        return None
+    alert = Alert(
+        customer_id=customer.id, alert_type="SANCTIONS", risk_score=100, confidence=100.0,
+        triggered_rules={"rules": [SANCTIONS_CASE_RULE]}, recommended_action="IMMEDIATE_REVIEW", status="OPEN",
+        parameters={"reason": reason}, rule_version="sanctions-case-v1",
+    )
+    db.add(alert)
+    db.flush()
+    from app.services import customer_risk_service, deadline_service  # imported here to avoid an import cycle
+
+    deadline_service.start_case_clock(db, alert, customer)
+    from app.services import assignment_service  # imported here to avoid an import cycle
+
+    assignment_service.assign_new(db, alert, customer)
+    customer_risk_service.assess_customer(db, customer)
+    log_action(db, entity_type="ALERT", entity_id=alert.id, action="CREATE", new_values={"sanctions_case": reason})
+    return alert

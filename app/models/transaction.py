@@ -21,6 +21,12 @@ class Transaction(Base, UUIDPrimaryKeyMixin):
             "transaction_type IS NULL OR transaction_type IN ('DEPOSIT','WITHDRAWAL','TRANSFER','FX','TRADE')",
             name="chk_transaction_type",
         ),
+        CheckConstraint("direction IS NULL OR direction IN ('CREDIT','DEBIT')", name="chk_transaction_direction"),
+        CheckConstraint(
+            "channel IS NULL OR channel IN ('CASH','WIRE','ACH','CARD','CHEQUE','INTERNAL','CRYPTO','OTHER')",
+            name="chk_transaction_channel",
+        ),
+        Index("ix_app_txn_source_reference", "source_system", "reference"),
         Index("ix_app_txn_date_brin", "transaction_date", postgresql_using="brin"),
         Index("ix_app_txn_risk_flags_gin", "risk_flags", postgresql_using="gin"),
         {"schema": SCHEMA},
@@ -36,6 +42,19 @@ class Transaction(Base, UUIDPrimaryKeyMixin):
     transaction_type: Mapped[str | None] = mapped_column(String(50))
     amount: Mapped[float] = mapped_column(Numeric(18, 2), nullable=False)
     currency: Mapped[str] = mapped_column(String(3), nullable=False, default="USD")
+    # The amount in the base currency, and the rate used (services/fx_service.py); null when no rate was known
+    amount_base: Mapped[float | None] = mapped_column(Numeric(18, 2))
+    fx_rate: Mapped[float | None] = mapped_column(Numeric(20, 10))
+    # Rules engine R2: what the typologies need (models/data_foundation.py)
+    direction: Mapped[str | None] = mapped_column(String(10))  # CREDIT (money in) | DEBIT (money out)
+    channel: Mapped[str | None] = mapped_column(String(20))  # CASH, WIRE, ACH, CARD, CHEQUE, INTERNAL, CRYPTO, OTHER
+    counterparty_account: Mapped[str | None] = mapped_column(String(100))
+    counterparty_bank_bic: Mapped[str | None] = mapped_column(String(11))
+    counterparty_country: Mapped[str | None] = mapped_column(String(100))
+    branch_id: Mapped[str | None] = mapped_column(String(50))
+    depositor_name: Mapped[str | None] = mapped_column(String(255))  # who paid cash in, when not the customer
+    reference: Mapped[str | None] = mapped_column(String(100))  # the source system's own transaction reference
+    source_code: Mapped[str | None] = mapped_column(String(50))  # the source system's transaction code
     meta_counterparty: Mapped[str | None] = mapped_column(String(255))
     meta_counterparty_type: Mapped[str | None] = mapped_column(String(50))
     meta_location: Mapped[str | None] = mapped_column(String(255))

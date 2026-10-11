@@ -9,15 +9,36 @@ from __future__ import annotations
 
 from app.database import SessionLocal
 from app.ml.registry.model_registry import ModelNotFoundError, ModelRegistry
-from app.ml.training.trainer import train_all
+from app.ml.training.trainer import label_definition, train_all
+from app.services.rules_engine import RuleOptions
 
 MODEL_NAMES = ("risk_scorer", "anomaly_classifier", "isolation_detector")
 
 
+class LabelDefinitionChanged(ValueError):
+    """The labels a retrain would learn from no longer mean what the active models learnt."""
+
+
+def _active_label_definition(registry: ModelRegistry) -> str | None:
+    try:
+        version = registry.get_routing("anomaly_classifier")["active"]
+        # Models trained before label definitions were recorded learnt from the legacy scoring
+        return registry.load_model("anomaly_classifier", version)["metrics"].get("label_definition", label_definition(RuleOptions()))
+    except (ModelNotFoundError, KeyError):
+        return None  # nothing trained yet
+
+
 def run_training_pipeline(
-    *, as_candidate: bool = False, candidate_traffic_pct: float = 10.0, limit: int | None = None
+    *, as_candidate: bool = False, candidate_traffic_pct: float = 10.0, limit: int | None = None,
+    allow_label_change: bool = False,
 ) -> dict:
     registry = ModelRegistry()
+    active = _active_label_definition(registry)
+    if active is not None and active != label_definition() and not allow_label_change:
+        raise LabelDefinitionChanged(
+            f"The training labels have changed (active models: {active}; now: {label_definition()}). "
+            "Retrain only with an approved label change (allow_label_change)."
+        )
     db = SessionLocal()
     try:
         result = train_all(db, limit=limit)

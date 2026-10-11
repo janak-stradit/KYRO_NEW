@@ -77,4 +77,7 @@ class AlertRouter:
         db.add(alert)
         db.flush()
         deadline_service.start_case_clock(db, alert, customer)
+        from app.services import assignment_service  # imported here to avoid an import cycle
+
+        assignment_service.assign_new(db, alert, customer)
         return alert

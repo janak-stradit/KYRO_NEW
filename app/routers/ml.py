@@ -169,13 +169,15 @@ def train(data: TrainRequest, user: User = Depends(require_permission("ml.train"
         from app.tasks.ml_tasks import run_training_pipeline_task
 
         task = run_training_pipeline_task.delay(
-            as_candidate=data.as_candidate, candidate_traffic_pct=data.candidate_traffic_pct, limit=data.limit
+            as_candidate=data.as_candidate, candidate_traffic_pct=data.candidate_traffic_pct, limit=data.limit,
+            allow_label_change=data.allow_label_change,
         )
         return TrainResponse(status="QUEUED", task_id=task.id)
 
     try:
         result = run_training_pipeline(
-            as_candidate=data.as_candidate, candidate_traffic_pct=data.candidate_traffic_pct, limit=data.limit
+            as_candidate=data.as_candidate, candidate_traffic_pct=data.candidate_traffic_pct, limit=data.limit,
+            allow_label_change=data.allow_label_change,
         )
     except ValueError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
