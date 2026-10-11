@@ -1137,3 +1137,50 @@ tr.q-row:hover .q-open { color: #0F172A; }
     padding: 10px 12px 9px !important; min-width: 0 !important; width: auto !important; text-align: left; }
 #mainContent #rqTiles .q-view.is-active { border-bottom-color: #0F172A !important; }
 #mainContent #rqTiles .q-view:hover { transform: none !important; background: transparent !important; }
+
+/* ── How KYRO works: "In detail" for the steps that need explaining ──── */
+.pf-deep { display: grid; grid-template-columns: 1.4fr 1fr; gap: 28px; margin-top: 22px; padding-top: 20px; border-top: 1px solid #EEF1F5; }
+@media (max-width: 1100px) { .pf-deep { grid-template-columns: 1fr; } }
+.pf-deep h3 { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--kt-muted, #6B7280); margin: 0 0 10px; }
+.pf-subs { list-style: none; margin: 0; padding: 0; position: relative; }
+.pf-subs::before { content: ""; position: absolute; left: 13px; top: 8px; bottom: 8px; width: 2px; background: #FED7AA; }
+.pf-sub { position: relative; display: flex; gap: 14px; padding: 0 0 14px; opacity: 0; transform: translateX(-6px); transition: opacity .35s, transform .35s; }
+.pf-sub.is-in { opacity: 1; transform: none; }
+.pf-sub__n { position: relative; z-index: 1; flex: none; width: 28px; height: 28px; border-radius: 50%; background: #fff; border: 2px solid var(--kt-accent, #F97316);
+    color: var(--kt-accent, #F97316); font-weight: 700; font-size: 12.5px; display: inline-flex; align-items: center; justify-content: center; }
+.pf-sub strong { display: block; color: var(--kt-ink); font-size: 14px; margin-top: 3px; }
+.pf-sub p { margin: 2px 0 0; color: var(--kt-body, #374151); font-size: 13.5px; line-height: 1.5; }
+.pf-points { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.pf-points li { display: flex; gap: 10px; font-size: 13.5px; color: var(--kt-ink); background: #F0FDF4; border: 1px solid #BBF7D0; border-radius: 8px; padding: 8px 12px; }
+.pf-points i { color: #16A34A; margin-top: 3px; }
+
+.pf-mock { border: 1px solid #E5E7EB; border-radius: 10px; background: #fff; padding: 12px; box-shadow: 0 1px 2px rgba(15,23,42,.05); }
+.pf-mock__note { font-size: 11.5px; color: #94A3B8; margin: 8px 0 0; }
+.pf-m-tabs { display: flex; gap: 12px; font-size: 11.5px; color: #64748B; border-bottom: 1px solid #EEF1F5; padding-bottom: 8px; margin-bottom: 4px; }
+.pf-m-tabs b { color: #0F172A; border-bottom: 2px solid #0F172A; padding-bottom: 7px; margin-bottom: -9px; }
+.pf-m-row { display: grid; grid-template-columns: 10px 1fr 1.3fr 1.2fr .9fr .6fr; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid #F1F5F9; font-size: 11.5px; }
+.pf-m-row:last-of-type { border-bottom: 0; }
+.pf-m-dot { width: 8px; height: 8px; border-radius: 50%; background: #CBD5E1; display: inline-block; }
+.pf-m-dot--high { background: #DC2626; }
+.pf-m-dot--medium { background: #F59E0B; }
+.pf-m-name { font-weight: 600; color: #0F172A; }
+.pf-m-tags { display: flex; gap: 4px; flex-wrap: wrap; }
+.pf-m-tags em { font-style: normal; background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 4px; padding: 0 5px; color: #334155; white-space: nowrap; }
+.pf-m-stage { display: flex; gap: 2px; margin-bottom: 3px; }
+.pf-m-stage i { width: 12px; height: 3px; border-radius: 2px; background: #E2E8F0; }
+.pf-m-stage i.is-done { background: #0F172A; }
+.pf-m-stage i.is-current { background: #F97316; }
+.pf-m-st small { color: #334155; }
+.pf-m-owner { color: #475569; }
+.pf-m-wait { text-align: right; font-weight: 600; color: #0F172A; }
+.pf-m-wait.is-late { color: #B91C1C; }
+.pf-m-case__head { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #0F172A; }
+.pf-m-case__head small { color: #64748B; font-size: 11.5px; }
+.pf-m-case__tabs { display: flex; gap: 12px; font-size: 11.5px; color: #64748B; border-bottom: 1px solid #EEF1F5; margin: 8px 0; padding-bottom: 6px; }
+.pf-m-case__tabs b { color: #0F172A; }
+.pf-m-check { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 12px; color: #475569; }
+.pf-m-check li { display: flex; gap: 8px; align-items: center; }
+.pf-m-check i { color: #CBD5E1; }
+.pf-m-check li.is-done { color: #0F172A; }
+.pf-m-check li.is-done i { color: #16A34A; }
+@media (prefers-reduced-motion: reduce) { .pf-sub { opacity: 1; transform: none; transition: none; } }

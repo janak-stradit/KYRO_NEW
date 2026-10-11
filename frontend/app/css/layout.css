@@ -1,0 +1,26 @@
+/* layout.css — app shell, page header */
+.topbar { position: sticky; top: 0; z-index: 50; height: var(--topbar-h); display: flex; align-items: center; gap: var(--s-6);
+    padding: 0 var(--s-6); background: var(--ink); color: #fff; }
+.topbar__brand { display: inline-flex; align-items: center; gap: 8px; color: #fff; font-weight: 700; font-size: 15px; letter-spacing: .02em; }
+.topbar__brand:hover { text-decoration: none; }
+.topbar__brand img { background: #fff; border-radius: 6px; padding: 2px; }
+.topbar__brand b { color: var(--brand); font-weight: 700; }
+.topbar__nav { display: flex; gap: 2px; flex: 1; overflow-x: auto; scrollbar-width: none; }
+.topbar__link { color: #CBD5E1; font-size: var(--fs-md); font-weight: 500; padding: 7px 12px; border-radius: var(--r-sm); white-space: nowrap; }
+.topbar__link:hover { color: #fff; background: rgba(255, 255, 255, .08); text-decoration: none; }
+.topbar__link.is-active { color: #fff; background: rgba(255, 255, 255, .12); box-shadow: inset 0 -2px 0 var(--brand); }
+.topbar__avatar { width: 34px; height: 34px; border-radius: 50%; border: 0; background: var(--brand); color: #fff; font-weight: 700; font-size: 12.5px; }
+.topbar .dropdown-header { font-size: var(--fs-sm); color: var(--muted); }
+
+.view { display: block; max-width: var(--content-max); margin: 0 auto; padding: var(--s-6); outline: none; }
+.page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--s-4); margin-bottom: var(--s-5); flex-wrap: wrap; }
+.page-head__kicker { display: block; font-size: var(--fs-xs); font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+.page-head__title { font-size: var(--fs-2xl); }
+.page-head__sub { color: var(--muted); font-size: var(--fs-md); margin-top: 4px; }
+.page-head__actions { display: flex; gap: var(--s-2); }
+
+.page-message { max-width: 520px; margin: 12vh auto; text-align: center; display: grid; gap: var(--s-3); justify-items: center; }
+.page-message h1 { font-size: var(--fs-xl); }
+.page-message p { color: var(--muted); }
+
+@media (max-width: 768px) { .view { padding: var(--s-4); } .topbar { padding: 0 var(--s-4); gap: var(--s-3); } }

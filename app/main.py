@@ -180,6 +180,10 @@ class _FrontendStaticFiles(StaticFiles):
 
 if settings.serve_frontend_dir:
     _frontend_dir = Path(settings.serve_frontend_dir)
+    _next_dir = _frontend_dir.parent / "app"
+    if settings.frontend_next_preview and _next_dir.is_dir() and _next_dir != _frontend_dir:
+        # The rewritten frontend, side by side with the current one until switch-over
+        app.mount("/next", _FrontendStaticFiles(directory=_next_dir, html=True), name="frontend-next")
     if _frontend_dir.is_dir():
         app.mount("/", _FrontendStaticFiles(directory=_frontend_dir, html=True), name="frontend")
     else:

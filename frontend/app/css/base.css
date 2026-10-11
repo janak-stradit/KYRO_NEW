@@ -1,0 +1,18 @@
+/* base.css — reset, type, focus */
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; font-family: var(--font); font-size: var(--fs-base); line-height: 1.5; color: var(--text); background: var(--page);
+    -webkit-font-smoothing: antialiased; font-feature-settings: 'cv11', 'ss01'; }
+h1, h2, h3, h4 { color: var(--ink); margin: 0; line-height: 1.25; font-weight: 700; }
+p { margin: 0; }
+a { color: var(--link); text-decoration: none; }
+a:hover { text-decoration: underline; }
+button { font: inherit; }
+code { font-size: .92em; color: var(--text-2); background: var(--surface-2); border-radius: 4px; padding: 1px 5px; }
+:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.visually-hidden { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.skip-link { position: absolute; left: -999px; top: 8px; z-index: 1000; background: var(--ink); color: #fff; padding: 8px 12px; border-radius: var(--r-sm); }
+.skip-link:focus { left: 8px; }
+.num { font-variant-numeric: tabular-nums; }
+.muted { color: var(--muted); }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }

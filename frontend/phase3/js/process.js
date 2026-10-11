@@ -71,12 +71,30 @@ const Process = {
             key: 'queue', icon: 'fa-inbox', title: 'Work queue', short: 'Riskiest and oldest first',
             who: 'Team Lead assigns; analysts pick up', system: 'Review Cases page, /alerts/queue',
             what: [
+                'New alerts are routed to a team and given an owner automatically, by rules a Team Lead sets up.',
                 'Alerts are grouped by customer so one review settles several, ordered by highest risk and longest wait.',
-                'Filters show overdue cases, cases waiting on information, unassigned work and alerts by rule.',
-                'Team Leads assign one case or many at once.',
+                'Views show what needs attention: high risk, unassigned, mine, with the MLRO, overdue, waiting on information.',
+                'Team Leads can still assign or reassign one case, a customer\'s cases or a selection at once.',
             ],
-            recorded: 'ALERT / UPDATE on assignment',
+            recorded: 'ALERT / UPDATE on every assignment, saying whether it was automatic and which rule chose the team',
             controls: 'L1, L2 and KYC analysts see only their own cases and the unassigned pool; SAR-filed cases are invisible without SAR access.',
+            deep: {
+                mock: 'queue',
+                flow: [
+                    ['Alert enters the queue', 'Status Open, case clock started (5, 10 or 20 days by risk), customer re-rated.'],
+                    ['Routed to a team', 'Routing rules are checked in priority order: by alert type, rules fired, risk score, customer segment or country. The first rule that matches picks the team, e.g. sanctions alerts to the Sanctions team.'],
+                    ['Given an owner', 'Inside the team, the available member with the fewest open cases gets it (then fewest overdue). People on leave or without a case-working role are skipped. If nothing matches, it waits in the unassigned pool for the Team Lead.'],
+                    ['Prioritised', 'Each analyst sees their own work, highest risk and longest waiting first, one row per customer so related alerts are reviewed together.'],
+                    ['Tracked', 'Every row shows its stage (opened, assigned, investigation, MLRO, decision, quality check) and whether it is on time or overdue against its target.'],
+                ],
+                points: [
+                    'No alert waits unseen: every new alert gets a team and an owner, or is visible in the unassigned pool.',
+                    'Work is shared fairly: whoever has the fewest open cases gets the next one.',
+                    'Specialist work goes to specialists: sanctions, PEP and high-risk cases can be routed to the right team.',
+                    'Deadlines are visible to everyone: overdue work stands out in its own view.',
+                    'Every assignment, automatic or manual, is in the audit log with who or which rule decided it.',
+                ],
+            },
         },
         {
             key: 'investigate', icon: 'fa-magnifying-glass', title: 'Investigation', short: 'Case file, notes, AI help',
@@ -88,6 +106,25 @@ const Process = {
             ],
             recorded: 'Notes (never edited), requests, every AI call with its redacted input and the human decision',
             controls: 'AI proposes, a person decides: nothing AI-written counts until it has been checked.',
+            deep: {
+                mock: 'investigation',
+                flow: [
+                    ['Why this alert', 'Which rules fired, with the thresholds and values used, the rule version and the transactions behind it.'],
+                    ['Who the customer is', 'Profile and KYC, risk rating and its factors, accounts, beneficial owners, and any watchlist match to confirm or dismiss.'],
+                    ['What they did', 'Activity in the last 30 days against the customer\'s own 90-day baseline, counterparties and countries, first-time and high-risk ones marked.'],
+                    ['What happened before', 'The customer\'s earlier cases and how they ended, and how earlier alerts on the same rules were decided.'],
+                    ['Gather evidence', 'Notes that can never be edited, requests for information with due dates, KYC documents read with page citations and checked against the record.'],
+                    ['AI help, checked by a person', 'A case summary and a draft narrative written from the facts on file, with names, IDs and account numbers masked. Nothing counts until the investigator confirms it against the records.'],
+                    ['Ready to decide', 'With the evidence on one page, the investigator closes the case or escalates it to the MLRO (next step).'],
+                ],
+                points: [
+                    'One screen instead of five systems: everything about the customer and the case is in one place.',
+                    'Every action is recorded: notes, requests, documents and AI calls are kept and cannot be changed afterwards.',
+                    'Behaviour is compared with the customer\'s own normal, not a one-size-fits-all limit.',
+                    'AI saves time but never decides: its output is masked going out and checked by a person coming back.',
+                    'An examiner can follow exactly why the alert fired and what the investigator saw before deciding.',
+                ],
+            },
         },
         {
             key: 'decide', icon: 'fa-code-branch', title: 'Decision', short: 'Close, or escalate to the MLRO',
@@ -340,7 +377,70 @@ const Process = {
                     <div><dt>Recorded</dt><dd>${escapeHtml(s.recorded)}</dd></div>
                     <div><dt>Control</dt><dd>${escapeHtml(s.controls)}</dd></div>
                 </dl>
-            </div>`);
+            </div>
+            ${s.deep ? this.renderDeep(s.deep) : ''}`);
+        $("#pfDetail .pf-sub").each((i, el) => setTimeout(() => el.classList.add("is-in"), this.reduced ? 0 : 80 * i));
+    },
+
+    /** "In detail": the sub-steps, what the analyst sees, and points to make to stakeholders. */
+    renderDeep(deep) {
+        return `
+            <div class="pf-deep">
+                <div class="pf-deep__flow">
+                    <h3>In detail</h3>
+                    <ol class="pf-subs">${deep.flow.map(([title, text], i) => `
+                        <li class="pf-sub"><span class="pf-sub__n" aria-hidden="true">${i + 1}</span>
+                            <div><strong>${escapeHtml(title)}</strong><p>${escapeHtml(text)}</p></div></li>`).join('')}</ol>
+                </div>
+                <div class="pf-deep__side">
+                    <h3>What the analyst sees</h3>
+                    ${deep.mock === 'queue' ? this.mockQueue() : this.mockInvestigation()}
+                    <h3 class="mt-3">Key points for stakeholders</h3>
+                    <ul class="pf-points">${deep.points.map(p => `<li><i class="fas fa-check" aria-hidden="true"></i>${escapeHtml(p)}</li>`).join('')}</ul>
+                </div>
+            </div>`;
+    },
+
+    /** A miniature of the work queue: illustrative rows, not live data. */
+    mockQueue() {
+        const seg = (states) => `<span class="pf-m-stage">${states.map(s => `<i class="is-${s}"></i>`).join('')}</span>`;
+        const row = (dot, name, tags, stage, label, owner, wait) => `
+            <div class="pf-m-row">
+                <span class="pf-m-dot pf-m-dot--${dot}"></span>
+                <span class="pf-m-name">${name}</span>
+                <span class="pf-m-tags">${tags.map(t => `<em>${t}</em>`).join('')}</span>
+                <span class="pf-m-st">${seg(stage)}<small>${label}</small></span>
+                <span class="pf-m-owner">${owner}</span>
+                <span class="pf-m-wait ${wait.includes('overdue') ? 'is-late' : ''}">${wait}</span>
+            </div>`;
+        return `
+            <div class="pf-mock" aria-label="Illustration of the work queue">
+                <div class="pf-m-tabs"><b>All 2,497</b><span>High risk 415</span><span>Mine 12</span><span>Overdue 3</span></div>
+                ${row('high', 'Customer A', ['Sanctions', 'New counterparty'], ['done', 'done', 'current', 'todo', 'todo'], 'Under investigation', 'Sanctions team', '2 d')}
+                ${row('high', 'Customer B', ['PEP', 'High-risk country'], ['done', 'current', 'todo', 'todo', 'todo'], 'Waiting for an owner', 'Unassigned', '6 d overdue')}
+                ${row('medium', 'Customer C', ['Amount threshold'], ['done', 'done', 'done', 'current', 'todo'], 'Awaiting decision', 'L2 team', '1 d')}
+                <p class="pf-mock__note">Illustration. Each row is one customer; the bar shows the stage of their highest-risk case.</p>
+            </div>`;
+    },
+
+    /** A miniature of the case page: illustrative, not live data. */
+    mockInvestigation() {
+        const item = (done, text) => `<li class="${done ? 'is-done' : ''}"><i class="fas ${done ? 'fa-circle-check' : 'fa-circle'}" aria-hidden="true"></i>${text}</li>`;
+        return `
+            <div class="pf-mock" aria-label="Illustration of the case page">
+                <div class="pf-m-case">
+                    <div class="pf-m-case__head"><b>Customer B</b><span class="pf-m-dot pf-m-dot--high"></span><small>Score 100 · PEP · Under investigation</small></div>
+                    <div class="pf-m-case__tabs"><b>Overview</b><span>Activity</span><span>Investigation</span><span>Customer file</span></div>
+                    <ul class="pf-m-check">
+                        ${item(true, 'Why this alert: R004 + R005, values and thresholds')}
+                        ${item(true, 'Activity vs 90-day baseline: 3× usual value')}
+                        ${item(true, '2 new counterparties, 1 in a high-risk country')}
+                        ${item(false, 'Request: source of funds, due in 5 days')}
+                        ${item(false, 'AI summary: Not checked')}
+                    </ul>
+                </div>
+                <p class="pf-mock__note">Illustration. Everything the investigator needs, on one page, with every action recorded.</p>
+            </div>`;
     },
 
     // ── Live figures on the diagram, where the data is at hand ──────────
