@@ -66,3 +66,9 @@ class Alert(Base, UUIDPrimaryKeyMixin):
     summary_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     summary_provider: Mapped[str | None] = mapped_column(String(30))
     ml_version: Mapped[str | None] = mapped_column(String(20))
+    # Deadlines (services/deadline_service.py); days are fixed when each clock starts
+    detected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))  # date of initial detection
+    sla_days: Mapped[int | None] = mapped_column()
+    sar_candidate_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))  # escalated as a potential SAR
+    sar_decision_days: Mapped[int | None] = mapped_column()
+    filing_due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

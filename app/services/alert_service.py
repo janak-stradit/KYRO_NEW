@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.models.alert import Alert
 from app.models.customer import Customer
+from app.services import deadline_service
 
 LOW_MAX = 30
 MEDIUM_MAX = 70
@@ -75,4 +76,5 @@ class AlertRouter:
         )
         db.add(alert)
         db.flush()
+        deadline_service.start_case_clock(db, alert, customer)
         return alert

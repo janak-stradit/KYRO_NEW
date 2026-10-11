@@ -4,17 +4,16 @@ routers/alerts.py — Analyst alert work queue: assign, resolve, escalate.
 from __future__ import annotations
 
 import uuid
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timezone
 
 import asyncio
 import json
 import jwt
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
-from sqlalchemy import and_, case, exists, func, or_
+from sqlalchemy import and_, case, exists, func
 from sqlalchemy.orm import Session
 
-from app.config import get_settings
 from app.database import get_db, SessionLocal
 from app.deps import PaginationParams, get_current_user, require_permission
 from app.models.alert import Alert as AlertModel
@@ -22,7 +21,7 @@ from app.models.customer import Customer
 from app.models.alert_request import AlertRequest
 from app.models.user import User
 from app.permissions import has_permission, is_read_only
-from app.visibility import alert_conditions, alert_visible, record_sar_view, visible_alert_or_404
+from app.visibility import alert_conditions, alert_visible, record_sar_view, sees_sar, visible_alert_or_404
 from app.schemas.alert import (
     OUTCOME_REASONS,
     RESOLUTION_OUTCOMES,
@@ -36,7 +35,7 @@ from app.schemas.alert import (
     ResolutionOptions,
 )
 from app.schemas.common import Page
-from app.services import customer_risk_service, feedback_service
+from app.services import customer_risk_service, deadline_service, feedback_service
 from app.services.audit_service import log_action
 from app.utils.security import decode_token
 
@@ -191,26 +190,15 @@ _UNRESOLVED = ("OPEN", "ASSIGNED", "IN_REVIEW", "ESCALATED")
 _RISK_BANDS = {"high": (80, 101), "medium": (60, 80), "low": (0, 60)}
 
 
-def _target_days() -> dict[str, int]:
-    settings = get_settings()
-    return {"high": settings.case_target_days_high, "medium": settings.case_target_days_medium, "low": settings.case_target_days_low}
-
-
-def _risk_band(score: int) -> str:
-    return "high" if score >= 80 else "medium" if score >= 60 else "low"
+def _target_days(db: Session | None = None) -> dict[str, int]:
+    """Case SLA days by risk band: the GLOBAL policy when a session is given, otherwise the configured defaults."""
+    sla = deadline_service.policy(db)["CASE_SLA_DAYS"] if db is not None else deadline_service.defaults()["CASE_SLA_DAYS"]
+    return {band.lower(): int(days) for band, days in sla.items()}
 
 
 def _overdue_condition():
-    """Unresolved alerts older than the target for their risk band (CASE_TARGET_DAYS_*)."""
-    now = datetime.now(timezone.utc)
-    targets = _target_days()
-    return and_(
-        AlertModel.status.in_(_UNRESOLVED),
-        or_(*(
-            and_(AlertModel.risk_score >= low, AlertModel.risk_score < high, AlertModel.created_at < now - timedelta(days=targets[band] + 1))
-            for band, (low, high) in _RISK_BANDS.items()
-        )),
-    )
+    """Unresolved alerts past their case SLA, or past the MLRO decision date of a potential SAR."""
+    return deadline_service.overdue_condition()
 
 
 def _awaiting_information_condition():
@@ -312,19 +300,17 @@ def alert_queue(
             func.sum(case((AlertRequest.due_date < date.today(), 1), else_=0)),
         ).filter(AlertRequest.alert_id.in_(alert_ids), AlertRequest.status == "OPEN").group_by(AlertRequest.alert_id)
     } if alert_ids else {}
-    targets = _target_days()
     now = datetime.now(timezone.utc)
 
     items = []
     for alert, customer in rows:
         item = AlertOut.model_validate(alert).model_dump(mode="json")
-        target = targets[_risk_band(alert.risk_score)]
         age_days = ((alert.resolved_at or now) - alert.created_at).days
         requests_open, requests_overdue = open_requests.get(alert.id, (0, 0))
         item.update(
             age_days=age_days,
-            target_days=target,
-            overdue=alert.status in _UNRESOLVED and age_days > target,
+            target_days=deadline_service.target_days(alert),
+            overdue=deadline_service.is_overdue(alert),
             open_requests=requests_open,
             requests_overdue=int(requests_overdue),
             customer_name=customer.full_name,
@@ -438,7 +424,7 @@ def alert_queue_summary(db: Session = Depends(get_db), user: User = Depends(get_
         "escalated": count(AlertModel.status == "ESCALATED"),
         "overdue": count(_overdue_condition()),
         "awaiting_information": count(_awaiting_information_condition()),
-        "target_days": _target_days(),
+        "target_days": _target_days(db),
         "oldest_created_at": unresolved.with_entities(func.min(AlertModel.created_at)).scalar(),
         "customers_with_alerts": unresolved.with_entities(func.count(func.distinct(AlertModel.customer_id))).scalar() or 0,
         "by_rule": [{"rule": r, "alerts": n} for r, n in sorted(rule_counts.items(), key=lambda kv: (-kv[1], kv[0]))],
@@ -488,9 +474,17 @@ def disposition_baseline(
 
 @router.get("/{alert_id}", response_model=AlertOut)
 def get_alert(alert_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> AlertModel:
-    alert = visible_alert_or_404(db, user, alert_id)
+    alert = visible_alert_or_404(db, user, alert_id, emergency_read=True)
     record_sar_view(db, user, alert)
     return alert
+
+
+@router.get("/{alert_id}/deadlines")
+def alert_deadlines(alert_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> dict:
+    """The case SLA and, for roles that see SAR work, the potential-SAR decision and filing deadlines."""
+    alert = visible_alert_or_404(db, user, alert_id)
+    customer = db.get(Customer, alert.customer_id)
+    return deadline_service.summary(db, alert, customer, include_sar=sees_sar(user))
 
 
 def _assignee_or_422(db: Session, user_id: uuid.UUID) -> User:
@@ -636,13 +630,16 @@ def escalate(
     alert.resolution_reasons = data.reasons or None
     if data.resolution_notes:
         alert.resolution_notes = data.resolution_notes
+    if data.potential_sar:
+        # Starts the shorter clock to the MLRO's decision and the filing deadline
+        deadline_service.mark_potential_sar(db, alert, db.get(Customer, alert.customer_id))
     log_action(
         db,
         entity_type="ALERT",
         entity_id=alert.id,
         action="UPDATE",
         performed_by=user.id,
-        new_values={"status": "ESCALATED", "resolution_reasons": data.reasons},
+        new_values={"status": "ESCALATED", "resolution_reasons": data.reasons, **({"potential_sar": True} if data.potential_sar else {})},
     )
     db.commit()
     db.refresh(alert)

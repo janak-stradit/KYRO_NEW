@@ -21,6 +21,7 @@ from app.config import get_settings
 from app.rate_limit import limiter
 from app.services import live_feed_service
 from app.routers import (
+    access_control,
     accounts,
     ai,
     alerts,
@@ -128,6 +129,7 @@ app.include_router(change_management.router)
 app.include_router(documents.router)
 app.include_router(feeds.router)
 app.include_router(users.router)
+app.include_router(access_control.router)
 app.include_router(case_file.router)
 try:
     app.include_router(importlib.import_module("app.routers.ml").router)

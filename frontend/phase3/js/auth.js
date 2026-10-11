@@ -325,7 +325,7 @@ const Auth = {
         'periodic-reviews': ['customers.view_all'],
         patterns: ['cases.view'],
         feeds: ['feeds.load'],
-        admin: ['users.manage', 'audit.read'],
+        admin: ['users.manage', 'audit.read', 'sar.grant_access'],
         case: ['cases.view']
     },
 

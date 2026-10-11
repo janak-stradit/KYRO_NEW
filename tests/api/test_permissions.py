@@ -17,7 +17,7 @@ _SAR = {
 }
 _NO_SAR = {"outcome": "TRUE_POSITIVE_NO_SAR", "reasons": ["EXPECTED_ACTIVITY_DOCUMENTED"], "resolution_notes": "Documented"}
 _NEW_USER = {
-    "username": "new.mlro", "email": "new.mlro@example.com", "full_name": "New MLRO", "password": "Str0ngPass!123", "role": "MLRO",
+    "username": "new.mlro", "email": "new.mlro@example.com", "full_name": "New MLRO", "password": "Str0ngPass!123", "role": "TEAM_LEAD",
 }
 
 
@@ -197,14 +197,14 @@ def test_admin_creates_a_user_who_can_sign_in(client, admin_headers, admin_user,
     created = client.post("/api/v1/users", json=_NEW_USER, headers=admin_headers)
     assert created.status_code == 201, created.text
     body = created.json()
-    assert body["role"] == "MLRO" and body["is_active"] is True and "password" not in body and "hashed_password" not in body
+    assert body["role"] == "TEAM_LEAD" and body["is_active"] is True and "password" not in body and "hashed_password" not in body
 
     login = client.post("/api/v1/auth/login", data={"username": "new.mlro", "password": "Str0ngPass!123"})
     assert login.status_code == 200
     assert any(u["username"] == "new.mlro" for u in client.get("/api/v1/users", headers=admin_headers).json())
 
     entry = db_session.query(AuditLog).filter_by(entity_type="USER", action="CREATE").one()
-    assert entry.performed_by == admin_user.id and entry.new_values == {"username": "new.mlro", "role": "MLRO"}
+    assert entry.performed_by == admin_user.id and entry.new_values == {"username": "new.mlro", "role": "TEAM_LEAD"}
 
 
 @pytest.mark.parametrize("change, status_code", [
@@ -263,15 +263,17 @@ def test_password_reset_replaces_the_old_password(client, admin_headers, analyst
 
 def test_the_last_administrator_cannot_be_removed(client, admin_headers, admin_user, db_session):
     url = f"/api/v1/users/{admin_user.id}"
-    for change in ({"role": "MLRO"}, {"is_active": False}):
+    # Including through a role change that would wait for the MLRO's approval
+    for change in ({"role": "TEAM_LEAD"}, {"role": "MLRO"}, {"is_active": False}):
         own = client.put(url, json=change, headers=admin_headers)
         assert own.status_code == 409 and "your own" in own.json()["detail"]
 
     second_headers, second = _headers(client, db_session, "ADMIN", username="admin2")
     # With two administrators, one may demote the other...
-    assert client.put(url, json={"role": "MLRO"}, headers=second_headers).status_code == 200
+    assert client.put(url, json={"role": "TEAM_LEAD"}, headers=second_headers).status_code == 200
     # ...and the one left cannot then be removed by anyone
-    assert client.put(f"/api/v1/users/{second.id}", json={"role": "MLRO"}, headers=second_headers).status_code == 409
+    for change in ({"role": "TEAM_LEAD"}, {"role": "MLRO"}):
+        assert client.put(f"/api/v1/users/{second.id}", json=change, headers=second_headers).status_code == 409
     assert client.put(f"/api/v1/users/{second.id}", json={"full_name": "Second Admin"}, headers=second_headers).status_code == 200
 
 

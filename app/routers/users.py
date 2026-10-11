@@ -7,15 +7,17 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.deps import PaginationParams, get_current_user, require_permission
+from app.models.access_control import RoleGrantRequest
 from app.models.audit import AuditLog
 from app.models.user import User
 from app.permissions import PERMISSIONS, ROLE_DEFINITIONS, ROLES
+from app.services import access_control_service
 from app.services.audit_service import log_action
 from app.utils.security import hash_password
 
@@ -47,6 +49,7 @@ class UserAdminOut(BaseModel):
     is_active: bool
     last_login: datetime | None = None
     created_at: datetime
+    pending_role: str | None = None  # a role change waiting for approval (roles that can see SAR cases)
 
 
 class UserAdminCreate(BaseModel):
@@ -81,6 +84,15 @@ def _user_or_404(db: Session, user_id: uuid.UUID) -> User:
     return user
 
 
+def _with_pending_role(db: Session, users: list[User]) -> list[UserAdminOut]:
+    ids = [u.id for u in users]
+    pending = dict(
+        db.query(RoleGrantRequest.user_id, RoleGrantRequest.to_role)
+        .filter(RoleGrantRequest.user_id.in_(ids), RoleGrantRequest.status == "REQUESTED")
+    ) if ids else {}
+    return [UserAdminOut.model_validate(u).model_copy(update={"pending_role": pending.get(u.id)}) for u in users]
+
+
 def _other_active_admins(db: Session, user: User) -> int:
     return db.query(User).filter(User.role == "ADMIN", User.is_active.is_(True), User.id != user.id).count()
 
@@ -105,8 +117,8 @@ def list_roles() -> dict[str, Any]:
 # ── Users ────────────────────────────────────────────────────────────────
 
 @router.get("/users", response_model=list[UserAdminOut])
-def list_users(db: Session = Depends(get_db), _: User = Depends(require_permission("users.manage"))) -> list[User]:
-    return db.query(User).order_by(User.is_active.desc(), User.full_name, User.username).all()
+def list_users(db: Session = Depends(get_db), _: User = Depends(require_permission("users.manage"))) -> list[UserAdminOut]:
+    return _with_pending_role(db, db.query(User).order_by(User.is_active.desc(), User.full_name, User.username).all())
 
 
 @router.post("/users", response_model=UserAdminOut, status_code=status.HTTP_201_CREATED)
@@ -117,6 +129,12 @@ def create_user(
         raise HTTPException(status.HTTP_409_CONFLICT, "That username is already taken")
     if db.query(User).filter(User.email.ilike(data.email)).first() is not None:
         raise HTTPException(status.HTTP_409_CONFLICT, "That email is already registered")
+    if access_control_service.needs_approval(db, data.role):
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"{ROLES[data.role].label} can see SAR cases, so it needs the MLRO's approval. "
+            "Create the user with another role first, then change the role.",
+        )
     user = User(
         username=data.username, email=data.email, full_name=data.full_name.strip(),
         hashed_password=hash_password(data.password), role=data.role, is_active=True,
@@ -134,9 +152,11 @@ def create_user(
 def update_user(
     user_id: uuid.UUID,
     data: UserAdminUpdate,
+    response: Response,
     db: Session = Depends(get_db),
     admin: User = Depends(require_permission("users.manage")),
-) -> User:
+) -> UserAdminOut:
+    """Update a user. A role that can see SAR cases is not applied here: it goes to the MLRO for approval (202)."""
     user = _user_or_404(db, user_id)
     changes = data.model_dump(exclude_none=True)
     loses_admin = user.role == "ADMIN" and user.is_active and (
@@ -149,6 +169,13 @@ def update_user(
         if _other_active_admins(db, user) == 0:
             raise HTTPException(status.HTTP_409_CONFLICT, "At least one active administrator is required")
 
+    if changes.get("role", user.role) != user.role and access_control_service.needs_approval(db, changes["role"]):
+        try:
+            access_control_service.request_role(db, admin, user, changes.pop("role"), None)
+        except access_control_service.AccessError as exc:
+            raise HTTPException(exc.status_code, str(exc)) from None
+        response.status_code = status.HTTP_202_ACCEPTED
+
     old = {key: getattr(user, key) for key in changes}
     for key, value in changes.items():
         setattr(user, key, value.strip() if key == "full_name" else value)
@@ -157,7 +184,7 @@ def update_user(
                    old_values=old, new_values=changes)
     db.commit()
     db.refresh(user)
-    return user
+    return _with_pending_role(db, [user])[0]
 
 
 @router.post("/users/{user_id}/reset-password", status_code=status.HTTP_204_NO_CONTENT)

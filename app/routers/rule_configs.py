@@ -18,8 +18,13 @@ from app.deps import get_current_user, require_permission
 from app.models.rule_config import RuleConfig
 from app.models.user import User
 from app.schemas.rule_config import RuleConfigOut, RuleConfigUpdate
-from app.services import rule_config_service
-from app.services.rules_engine import DEFAULTS
+from app.services import deadline_service, rule_config_service
+from app.services.rules_engine import DEFAULTS as RULE_DEFAULTS
+
+
+def all_defaults() -> dict[str, Any]:
+    """Every editable setting: detection rule thresholds and deadline policy."""
+    return {**RULE_DEFAULTS, **deadline_service.defaults()}
 
 router = APIRouter(prefix="/api/v1/rule-configs", tags=["rule-configs"], dependencies=[Depends(get_current_user)])
 
@@ -39,9 +44,14 @@ def _is_number(v: Any) -> bool:
 
 
 def _validate_value(key: str, value: Any) -> None:
-    if key not in DEFAULTS:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Unknown rule config key '{key}'. Valid keys: {sorted(DEFAULTS)}")
-    if key in _NUMERIC_KEYS:
+    defaults = all_defaults()
+    if key not in defaults:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Unknown rule config key '{key}'. Valid keys: {sorted(defaults)}")
+    if key not in RULE_DEFAULTS:
+        problem = deadline_service.validate(key, value)
+        if problem:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, problem)
+    elif key in _NUMERIC_KEYS:
         if not _is_number(value):
             raise HTTPException(status.HTTP_400_BAD_REQUEST, f"{key} must be a number")
     elif key == "HIGH_RISK_COUNTRIES":
@@ -64,7 +74,7 @@ def list_configs(jurisdiction: str | None = None, db: Session = Depends(get_db))
 def effective_config(jurisdiction: str | None = None, db: Session = Depends(get_db)) -> dict[str, Any]:
     """The merged config a transaction for this jurisdiction would actually
     be scored against right now (defaults <- GLOBAL <- jurisdiction)."""
-    return rule_config_service.get_effective_config(db, DEFAULTS, jurisdiction)
+    return rule_config_service.get_effective_config(db, all_defaults(), jurisdiction)
 
 
 @router.put("/{key}", response_model=RuleConfigOut)

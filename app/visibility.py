@@ -10,6 +10,9 @@ Two rules:
    that a SAR was filed are visible only to roles with "sar.view". Each time
    such a case is opened, a SAR / VIEW entry is written to the audit log.
 
+An approved, unexpired emergency access grant (models/access_control.py) lets
+one user read one case they could not otherwise see; each use is audited.
+
 A record a user may not see is reported as not found, so its existence is
 not revealed.
 """
@@ -29,6 +32,7 @@ from app.models.customer import Customer
 from app.models.document import Document
 from app.models.user import User
 from app.permissions import has_permission
+from app.services import access_control_service
 from app.services.audit_service import log_action
 
 SAR_OUTCOME = "SAR_FILED"
@@ -62,11 +66,17 @@ def alert_visible(user: User, alert: Alert) -> bool:
     return sees_sar(user) or alert.resolution_outcome != SAR_OUTCOME
 
 
-def visible_alert_or_404(db: Session, user: User, alert_id: uuid.UUID) -> Alert:
+def visible_alert_or_404(db: Session, user: User, alert_id: uuid.UUID, *, emergency_read: bool = False) -> Alert:
+    """The alert, if this user may see it. `emergency_read` (read-only endpoints only) also honours emergency access."""
     alert = db.get(Alert, alert_id)
-    if alert is None or not alert_visible(user, alert):
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Alert not found")
-    return alert
+    if alert is not None and alert_visible(user, alert):
+        return alert
+    if alert is not None and emergency_read:
+        grant = access_control_service.live_grant(db, user, alert.id)
+        if grant is not None:
+            access_control_service.record_use(db, user, grant)
+            return alert
+    raise HTTPException(status.HTTP_404_NOT_FOUND, "Alert not found")
 
 
 def record_sar_view(db: Session, user: User, alert: Alert) -> None:

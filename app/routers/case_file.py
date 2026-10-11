@@ -14,7 +14,6 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy.orm import Session
 
 from app.ai import AIDisabledError, AIGateway, AIProviderError
-from app.config import get_settings
 from app.database import get_db
 from app.deps import get_current_user, require_permission
 from app.models.account import Account
@@ -30,7 +29,7 @@ from app.models.obligation_mapping import ObligationMapping
 from app.models.transaction import Transaction
 from app.models.user import User
 from app.models.watchlist import WatchlistEntity, WatchlistSource
-from app.services import customer_risk_service, pattern_service, rule_config_service
+from app.services import customer_risk_service, deadline_service, pattern_service, rule_config_service
 from app.services.audit_service import log_action
 from app.services.control_catalogue import CONTROLS
 from app.visibility import (
@@ -270,9 +269,8 @@ def customer_activity(customer_id: uuid.UUID, db: Session = Depends(get_db), use
 
 def _case_clock(alert: Alert, audits: list[AuditLog]) -> dict[str, Any]:
     """Age of the case against the target for its risk band (config: CASE_TARGET_DAYS_*)."""
-    settings = get_settings()
     band = "high" if alert.risk_score >= 80 else "medium" if alert.risk_score >= 60 else "low"
-    target = {"high": settings.case_target_days_high, "medium": settings.case_target_days_medium, "low": settings.case_target_days_low}[band]
+    target = deadline_service.target_days(alert)
     end = alert.resolved_at or datetime.now(timezone.utc)
     age_days = max(0, (end - alert.created_at).days)
     assigned = [a.performed_at for a in audits if "assigned_to" in (a.new_values or {})]

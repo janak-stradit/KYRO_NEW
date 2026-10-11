@@ -19,8 +19,8 @@ from app.models.customer import Customer
 from app.models.transaction import Transaction
 from app.models.user import User
 from app.permissions import ROLES, has_permission
-from app.routers.alerts import _UNRESOLVED, _awaiting_information_condition, _overdue_condition, _risk_band, _target_days
-from app.services import feedback_service, pattern_service
+from app.routers.alerts import _UNRESOLVED, _awaiting_information_condition, _overdue_condition
+from app.services import deadline_service, feedback_service, pattern_service
 
 router = APIRouter(prefix="/api/v1/dashboard", tags=["dashboard"], dependencies=[Depends(get_current_user)])
 
@@ -324,7 +324,6 @@ def my_work(db: Session = Depends(get_db), user: User = Depends(get_current_user
     visible = alert_conditions(user)
     open_alerts = db.query(Alert).filter(Alert.status.in_(_UNRESOLVED), *visible)
     mine = open_alerts.filter(Alert.assigned_to == user.id)
-    targets = _target_days()
     now = datetime.now(timezone.utc)
 
     def rows(query, limit=MY_WORK_LIMIT) -> list[dict[str, Any]]:
@@ -337,7 +336,7 @@ def my_work(db: Session = Depends(get_db), user: User = Depends(get_current_user
             out.append({
                 "id": str(a.id), "customer_name": names.get(a.customer_id, "Unknown customer"), "risk_score": a.risk_score,
                 "status": a.status, "rules": list(rules or []), "age_days": age,
-                "overdue": age > targets[_risk_band(a.risk_score)], "created_at": a.created_at.isoformat(),
+                "overdue": deadline_service.is_overdue(a), "created_at": a.created_at.isoformat(),
             })
         return out
 

@@ -176,3 +176,29 @@ Migrations: `0021` audit types (done in S1; the emergency access table moves to 
   approval for granting roles that hold `sar.view`, plus an alert to the MLRO.
 - Legacy `COMPLIANCE_OFFICER` still holds every SAR and rule permission (decision 3 in §11). The demo `compliance` user uses it.
 
+
+## 14. Sprint 2 log (11 Oct 2026)
+
+**Done**
+- **Emergency access** (`app/services/access_control_service.py`, `/api/v1/access/emergency`, migration `0022`):
+  an administrator (`emergency.request`) asks for read-only access to one case with a reason and a duration
+  (max `EMERGENCY_ACCESS_MAX_MINUTES`, default 240). The MLRO (`sar.grant_access`) approves or rejects; the
+  requester cannot approve. Access ends at expiry or when revoked. Every read under a grant writes
+  `EMERGENCY_ACCESS` / `VIEW` to the audit log. Grants open the case for reading only (`emergency_read` on GET
+  endpoints); no action permission is added.
+- **Roles that can see SAR cases need approval:** creating a user with such a role is refused; changing to one
+  returns 202 and waits for the MLRO. Neither the requester nor the person receiving the role can approve. The
+  "last administrator" rule is checked before the request and again at approval. On a new installation with no
+  approver yet, the first such role is granted directly.
+- **Deadlines** (`app/services/deadline_service.py`): case SLA days stored on each alert at creation, so policy
+  changes do not move running clocks. Escalating with `potential_sar: true` starts the MLRO decision clock and the
+  filing deadline from the date of detection. `GET /alerts/{id}/deadlines` shows the case SLA to everyone and the
+  SAR clocks only to roles with `sar.view`. The queue's overdue filter now includes missed MLRO decision dates.
+- Deadline policy (`CASE_SLA_DAYS`, `SAR_DECISION_DAYS`, `SAR_FILING_DAYS`, `DEADLINE_WARNING_PERCENT`) is
+  edited through the existing rule-change maker-checker flow, globally or per jurisdiction.
+- Administration → **Access requests** tab for asking, approving and ending access.
+
+**Still for S3**
+- Notices at the warning threshold and on breach (needs a notification channel), deadline chips in the queue and
+  case page, and a "Potential SAR" option on the escalate dialog (the API supports it).
+- Values in `deadline_service.defaults()` are proposals; Compliance must confirm them (decision 4–5 in §11).

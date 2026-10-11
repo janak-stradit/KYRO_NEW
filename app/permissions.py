@@ -51,6 +51,8 @@ PERMISSIONS: dict[str, str] = {
     "ai.admin": "Run the AI connectivity check",
     "ml.train": "Retrain the ML models",
     "audit.read": "Read the audit log",
+    "emergency.request": "Ask for time-limited, read-only emergency access to one case",
+    "sar.grant_access": "Approve emergency access to a case, or a role that can see SAR cases",
     "users.manage": "Create users and assign roles",
 }
 
@@ -80,26 +82,30 @@ DECISION_PERMISSIONS = frozenset({
     "sar.view", "sar.approve", "alerts.assign", "alerts.escalate", "alerts.close_false_positive", "alerts.close", "alerts.qa",
     "rules.propose", "rules.approve", "rules.edit_direct", "obligations.manage", "mappings.manage", "changes.assess",
     "kyc.review", "screening.run", "customers.edit", "ubo.verify", "customers.assess_risk", "documents.manage",
+    "sar.grant_access",
 })
 
 ROLE_DEFINITIONS: tuple[RoleDefinition, ...] = (
     _role(
         "ADMIN", "Administrator", "Runs the system: users, data loads, models and the audit log.",
         ["Create users and assign roles", "Load data feeds, transactions, watchlists and regulations",
-         "Retrain models and check the AI connection", "Read the audit log"],
+         "Retrain models and check the AI connection", "Read the audit log",
+         "Ask for time-limited, read-only emergency access to a case, approved by the MLRO"],
         ["Cannot see SAR-filed cases or approve a SAR", "Cannot resolve, escalate, assign or quality-check cases",
-         "Cannot change customer records, documents or rules"],
+         "Cannot change customer records, documents or rules",
+         "Cannot give anyone a role that sees SAR cases without the MLRO's approval"],
         set(PERMISSIONS) - DECISION_PERMISSIONS,
     ),
     _role(
         "MLRO", "MLRO / AML Officer", "The accountable AML officer: final say on suspicion and on the programme's rules.",
         ["Approve SAR filings", "Close or return escalated cases", "Approve rule changes and confirm obligations",
-         "Assess regulatory changes", "Assign work and quality-check cases"],
+         "Assess regulatory changes", "Assign work and quality-check cases",
+         "Approve emergency access and roles that can see SAR cases"],
         ["Cannot approve a rule change they proposed", "Cannot manage users or system settings"],
         _VIEW | _ALL_RECORDS | {"sar.view", "sar.approve", "alerts.close", "alerts.close_false_positive", "alerts.escalate", "alerts.assign", "alerts.qa",
                  "alerts.baseline", "documents.manage", "kyc.review", "screening.run", "customers.edit", "ubo.verify", "customers.assess_risk",
                  "rules.propose", "rules.approve", "regulatory.ingest", "obligations.manage", "mappings.manage", "changes.assess",
-                 "audit.read", "ai.status"},
+                 "audit.read", "ai.status", "sar.grant_access"},
     ),
     _role(
         "TEAM_LEAD", "Team Lead", "Runs the alert queue day to day.",

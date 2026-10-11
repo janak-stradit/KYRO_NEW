@@ -137,6 +137,7 @@ class AlertResolve(BaseModel):
 class AlertEscalate(BaseModel):
     resolution_notes: str | None = None
     reasons: list[str] = Field(default_factory=list)
+    potential_sar: bool = False  # escalated as a potential SAR: starts the decision and filing clocks
 
     @field_validator("reasons")
     @classmethod

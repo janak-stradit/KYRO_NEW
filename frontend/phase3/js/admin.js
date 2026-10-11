@@ -27,6 +27,7 @@ const Admin = {
         const tabs = [];
         if (Auth.can('users.manage')) tabs.push(['users', 'Users']);
         tabs.push(['roles', 'Roles and permissions']);
+        if (Auth.can('emergency.request', 'sar.grant_access', 'users.manage')) tabs.push(['access', 'Access requests']);
         if (Auth.can('audit.read')) tabs.push(['audit', 'Audit log']);
         if (!tabs.some(([key]) => key === this.tab)) this.tab = tabs[0][0];
 
@@ -66,6 +67,7 @@ const Admin = {
     renderTab() {
         if (this.tab === 'users') return this.renderUsers();
         if (this.tab === 'audit') return this.renderAudit();
+        if (this.tab === 'access') return this.renderAccess();
         return this.renderRoles();
     },
 
@@ -111,7 +113,7 @@ const Admin = {
                 <td class="px-3 py-2"><strong>${escapeHtml(u.full_name || u.username)}</strong>${u.id === me ? ' <small class="text-muted">(you)</small>' : ''}</td>
                 <td class="px-3 py-2">${escapeHtml(u.username)}</td>
                 <td class="px-3 py-2">${escapeHtml(u.email)}</td>
-                <td class="px-3 py-2">${escapeHtml(this.roleLabel(u.role))}</td>
+                <td class="px-3 py-2">${escapeHtml(this.roleLabel(u.role))}${u.pending_role ? `<br><small class="text-muted">${escapeHtml(this.roleLabel(u.pending_role))} waiting for MLRO approval</small>` : ''}</td>
                 <td class="px-3 py-2"><span class="cd-chip cd-chip--${u.is_active ? 'low' : 'muted'}">${u.is_active ? 'Active' : 'Deactivated'}</span></td>
                 <td class="px-3 py-2 text-muted text-nowrap">${u.last_login ? escapeHtml(formatDateTime(u.last_login)) : 'Never'}</td>
                 <td class="px-3 py-2 text-end text-nowrap">
@@ -187,7 +189,8 @@ const Admin = {
             if (missing) return this.showError("#admUserError", isNew ? 'Fill in every field; the password needs at least 10 characters.' : 'Enter the full name.');
             await this.save("#admUserModal", "#admUserError",
                 () => (isNew ? API.post('/users', body) : API.put(`/users/${user.id}`, body)),
-                isNew ? 'User created.' : 'User updated.');
+                saved => (saved && saved.pending_role ? `Role change to ${this.roleLabel(saved.pending_role)} sent to the MLRO for approval.`
+                    : isNew ? 'User created.' : 'User updated.'));
         });
         new bootstrap.Modal(document.getElementById("admUserModal")).show();
     },
@@ -231,10 +234,12 @@ const Admin = {
         $(selector).text(message).removeClass("d-none");
     },
 
+    /** `successMessage` is text, or a function of the saved record that returns it. */
     async save(modalSelector, errorSelector, request, successMessage) {
         const $submit = $(`${modalSelector} button[type=submit]`).prop("disabled", true);
+        let saved;
         try {
-            await request();
+            saved = await request();
         } catch (xhr) {
             const detail = xhr && xhr.responseJSON && xhr.responseJSON.detail;
             const message = Array.isArray(detail) ? detail.map(d => String(d.msg || '').replace(/^Value error, /, '')).join(' ') : detail;
@@ -243,7 +248,7 @@ const Admin = {
             return;
         }
         closeModalSafely(document.querySelector(modalSelector));
-        showToast("success", successMessage);
+        showToast("success", typeof successMessage === "function" ? successMessage(saved) : successMessage);
         await this.loadUsers();
     },
 
@@ -285,6 +290,126 @@ const Admin = {
                 <ul class="adm-list mb-0">${legacy.map(r => `<li><strong>${escapeHtml(r.label)}</strong>: ${escapeHtml(r.responsibilities.join('; '))}</li>`).join('')}</ul>
             </section>` : ''}
         `);
+    },
+
+    // ── Access requests (emergency access, roles that can see SAR cases) ──
+    async renderAccess() {
+        const approver = Auth.can('sar.grant_access');
+        const requester = Auth.can('emergency.request');
+        const manager = Auth.can('users.manage');
+        $("#admBody").html(`
+            ${requester ? `
+            <section class="card kd-panel mb-3">
+                <h3 class="adm-section-title">Ask for emergency access</h3>
+                <p class="kx-note">Read-only access to one case you cannot otherwise open, for a limited time. The MLRO decides, and every use is recorded in the audit log.</p>
+                <form id="admEmergencyForm" class="row g-2 align-items-end" novalidate>
+                    <div class="col-md-4"><label class="kx-label" for="admEmCase">Case ID</label>
+                        <input type="text" class="form-control" id="admEmCase" required autocomplete="off"></div>
+                    <div class="col-md-5"><label class="kx-label" for="admEmReason">Reason</label>
+                        <input type="text" class="form-control" id="admEmReason" minlength="10" maxlength="2000" required></div>
+                    <div class="col-md-2"><label class="kx-label" for="admEmMinutes">Minutes</label>
+                        <input type="number" class="form-control" id="admEmMinutes" min="1" value="60" required></div>
+                    <div class="col-md-1"><button type="submit" class="btn btn-primary w-100">Ask</button></div>
+                </form>
+                <p class="adm-error d-none" id="admEmError" role="alert"></p>
+            </section>` : ''}
+            <section class="card border-0 rc-table-card mb-3">
+                <h3 class="adm-section-title px-3 pt-3">Emergency access</h3>
+                <div class="table-responsive"><table class="table mb-0">
+                    <thead><tr><th class="px-3">Person</th><th>Case</th><th>Reason</th><th>Status</th><th>Until</th><th class="text-end px-3"></th></tr></thead>
+                    <tbody id="admEmBody"><tr><td colspan="6" class="rc-empty">Loading…</td></tr></tbody>
+                </table></div>
+            </section>
+            ${approver || manager ? `
+            <section class="card border-0 rc-table-card">
+                <h3 class="adm-section-title px-3 pt-3">Roles that can see SAR cases</h3>
+                <div class="table-responsive"><table class="table mb-0">
+                    <thead><tr><th class="px-3">Person</th><th>Change</th><th>Asked by</th><th>Status</th><th class="text-end px-3"></th></tr></thead>
+                    <tbody id="admRoleReqBody"><tr><td colspan="5" class="rc-empty">Loading…</td></tr></tbody>
+                </table></div>
+            </section>` : ''}
+        `);
+
+        const detailOf = (xhr, fallback) => {
+            const detail = xhr && xhr.responseJSON && xhr.responseJSON.detail;
+            return typeof detail === 'string' ? detail : fallback;
+        };
+        $("#admEmergencyForm").on("submit", async (e) => {
+            e.preventDefault();
+            const body = { alert_id: $("#admEmCase").val().trim(), reason: $("#admEmReason").val().trim(), duration_minutes: Number($("#admEmMinutes").val()) };
+            if (!body.alert_id || body.reason.length < 10) return this.showError("#admEmError", 'Enter the case ID and a reason of at least 10 characters.');
+            try {
+                await API.post('/access/emergency', body);
+                showToast("success", "Request sent to the MLRO.");
+                this.renderAccess();
+            } catch (xhr) {
+                this.showError("#admEmError", detailOf(xhr, 'Check the case ID and try again.'));
+            }
+        });
+
+        const act = async (request, done) => {
+            try {
+                await request();
+                showToast("success", done);
+            } catch (xhr) {
+                showToast("error", detailOf(xhr, "Could not save. Try again."));
+            }
+            this.renderAccess();
+        };
+        const decide = (url, approve) => {
+            const notes = approve ? null : (window.prompt("Reason for rejecting (optional)") || null);
+            act(() => API.put(url, { decision: approve ? 'APPROVED' : 'REJECTED', notes }), approve ? 'Approved.' : 'Rejected.');
+        };
+        const statusChip = (status, live) => {
+            const tone = live ? 'high' : status === 'REQUESTED' ? 'medium' : 'muted';
+            return `<span class="cd-chip cd-chip--${tone}">${live ? 'Live' : escapeHtml(this.human(status))}</span>`;
+        };
+
+        try {
+            const grants = await API.get('/access/emergency');
+            $("#admEmBody").html(grants.map(g => `
+                <tr>
+                    <td class="px-3">${escapeHtml(g.user_name || '')}</td>
+                    <td><code>${escapeHtml(g.alert_id.slice(0, 8))}</code></td>
+                    <td>${escapeHtml(g.reason)}${g.decision_notes ? `<br><small class="text-muted">${escapeHtml(g.decision_notes)}</small>` : ''}</td>
+                    <td>${statusChip(g.status, g.live)}</td>
+                    <td class="text-nowrap">${g.live ? escapeHtml(formatDateTime(g.expires_at)) : `${g.duration_minutes} min`}</td>
+                    <td class="text-end px-3 text-nowrap">
+                        ${approver && g.status === 'REQUESTED' ? `
+                            <button type="button" class="btn btn-sm btn-primary adm-em-approve" data-id="${escapeHtml(g.id)}">Approve</button>
+                            <button type="button" class="btn btn-sm rc-actions__view adm-em-reject" data-id="${escapeHtml(g.id)}">Reject</button>` : ''}
+                        ${g.status === 'REQUESTED' || g.live ? `<button type="button" class="btn btn-sm rc-actions__view adm-em-revoke" data-id="${escapeHtml(g.id)}">${g.live ? 'End now' : 'Withdraw'}</button>` : ''}
+                    </td>
+                </tr>`).join('') || '<tr><td colspan="6" class="rc-empty">No emergency access requests.</td></tr>');
+            $(".adm-em-approve").on("click", e => decide(`/access/emergency/${$(e.currentTarget).data("id")}/decision`, true));
+            $(".adm-em-reject").on("click", e => decide(`/access/emergency/${$(e.currentTarget).data("id")}/decision`, false));
+            $(".adm-em-revoke").on("click", e => act(() => API.put(`/access/emergency/${$(e.currentTarget).data("id")}/revoke`), 'Access ended.'));
+        } catch (error) {
+            $("#admEmBody").html('<tr><td colspan="6" class="rc-empty">Could not load emergency access requests.</td></tr>');
+        }
+
+        if (!approver && !manager) return;
+        try {
+            const requests = await API.get('/access/role-requests');
+            $("#admRoleReqBody").html(requests.map(r => `
+                <tr>
+                    <td class="px-3">${escapeHtml(r.user_name || '')}</td>
+                    <td>${escapeHtml(this.roleLabel(r.from_role))} → <strong>${escapeHtml(r.to_role_label)}</strong></td>
+                    <td>${escapeHtml(r.requested_by_name || '')}</td>
+                    <td>${statusChip(r.status, false)}</td>
+                    <td class="text-end px-3 text-nowrap">
+                        ${r.status === 'REQUESTED' && approver ? `
+                            <button type="button" class="btn btn-sm btn-primary adm-role-approve" data-id="${escapeHtml(r.id)}">Approve</button>
+                            <button type="button" class="btn btn-sm rc-actions__view adm-role-reject" data-id="${escapeHtml(r.id)}">Reject</button>` : ''}
+                        ${r.status === 'REQUESTED' && manager ? `<button type="button" class="btn btn-sm rc-actions__view adm-role-cancel" data-id="${escapeHtml(r.id)}">Cancel</button>` : ''}
+                    </td>
+                </tr>`).join('') || '<tr><td colspan="5" class="rc-empty">No role changes waiting.</td></tr>');
+            $(".adm-role-approve").on("click", e => decide(`/access/role-requests/${$(e.currentTarget).data("id")}/decision`, true));
+            $(".adm-role-reject").on("click", e => decide(`/access/role-requests/${$(e.currentTarget).data("id")}/decision`, false));
+            $(".adm-role-cancel").on("click", e => act(() => API.put(`/access/role-requests/${$(e.currentTarget).data("id")}/cancel`), 'Request cancelled.'));
+        } catch (error) {
+            $("#admRoleReqBody").html('<tr><td colspan="5" class="rc-empty">Could not load role changes.</td></tr>');
+        }
     },
 
     // ── Audit log ────────────────────────────────────────────────────────

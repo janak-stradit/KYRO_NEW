@@ -86,6 +86,8 @@ class Settings(BaseSettings):
     case_target_days_high: int = 5
     case_target_days_medium: int = 10
     case_target_days_low: int = 20
+    # Longest emergency access an approver may grant to one case
+    emergency_access_max_minutes: int = 240
 
     # Where uploaded KYC documents are kept (local disk in development; use
     # encrypted object storage in production). Never inside the repository tree.

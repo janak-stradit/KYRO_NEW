@@ -32,6 +32,8 @@ Generated from `app/permissions.py` by `scripts/role_matrix.py`. Do not edit by 
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
 | `sar.view` — See SAR-filed cases, their documents and the fact a SAR was filed |  | ✔ |  |  |  |  |  |  | ✔ |  | ✔ |  |
 | `sar.approve` — Approve a SAR filing |  | ✔ |  |  |  |  |  |  |  |  | ✔ |  |
+| `sar.grant_access` — Approve emergency access to a case, or a role that can see SAR cases |  | ✔ |  |  |  |  |  |  |  |  | ✔ |  |
+| `emergency.request` — Ask for time-limited, read-only emergency access to one case | ✔ |  |  |  |  |  |  |  |  |  | ✔ |  |
 
 ### Customers and KYC
 
@@ -81,11 +83,13 @@ Runs the system: users, data loads, models and the audit log.
 - Load data feeds, transactions, watchlists and regulations
 - Retrain models and check the AI connection
 - Read the audit log
+- Ask for time-limited, read-only emergency access to a case, approved by the MLRO
 
 **Cannot:**
 - Cannot see SAR-filed cases or approve a SAR
 - Cannot resolve, escalate, assign or quality-check cases
 - Cannot change customer records, documents or rules
+- Cannot give anyone a role that sees SAR cases without the MLRO's approval
 
 ### MLRO / AML Officer (`MLRO`)
 
@@ -97,6 +101,7 @@ The accountable AML officer: final say on suspicion and on the programme's rules
 - Approve rule changes and confirm obligations
 - Assess regulatory changes
 - Assign work and quality-check cases
+- Approve emergency access and roles that can see SAR cases
 
 **Cannot:**
 - Cannot approve a rule change they proposed

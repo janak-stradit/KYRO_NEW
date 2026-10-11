@@ -300,6 +300,7 @@ a, .kd-link, .rq-more, .cp-back, .doc-field__page, .kc-link { color: #B54708; }
 .adm-check { display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--kt-ink); }
 .adm-check .form-check-input { margin: 0; }
 .adm-error { margin: 12px 0 0; padding: 8px 12px; border-radius: 8px; background: #FEF3F2; color: #B42318; font-size: 13px; }
+.adm-section-title { margin: 0 0 6px; font-size: 15px; font-weight: 700; color: var(--kt-ink); }
 .adm-matrix th { font-size: 11.5px; white-space: nowrap; }
 .adm-matrix td, .adm-matrix th { padding-top: 6px !important; padding-bottom: 6px !important; }
 .adm-matrix td:first-child, .adm-matrix th:first-child { position: sticky; left: 0; background: #fff; min-width: 280px; }
