@@ -898,6 +898,25 @@ const CaseDetail = {
         await this.loadNarratives(alertId);
     },
 
+    /** Why this alert: the rules that fired with the values and thresholds used (rules engine R1 provenance). */
+    whyBlock(alert) {
+        const p = alert.parameters;
+        if (!p || !p.rules) return '';
+        const money = (v, c) => v == null ? '—' : `${Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 })} ${escapeHtml(c || '')}`;
+        const base = p.base_currency || '';
+        const fx = p.fx_missing ? '<span class="cd-chip cd-chip--medium">No exchange rate: compared in the original currency</span>'
+            : p.fx_stale ? '<span class="cd-chip cd-chip--medium">Exchange rate more than 5 days old</span>' : '';
+        const merged = (p.consolidated || []).length;
+        return `
+            <section class="card kd-panel mb-4">
+                <header class="kd-panel__head"><div><h2>Why this alert</h2>
+                    <p class="aml-subtitle">Rule version <code>${escapeHtml(alert.rule_version || '—')}</code>${merged ? ` &middot; ${merged + 1} transactions merged into this alert today` : ''}</p></div></header>
+                <ul class="adm-list mb-2">${p.rules.map(r => `<li><strong>${escapeHtml(r.rule)}</strong> ${escapeHtml(r.description)} <small class="text-muted">(${escapeHtml(this.human(r.severity))})</small></li>`).join('')}</ul>
+                <p class="kx-note mb-1">Amount ${money(p.amount, p.currency)}${p.amount_base != null ? ` &middot; ${money(p.amount_base, base)} in the base currency` : ''} ${fx}</p>
+                <p class="kx-note mb-0">Thresholds: amount ${money(p.thresholds.AMOUNT_THRESHOLD)} &middot; alert at score ${escapeHtml(String(p.thresholds.ALERT_THRESHOLD))} &middot; EDD at ${escapeHtml(String(p.thresholds.EDD_THRESHOLD))}${p.options && p.options.noise_reduction ? ' &middot; weak indicators counted only with a substantive rule' : ''}</p>
+            </section>`;
+    },
+
     /** Quality check on a resolved case: the recorded result, and the form for those who may check it. */
     qaBlock(alert) {
         if (alert.status !== 'RESOLVED') return '';
@@ -1021,6 +1040,7 @@ const CaseDetail = {
                         <button type="button" class="cp-glance__tile" data-tab="investigation"><i class="fas fa-envelope" aria-hidden="true"></i><span>Open requests</span><strong id="cpGlanceRequests">—</strong><small id="cpGlanceRequestsNote">&nbsp;</small></button>
                         <button type="button" class="cp-glance__tile" data-tab="file"><i class="fas fa-user-shield" aria-hidden="true"></i><span>Screening matches</span><strong id="cpGlanceMatches">—</strong><small id="cpGlanceMatchesNote">&nbsp;</small></button>
                     </div>
+                    ${this.whyBlock(alert)}
                     <section class="card kd-panel cp-summary mb-4" aria-live="polite">
                         <header class="kd-panel__head">
                             <div><h2><i class="fas fa-wand-magic-sparkles cp-summary__icon" aria-hidden="true"></i>Case summary</h2><p class="aml-subtitle" id="cpSummaryMeta">Written from the facts on this case</p></div>

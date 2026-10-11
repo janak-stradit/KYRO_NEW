@@ -482,6 +482,11 @@ def decide_screening(
     if data.decision == "CONFIRMED":
         row.match_status = "CONFIRMED_MATCH"
         if row.screening_type == "SANCTIONS":
+            if not customer.sanctions_flag:
+                from app.services.rules_engine import open_sanctions_case  # imported here to avoid an import cycle
+
+                customer.sanctions_flag = True
+                open_sanctions_case(db, customer, f"Sanctions match confirmed by an analyst (screening {row.id})")
             customer.sanctions_flag = True
         elif row.screening_type == "PEP":
             customer.pep_flag = True

@@ -7,7 +7,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Numeric, String, Text, func
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, SCHEMA, UUIDPrimaryKeyMixin
@@ -70,6 +70,10 @@ class Alert(Base, UUIDPrimaryKeyMixin):
     summary_attested_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     summary_attested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     ml_version: Mapped[str | None] = mapped_column(String(20))
+    # Provenance: which rule configuration produced the alert, with what values, from which transactions
+    rule_version: Mapped[str | None] = mapped_column(String(64))
+    parameters: Mapped[dict | None] = mapped_column(JSONB)
+    evidence_transaction_ids: Mapped[list[uuid.UUID] | None] = mapped_column(ARRAY(UUID(as_uuid=True)))
     # Deadlines (services/deadline_service.py); days are fixed when each clock starts
     detected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))  # date of initial detection
     sla_days: Mapped[int | None] = mapped_column()

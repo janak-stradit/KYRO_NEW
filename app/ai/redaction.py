@@ -25,9 +25,10 @@ from typing import Any
 # half-consumed by the generic number pattern.
 _PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("ID", re.compile(r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b")),
-    # "account no. 1234567", "passport: X1234567": the label says what the value is
-    ("ACCOUNT", re.compile(r"(?i)\b(?:account|acct|a/c)(?:\s+(?:number|no\.?)|\s*#)?[:\s]\s*([A-Z0-9][A-Z0-9-]{3,})\b")),
-    ("ID", re.compile(r"(?i)\b(?:passport|national id|id number|ssn|tax id|tin|nino|registration|company no\.?)(?:\s+(?:number|no\.?))?[:\s#]\s*([A-Z0-9][A-Z0-9-]{4,})\b")),
+    # "account no. 1234567", "passport: X1234567": the label says what the value is. A value has a digit, so a
+    # word after the label ("Passport number", "passport\nFields") is never taken for one, even on a second pass
+    ("ACCOUNT", re.compile(r"(?i)\b(?:account|acct|a/c)(?:\s+(?:number|no\.?)|\s*#)?[:\s]\s*((?=[A-Z0-9-]*\d)[A-Z0-9][A-Z0-9-]{3,})\b")),
+    ("ID", re.compile(r"(?i)\b(?:passport|national id|id number|ssn|tax id|tin|nino|registration|company no\.?)(?:\s+(?:number|no\.?))?[:\s#]\s*((?=[A-Z0-9-]*\d)[A-Z0-9][A-Z0-9-]{4,})\b")),
     ("ADDRESS", re.compile(
         r"(?i)\b\d{1,5}[A-Z]?(?:\s+[A-Z][A-Za-z.'-]*){1,4}\s+"
         r"(?:street|st|road|rd|avenue|ave|lane|ln|drive|dr|boulevard|blvd|way|court|ct|place|pl|square|sq|close|terrace|highway|hwy)\b\.?"

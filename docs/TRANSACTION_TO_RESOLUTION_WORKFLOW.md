@@ -96,6 +96,12 @@ transaction, runs **step 2** and **step 3**, and writes `TRANSACTION / CREATE` t
 - **Recommended action:** any CRITICAL rule → `SAR`; score ≥ `EDD_THRESHOLD` (75) →
   `ENHANCED_DUE_DILIGENCE`; score ≥ `ALERT_THRESHOLD` (50) → `REVIEW`; otherwise no alert.
 - Each fired rule is kept as a `transaction_risk_flags` row; the transaction keeps its score.
+- **Rules engine R1** (switches, all off until Compliance has reviewed a replay with `POST /api/v1/rules/replay`):
+  `RULES_BASE_CURRENCY_ENABLED` compares R001 in the base currency (ECB daily rates, `fx_service.py`);
+  `RULES_NOISE_REDUCTION_ENABLED` stops R005/R006 on every payment (a newly confirmed sanctioned customer gets one
+  case instead), counts R007–R009 only alongside a substantive rule, and makes R010 look back only;
+  `RULES_CONSOLIDATE_DAILY` keeps one open rules alert per customer per day. Every alert records its rule version,
+  the values used and its evidence transactions ("Why this alert" on the case page).
 - Thresholds are per jurisdiction (customer's residency, then country, then GLOBAL) and change
   only through **maker-checker**: a Rules Owner proposes with a backtest, the MLRO approves
   (`/api/v1/changes/rules`).
