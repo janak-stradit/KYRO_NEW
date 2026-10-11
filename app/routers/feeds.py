@@ -1,7 +1,7 @@
 """
 routers/feeds.py — Data-feed field mapping (Phase 11.4 step 4): preview a
 client CSV, save the column mapping, check the file and load it. Also starts
-and stops the live synthetic feed.
+and stops the live synthetic feed, and generates sample CSV files.
 """
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ import uuid
 from datetime import datetime
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
@@ -18,7 +18,7 @@ from app.database import get_db
 from app.deps import get_current_user, require_permission
 from app.models.feed import FeedMapping, FeedRun
 from app.models.user import User
-from app.services import feed_service, live_feed_service
+from app.services import feed_service, live_feed_service, sample_feed_service
 from app.services.feed_service import FeedError
 from app.services.live_feed_service import LiveFeedError
 
@@ -158,6 +158,18 @@ async def run_feed(
 @router.get("/runs", response_model=list[RunOut])
 def list_runs(db: Session = Depends(get_db)) -> list[FeedRun]:
     return db.query(FeedRun).order_by(FeedRun.run_at.desc()).limit(50).all()
+
+
+@router.get("/sample/{target}")
+def sample_file(
+    target: Target,
+    seed: int = Query(ge=0, le=999_999, description="Use the same seed and size for all three files so they match"),
+    customers: int = Query(250, ge=1, le=sample_feed_service.MAX_CUSTOMERS),
+    user: User = Depends(require_permission("feeds.load")),
+) -> Response:
+    """A synthetic CSV of customers, accounts or transactions to try the feed with."""
+    filename, data = sample_feed_service.generate(target, seed=seed, customers=customers)
+    return Response(data, media_type="text/csv", headers={"Content-Disposition": f'attachment; filename="{filename}"'})
 
 
 @router.get("/live", response_model=LiveOut)

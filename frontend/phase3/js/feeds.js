@@ -16,6 +16,8 @@ const Feeds = {
     lastCheck: null,
     saved: [],
     RATES: { 6: 'One every 10 seconds', 12: 'One every 5 seconds', 30: 'One every 2 seconds', 60: 'One every second' },
+    SAMPLE_SIZES: { 250: '250 customers, about 5,000 transactions', 1000: '1,000 customers, about 20,000 transactions', 2000: '2,000 customers, 20,000 transactions' },
+    sampleSeed: null,
     live: null,
     liveTimer: null,
 
@@ -38,6 +40,21 @@ const Feeds = {
                 </div>
                 ${this.canUse() ? `
                 <section class="card kd-panel mb-4" id="liveFeed"></section>
+                <section class="card kd-panel mb-4">
+                    <header class="kd-panel__head">
+                        <div><h2>Sample files</h2><p class="aml-subtitle">Made-up customers, accounts and transactions as three CSV files that belong together, to load below. Load them in this order.</p></div>
+                        <div class="feed-live__controls">
+                            <select class="form-select" id="sampleSize" aria-label="How much data the files hold">
+                                ${Object.entries(this.SAMPLE_SIZES).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}
+                            </select>
+                            <button type="button" class="btn btn-outline-primary" id="sampleNew" title="Generate a different set of records">New set</button>
+                        </div>
+                    </header>
+                    <div class="feed-sample-files">
+                        ${Object.entries(this.TARGETS).map(([k, l], i) => `<button type="button" class="btn btn-outline-primary feed-sample-file" data-target="${k}"><i class="fas fa-download me-2"></i>${i + 1}. ${l}</button>`).join('')}
+                        <small class="text-muted" id="sampleSet"></small>
+                    </div>
+                </section>
                 <section class="card kd-panel mb-4">
                     <header class="kd-panel__head"><div><h2>1. Choose a file</h2><p class="aml-subtitle">CSV with a header row, up to 5 MB. Load customers first, then accounts, then transactions.</p></div></header>
                     <form class="feed-pick" id="feedPickForm">
@@ -68,7 +85,36 @@ const Feeds = {
         `);
         $("#feedPickForm").on("submit", (e) => { e.preventDefault(); this.readFile(); });
         $("#feedTarget").on("change", () => this.renderSavedOptions());
+        $(".feed-sample-file").on("click", (e) => this.downloadSample($(e.currentTarget)));
+        $("#sampleNew").on("click", () => this.newSampleSet());
+        this.newSampleSet();
         await Promise.all([this.loadSaved(), this.loadRuns(), this.canUse() ? this.loadLive() : null]);
+    },
+
+    // ── Sample files ─────────────────────────────────────────────────────
+
+    /** The three files match only when they share a seed, so it changes only on request. */
+    newSampleSet() {
+        this.sampleSeed = Math.floor(Math.random() * 1000000);
+        $("#sampleSet").text(`Set ${String(this.sampleSeed).padStart(6, '0')}`);
+    },
+
+    async downloadSample($button) {
+        $button.prop("disabled", true);
+        try {
+            const query = `seed=${this.sampleSeed}&customers=${$("#sampleSize").val()}`;
+            const response = await fetch(`${API.baseUrl}/feeds/sample/${$button.data("target")}?${query}`, { headers: { Authorization: API.getHeaders().Authorization } });
+            if (!response.ok) throw new Error('The file could not be generated.');
+            const name = (/filename="([^"]+)"/.exec(response.headers.get('Content-Disposition') || '') || [])[1] || 'sample.csv';
+            const link = Object.assign(document.createElement('a'), { href: URL.createObjectURL(await response.blob()), download: name });
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(link.href);
+        } catch (error) {
+            showToast('error', error.message);
+        }
+        $button.prop("disabled", false);
     },
 
     // ── Live synthetic feed ──────────────────────────────────────────────

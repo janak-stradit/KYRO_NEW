@@ -1339,6 +1339,8 @@ td.rc-empty strong { display: block; color: var(--kt-ink); font-size: 15px; marg
 .feed-live__dot { display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; background: currentColor; animation: feed-live-pulse 1.4s ease-in-out infinite; }
 @keyframes feed-live-pulse { 50% { opacity: 0.25; } }
 @media (prefers-reduced-motion: reduce) { .feed-live__dot { animation: none; } }
+.feed-sample-files { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.feed-sample-files small { margin-left: auto; font-variant-numeric: tabular-nums; }
 .feed-live__recent { max-height: 320px; overflow-y: auto; border: 1px solid var(--kt-border-soft); border-radius: 8px; }
 
 #mainContent td.bp-evidence { max-width: 420px; white-space: normal; color: var(--kt-ink); }
