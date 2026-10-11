@@ -48,6 +48,7 @@ class TrainRequest(BaseModel):
     candidate_traffic_pct: float = 10.0
     limit: int | None = None
     run_async: bool = False
+    allow_label_change: bool = False  # the rules engine's scoring changed since the active models were trained
 
 
 class TrainResponse(BaseModel):

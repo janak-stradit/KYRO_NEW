@@ -14,7 +14,7 @@ celery_app = Celery(
     "kyro_api",
     broker=settings.redis_url,
     backend=settings.redis_url,
-    include=["app.tasks.etl_tasks", "app.tasks.ml_tasks", "app.tasks.watchlist_tasks", "app.tasks.regulatory_tasks"],
+    include=["app.tasks.etl_tasks", "app.tasks.ml_tasks", "app.tasks.watchlist_tasks", "app.tasks.regulatory_tasks", "app.tasks.fx_tasks"],
 )
 
 celery_app.conf.update(
@@ -42,6 +42,10 @@ celery_app.conf.beat_schedule = {
     "sync-federal-register-daily": {
         "task": "app.tasks.regulatory_tasks.sync_federal_register_task",
         "schedule": crontab(hour=4, minute=30),
+    },
+    "refresh-fx-rates-daily": {
+        "task": "app.tasks.fx_tasks.refresh_fx_rates_task",
+        "schedule": crontab(hour=16, minute=30),  # after the ECB publishes (around 14:00-15:00 UTC)
     },
     "activate-due-rule-changes-daily": {
         "task": "app.tasks.regulatory_tasks.activate_due_rule_changes_task",

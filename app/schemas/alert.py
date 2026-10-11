@@ -94,6 +94,10 @@ class AlertOut(BaseModel):
     summary_attested_by: uuid.UUID | None = None
     summary_attested_at: datetime | None = None
     ml_version: str | None = None
+    # Provenance (rules engine R1): the configuration, values and transactions behind the alert
+    rule_version: str | None = None
+    parameters: dict[str, Any] | None = None
+    evidence_transaction_ids: list[uuid.UUID] | None = None
     # Set by services/sar_confidentiality.py for the user asking
     compliance_status: Literal["IN_PROGRESS", "WITH_MLRO", "CLOSED"] | None = None
     restricted: bool = False  # SAR content withheld from this user

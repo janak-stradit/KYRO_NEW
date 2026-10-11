@@ -12,9 +12,11 @@ from app.tasks.celery_app import celery_app
 
 @celery_app.task(name="app.tasks.ml_tasks.run_training_pipeline_task")
 def run_training_pipeline_task(
-    as_candidate: bool = False, candidate_traffic_pct: float = 10.0, limit: int | None = None
+    as_candidate: bool = False, candidate_traffic_pct: float = 10.0, limit: int | None = None, allow_label_change: bool = False,
 ) -> dict:
-    return run_training_pipeline(as_candidate=as_candidate, candidate_traffic_pct=candidate_traffic_pct, limit=limit)
+    return run_training_pipeline(
+        as_candidate=as_candidate, candidate_traffic_pct=candidate_traffic_pct, limit=limit, allow_label_change=allow_label_change,
+    )
 
 
 @celery_app.task(name="app.tasks.ml_tasks.check_retraining_task")

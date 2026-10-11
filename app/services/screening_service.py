@@ -293,6 +293,7 @@ def screen_customer(db: Session, customer: Customer, *, triggered_by: str = "SYS
     potential-match floor; always stamps last_screened_at so screening
     coverage/staleness can be reported on regardless of outcome."""
     customer.last_screened_at = datetime.now(timezone.utc)
+    was_flagged = customer.sanctions_flag
 
     rules = screening_policy.policy(db, customer)
     identifiers = subject_identifiers(customer.customer_metadata)
@@ -320,6 +321,10 @@ def screen_customer(db: Session, customer: Customer, *, triggered_by: str = "SYS
             customer.sanctions_flag = True
 
     db.flush()
+    if customer.sanctions_flag and not was_flagged:
+        from app.services.rules_engine import open_sanctions_case  # imported here to avoid an import cycle
+
+        open_sanctions_case(db, customer, f"Confirmed watchlist match on {results[0].matched_name}")
     return created
 
 
@@ -334,6 +339,7 @@ def screen_beneficial_owner(
     owner.last_screened_at = now
 
     customer = db.get(Customer, owner.customer_id)
+    was_flagged = bool(customer and customer.sanctions_flag)
     rules = screening_policy.policy(db, customer)
     identifiers = subject_identifiers(None, (owner.identification_type, owner.identification_number))
     results = _matches_for(db, owner.full_name, owner.date_of_birth, rules, identifiers)
@@ -363,6 +369,10 @@ def screen_beneficial_owner(
                 customer.sanctions_flag = True
 
     db.flush()
+    if customer is not None and customer.sanctions_flag and not was_flagged:
+        from app.services.rules_engine import open_sanctions_case  # imported here to avoid an import cycle
+
+        open_sanctions_case(db, customer, f"Beneficial owner {owner.full_name} confirmed on a sanctions list")
     return created
 
 

@@ -264,3 +264,29 @@ all segments. Retire the legacy rule it replaces only after replay shows no lost
 - Feature flags documented; default settings agreed with Compliance.
 - Role matrix and workflow README (`docs/TRANSACTION_TO_RESOLUTION_WORKFLOW.md`) updated.
 - Demo on synthetic data walked through with Compliance.
+
+---
+
+## Progress log
+
+### R1 — implemented on `feature/rules-r1-stabilise` (11 Oct 2026)
+
+| Task | Status | Where |
+|---|---|---|
+| 1.1 FX rates and base currency | Done | `models/fx_rate.py`, `services/fx_service.py` (ECB daily rates, stored per base currency), `tasks/fx_tasks.py` (16:30 UTC), `GET /api/v1/rules/fx`, `POST /api/v1/rules/fx/refresh`; settings `BASE_CURRENCY`, `FX_RATES_URL` |
+| 1.2 `amount_base`, `fx_rate` | Done | migration `0027`; filled on ingestion; `fx_service.backfill_amount_base` (also run after each rate load) |
+| 1.3 No per-payment PEP/sanctions | Done, switch `RULES_NOISE_REDUCTION_ENABLED` | R005/R006 skipped per payment; `rules_engine.open_sanctions_case` opens one case when a customer is newly confirmed (customer screening, owner screening, analyst confirmation) |
+| 1.4 Weak indicators need a substantive rule | Done, same switch | `WEAK_RULES` = R007, R008, R009 |
+| 1.5 R010 looks back only | Done, same switch | |
+| 1.6 Alert provenance | Done, always on | `alerts.rule_version`, `parameters`, `evidence_transaction_ids`; "Why this alert" panel on the case page |
+| 1.7 Daily consolidation | Done, switch `RULES_CONSOLIDATE_DAILY` | `rules_engine._consolidate`; audit entry per merged transaction |
+| 1.8 ML label freeze | Done | `trainer.label_definition()` stored with each model; `pipeline.LabelDefinitionChanged` unless `allow_label_change`; the automatic retrain reports `LABEL_CHANGE_NEEDS_APPROVAL` |
+| 1.9 Replay | Done | `services/rules_replay.py`, `POST /api/v1/rules/replay` (`rules.propose`): current vs proposed switches, per-rule hits, possible lost true positives; writes nothing |
+
+**Switch-on order (unchanged from the plan):** load rates and backfill → replay with `base_currency` →
+`RULES_BASE_CURRENCY_ENABLED=true` → replay with `noise_reduction` → Compliance reviews the lost-true-positive list →
+`RULES_NOISE_REDUCTION_ENABLED=true` → `RULES_CONSOLIDATE_DAILY=true`. Retrain ML with `allow_label_change` only after
+the scoring switches are settled.
+
+**Known limits:** replay links pre-R1 alerts to transactions by customer and a one-day window (alerts had no evidence
+IDs before); there is no screen yet for exchange rates or replay (API only).

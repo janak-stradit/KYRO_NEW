@@ -11,6 +11,11 @@ dataset yet, so:
     alert would have been opened), else 0.
 Once real analyst feedback accumulates (Alert.is_false_positive), the
 retraining service should swap these for actual outcome labels.
+
+Because both labels come from the rules engine's score, a change to how the
+engine scores (RuleOptions) changes what the models learn. label_definition()
+is stored with every trained model; pipeline.py refuses a retrain whose label
+definition differs from the active model's unless that change is approved.
 """
 from __future__ import annotations
 
@@ -28,9 +33,15 @@ from app.ml.models.isolation_detector import UnsupervisedAnomalyDetector
 from app.ml.models.risk_scorer import RiskScorerModel
 from app.models.customer import Customer
 from app.models.transaction import Transaction
-from app.services.rules_engine import ALERT_THRESHOLD
+from app.services.rules_engine import ALERT_THRESHOLD, RuleOptions
 
 MIN_TRAINING_ROWS = 50
+
+
+def label_definition(options: RuleOptions | None = None) -> str:
+    """What the training labels mean: the rules engine's scoring (today's switches by default) and the anomaly cut-off."""
+    options = options or RuleOptions.from_settings()
+    return f"risk_score from rules engine [{options.signature()}]; anomaly = risk_score >= {ALERT_THRESHOLD}"
 
 
 @dataclass
@@ -96,6 +107,7 @@ def train_all(db: Session, limit: int | None = None) -> TrainingResult:
         "anomaly_precision": float(precision_score(y_anom_test, anomaly_pred, zero_division=0)),
         "anomaly_recall": float(recall_score(y_anom_test, anomaly_pred, zero_division=0)),
         "anomaly_positive_rate": float(np.mean(y_anomaly)) if len(y_anomaly) else 0.0,
+        "label_definition": label_definition(),
     }
 
     return TrainingResult(

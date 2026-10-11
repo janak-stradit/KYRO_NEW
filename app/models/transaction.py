@@ -36,6 +36,9 @@ class Transaction(Base, UUIDPrimaryKeyMixin):
     transaction_type: Mapped[str | None] = mapped_column(String(50))
     amount: Mapped[float] = mapped_column(Numeric(18, 2), nullable=False)
     currency: Mapped[str] = mapped_column(String(3), nullable=False, default="USD")
+    # The amount in the base currency, and the rate used (services/fx_service.py); null when no rate was known
+    amount_base: Mapped[float | None] = mapped_column(Numeric(18, 2))
+    fx_rate: Mapped[float | None] = mapped_column(Numeric(20, 10))
     meta_counterparty: Mapped[str | None] = mapped_column(String(255))
     meta_counterparty_type: Mapped[str | None] = mapped_column(String(50))
     meta_location: Mapped[str | None] = mapped_column(String(255))
