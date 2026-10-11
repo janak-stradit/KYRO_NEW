@@ -748,8 +748,46 @@ const CaseDetail = {
     renderSummary(alert) {
         if (alert.summary) {
             const mock = alert.summary_provider === 'mock';
-            $("#cpSummary").html(`<p class="cp-summary__text">${escapeHtml(alert.summary)}</p>`);
+            const checked = !!alert.summary_attested_at;
+            const mayReview = Auth.can('alerts.escalate') && !alert.restricted;
+            $("#cpSummary").html(`
+                <p class="cp-summary__text">${escapeHtml(alert.summary)}</p>
+                <p class="cp-summary__check">${checked
+                    ? `<span class="cd-chip cd-chip--low">Checked</span> against the records on ${escapeHtml(formatDateTime(alert.summary_attested_at))}`
+                    : `<span class="cd-chip cd-chip--medium">Not checked</span> Compare it with the transactions, screening and documents before relying on it.`}</p>
+                ${mayReview && !checked ? `
+                <div class="cp-note__foot">
+                    <label class="form-check mb-0"><input class="form-check-input" type="checkbox" id="cpSummaryConfirm">
+                        <span class="form-check-label">I have checked this summary against the source records</span></label>
+                    <span>
+                        <button type="button" class="btn btn-sm rc-actions__view" id="cpSummaryReject">Reject</button>
+                        <button type="button" class="btn btn-sm btn-outline-primary" id="cpSummaryEdit">Correct</button>
+                        <button type="button" class="btn btn-sm btn-primary" id="cpSummaryAccept">Keep as written</button>
+                    </span>
+                </div>` : ''}`);
             $("#cpSummaryMeta").text(`${mock ? 'Built by the template from the facts on file; an AI model is not connected' : 'Written by the AI model from the facts on file, names removed before sending'} · ${formatDateTime(alert.summary_at)}`);
+            const review = async (decision, text) => {
+                if (decision !== 'REJECTED' && !$("#cpSummaryConfirm").is(":checked")) {
+                    showToast('error', 'Tick the box to confirm you checked the summary against the records.');
+                    return;
+                }
+                try {
+                    const result = await API.put(`/alerts/${this.id}/summary/review`, { decision, text, confirmed: decision !== 'REJECTED' });
+                    showToast('success', decision === 'REJECTED' ? 'Summary removed from the case.' : 'Summary recorded as checked.');
+                    if (decision === 'REJECTED') {
+                        $("#cpSummary").html(this.empty('The summary was rejected and removed. Select "Regenerate" to write a new one.'));
+                    } else {
+                        this.renderSummary({ ...alert, ...result, restricted: false });
+                    }
+                    this.loadTimeline(this.id);
+                } catch (xhr) { /* reported by the API layer */ }
+            };
+            $("#cpSummaryAccept").on("click", () => review('ACCEPTED'));
+            $("#cpSummaryReject").on("click", () => review('REJECTED'));
+            $("#cpSummaryEdit").on("click", () => {
+                const text = window.prompt("Corrected summary", alert.summary);
+                if (text && text.trim()) review('EDITED', text.trim());
+            });
             return;
         }
         if (alert.restricted) {
@@ -799,7 +837,7 @@ const CaseDetail = {
 
     showNarrative(alertId, text, version, count) {
         const source = !version ? ''
-            : version.source === 'EDITED' ? `Version ${version.version}, edited by ${version.by || 'an investigator'} on ${formatDateTime(version.at)}`
+            : version.source === 'EDITED' ? `Version ${version.version}, checked and saved by ${version.by || 'an investigator'} on ${formatDateTime(version.at)}`
             : `Version ${version.version}, ${version.provider === 'mock'
                 ? 'arranged from the facts on file by the built-in template; it adds nothing to the facts'
                 : 'drafted by the AI model from the facts on file, with names removed before sending; check every statement'} (${formatDateTime(version.at)})`;
@@ -809,7 +847,9 @@ const CaseDetail = {
             <label class="visually-hidden" for="cpNarrativeText">Narrative</label>
             <textarea class="form-control cp-narrative__text" id="cpNarrativeText" rows="14" ${Auth.can('alerts.escalate') ? '' : 'readonly'}>${escapeHtml(text)}</textarea>
             <div class="cp-note__foot">
-                <span class="kx-note">Saving keeps a new version; earlier versions are not changed.</span>
+                ${Auth.can('alerts.escalate') ? `<label class="form-check mb-0"><input class="form-check-input" type="checkbox" id="cpNarrativeConfirm">
+                    <span class="form-check-label">I have checked this against the source records</span></label>`
+                    : '<span class="kx-note">Saving keeps a new version; earlier versions are not changed.</span>'}
                 <span>
                     <button type="button" class="btn btn-sm btn-outline-primary" id="cpNarrativeCopy">Copy</button>
                     ${Auth.can('alerts.escalate') ? '<button type="button" class="btn btn-sm btn-primary" id="cpNarrativeSave">Save version</button>' : ''}
@@ -828,9 +868,13 @@ const CaseDetail = {
         $("#cpNarrativeSave").on("click", async () => {
             const body = ($("#cpNarrativeText").val() || '').trim();
             if (!body) return;
+            if (!$("#cpNarrativeConfirm").is(":checked")) {
+                showToast('error', 'Tick the box to confirm you checked the narrative against the records.');
+                return;
+            }
             $("#cpNarrativeSave").prop("disabled", true);
             try {
-                await API.post(`/alerts/${alertId}/narratives`, { text: body });
+                await API.post(`/alerts/${alertId}/narratives`, { text: body, confirmed: true });
                 showToast('success', 'Narrative saved as a new version.');
                 await this.loadNarratives(alertId);
             } catch (xhr) {

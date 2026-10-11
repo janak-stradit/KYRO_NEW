@@ -91,6 +91,8 @@ class AlertOut(BaseModel):
     summary: str | None = None
     summary_at: datetime | None = None
     summary_provider: str | None = None
+    summary_attested_by: uuid.UUID | None = None
+    summary_attested_at: datetime | None = None
     ml_version: str | None = None
     # Set by services/sar_confidentiality.py for the user asking
     compliance_status: Literal["IN_PROGRESS", "WITH_MLRO", "CLOSED"] | None = None

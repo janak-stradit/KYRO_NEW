@@ -39,6 +39,8 @@ elevenlabs>=1.0.0
 
 # ── Watchlist screening (Phase 4.1) ────────────────────────────
 rapidfuzz>=3.9.0
+jellyfish>=1.1.0      # phonetic codes for watchlist name matching
+anyascii>=0.3.2       # transliteration of non-Latin names before matching
 
 # ── Compliance AI (Phase 11) ──────────────────────────────────
 # HTTP client for the OpenAI-compatible LLM endpoint (also used by tests)

@@ -228,3 +228,31 @@ Migrations: `0021` audit types (done in S1; the emergency access table moves to 
   have yet.
 
 **Next (S4):** AI attestation and wider masking (WS5); phonetic and transliteration screening (WS4).
+
+## 16. Sprint 4 log (11 Oct 2026)
+
+**Done — WS4 screening**
+- Names are transliterated (`anyascii`) before matching, common spelling variants are unified, and the list is
+  searched by primary name, by alias and by sound (metaphone, `jellyfish`). Migration `0024` adds and backfills
+  `alias_text` / `phonetic_text` with trigram indexes; the search runs as three indexed queries (about 15–80 ms per
+  name on 20,907 list entries).
+- A name that only sounds the same scores `SCREENING_PHONETIC_SCORE` (85), always below the confirmed score, so sound
+  alone sends a name to review and never confirms it.
+- `SCREENING_CONFIRMED_SCORE`, `SCREENING_POTENTIAL_SCORE`, `SCREENING_PHONETIC_SCORE` are policy, changed through
+  maker-checker (`app/services/screening_policy.py`, registered in `policy_registry.py`).
+
+**Done — WS5 AI governance**
+- Masking before any AI call now also covers record IDs, street addresses, UK postcodes, US ZIP+4, payment
+  references, labelled account and ID numbers, and identifying values from customer and account metadata.
+- AI case summaries show "Not checked" until an investigator keeps, corrects or rejects them with the confirmation
+  "I have checked this against the source records" (`PUT /alerts/{id}/summary/review`, migration `0025`).
+  Narratives are saved only with the same confirmation. The decision is written on the AI call (`human_decision`).
+- A SAR cannot be recorded while the latest narrative is an unchecked AI draft.
+- `GET /api/v1/ai/oversight`: outputs, accepted, corrected, rejected and unreviewed per prompt version.
+
+**Not done / notes**
+- Identifier matching (passport, registration, IMO) and per-list thresholds move to S5 with the re-screen baseline.
+- The case report export builds its summary from a template, not from AI text, so it needed no attestation gate.
+- Masking errs on the side of hiding: mixed letter-and-digit tokens such as "COVID19" are treated as references.
+
+End-to-end flow, from transaction to resolution: `docs/TRANSACTION_TO_RESOLUTION_WORKFLOW.md`.

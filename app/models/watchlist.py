@@ -64,6 +64,9 @@ class WatchlistEntity(Base, UUIDPrimaryKeyMixin):
     first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     list_version: Mapped[str | None] = mapped_column(String(100))
+    # Candidate search (screening_service.py): normalised aliases, and how every name sounds
+    alias_text: Mapped[str | None] = mapped_column(Text)
+    phonetic_text: Mapped[str | None] = mapped_column(Text)
 
 
 class WatchlistIngestionRun(Base, UUIDPrimaryKeyMixin):

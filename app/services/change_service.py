@@ -131,11 +131,11 @@ def assess_change(
 # ── Rule config changes (maker-checker) ──────────────────────────────────
 
 def current_value(db: Session, key: str, jurisdiction: str) -> Any:
-    from app.services import deadline_service
+    from app.services import policy_registry
     from app.services.rules_engine import DEFAULTS  # avoids an import cycle
 
     scope = None if jurisdiction == GLOBAL_JURISDICTION else jurisdiction
-    return rule_config_service.get_effective_config(db, {**DEFAULTS, **deadline_service.defaults()}, scope).get(key)
+    return rule_config_service.get_effective_config(db, {**DEFAULTS, **policy_registry.policy_defaults()}, scope).get(key)
 
 
 def backtest(db: Session, key: str, current: Any, proposed: Any) -> dict[str, Any]:

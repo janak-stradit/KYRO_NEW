@@ -65,6 +65,10 @@ class Alert(Base, UUIDPrimaryKeyMixin):
     summary_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     summary_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     summary_provider: Mapped[str | None] = mapped_column(String(30))
+    # The AI call that wrote the summary, and the investigator who checked it against the records
+    summary_interaction_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    summary_attested_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    summary_attested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     ml_version: Mapped[str | None] = mapped_column(String(20))
     # Deadlines (services/deadline_service.py); days are fixed when each clock starts
     detected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))  # date of initial detection

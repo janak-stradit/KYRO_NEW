@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.models.watchlist import WatchlistEntity, WatchlistIngestionRun, WatchlistSource
-from app.services.screening_service import normalize_name
+from app.services.screening_service import normalize_name, search_columns
 from app.services.watchlist_adapters import ADAPTERS
 
 settings = get_settings()
@@ -46,6 +46,7 @@ def _entity_values(source_id, record, run_id: str, now: datetime) -> dict:
         "is_active": True,
         "list_version": run_id,
         "last_seen_at": now,
+        **search_columns(record.primary_name, record.aka_names),
     }
 
 

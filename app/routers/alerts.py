@@ -18,6 +18,7 @@ from app.database import get_db, SessionLocal
 from app.deps import PaginationParams, get_current_user, require_permission
 from app.models.alert import Alert as AlertModel
 from app.models.customer import Customer
+from app.models.sar_narrative import SarNarrative
 from app.models.alert_request import AlertRequest
 from app.models.user import User
 from app.permissions import has_permission, is_read_only
@@ -565,6 +566,11 @@ def resolve(
         raise HTTPException(status.HTTP_403_FORBIDDEN, f"Your role cannot record the outcome {data.outcome}")
     if alert.status == "RESOLVED":
         raise HTTPException(status.HTTP_409_CONFLICT, "Alert is already resolved")
+    if data.outcome == "SAR_FILED":
+        latest = db.query(SarNarrative).filter(SarNarrative.alert_id == alert.id).order_by(SarNarrative.version.desc()).first()
+        if latest is not None and latest.source == "AI_DRAFT":
+            raise HTTPException(status.HTTP_409_CONFLICT,
+                                "The latest narrative is an unchecked AI draft. Check it against the records and save it as a version first.")
     alert.status = "RESOLVED"
     alert.resolution_notes = data.resolution_notes
     alert.resolved_at = datetime.now(timezone.utc)

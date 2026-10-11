@@ -18,13 +18,13 @@ from app.deps import get_current_user, require_permission
 from app.models.rule_config import RuleConfig
 from app.models.user import User
 from app.schemas.rule_config import RuleConfigOut, RuleConfigUpdate
-from app.services import deadline_service, rule_config_service
+from app.services import policy_registry, rule_config_service
 from app.services.rules_engine import DEFAULTS as RULE_DEFAULTS
 
 
 def all_defaults() -> dict[str, Any]:
-    """Every editable setting: detection rule thresholds and deadline policy."""
-    return {**RULE_DEFAULTS, **deadline_service.defaults()}
+    """Every editable setting: detection rule thresholds, and the deadline and screening policies."""
+    return {**RULE_DEFAULTS, **policy_registry.policy_defaults()}
 
 router = APIRouter(prefix="/api/v1/rule-configs", tags=["rule-configs"], dependencies=[Depends(get_current_user)])
 
@@ -48,7 +48,7 @@ def _validate_value(key: str, value: Any) -> None:
     if key not in defaults:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Unknown rule config key '{key}'. Valid keys: {sorted(defaults)}")
     if key not in RULE_DEFAULTS:
-        problem = deadline_service.validate(key, value)
+        problem = policy_registry.validate(key, value)
         if problem:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, problem)
     elif key in _NUMERIC_KEYS:

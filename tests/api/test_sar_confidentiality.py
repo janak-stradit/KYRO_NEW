@@ -87,19 +87,19 @@ def test_narratives_are_versioned_and_restricted_once_escalated(client, auth_hea
     url = f"/api/v1/alerts/{alert['id']}"
 
     # Before escalation the investigator drafts and edits; each save is a new version
-    assert client.post(f"{url}/narratives", json={"text": "First version"}, headers=l2).json()["version"] == 1
-    assert client.post(f"{url}/narratives", json={"text": "Second version"}, headers=l2).json()["version"] == 2
+    assert client.post(f"{url}/narratives", json={"text": "First version", "confirmed": True}, headers=l2).json()["version"] == 1
+    assert client.post(f"{url}/narratives", json={"text": "Second version", "confirmed": True}, headers=l2).json()["version"] == 2
     versions = client.get(f"{url}/narratives", headers=l2).json()["versions"]
     assert [v["text"] for v in versions] == ["Second version", "First version"]
 
     client.put(f"{url}/escalate", json={"reasons": ["SANCTIONS_EXPOSURE"], "potential_sar": True}, headers=l2)
     assert client.get(f"{url}/narratives", headers=l2).json() == {"restricted": True, "versions": []}
-    assert client.post(f"{url}/narratives", json={"text": "Third"}, headers=l2).status_code == 403
+    assert client.post(f"{url}/narratives", json={"text": "Third", "confirmed": True}, headers=l2).status_code == 403
     assert client.post(f"{url}/summary", headers=l2).status_code == 403
     assert client.post(f"{url}/draft-narrative", headers=l2).status_code == 403
 
     # The MLRO carries on; nothing earlier was overwritten
-    assert client.post(f"{url}/narratives", json={"text": "MLRO final"}, headers=mlro).json()["version"] == 3
+    assert client.post(f"{url}/narratives", json={"text": "MLRO final", "confirmed": True}, headers=mlro).json()["version"] == 3
     rows = db_session.query(SarNarrative).filter_by(alert_id=uuid.UUID(alert["id"])).order_by(SarNarrative.version).all()
     assert [r.text for r in rows] == ["First version", "Second version", "MLRO final"]
 

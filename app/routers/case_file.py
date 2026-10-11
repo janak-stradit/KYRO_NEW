@@ -14,9 +14,11 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy.orm import Session
 
 from app.ai import AIDisabledError, AIGateway, AIProviderError
+from app.ai.redaction import identifying_values
 from app.database import get_db
 from app.deps import get_current_user, require_permission
 from app.models.account import Account
+from app.models.ai_interaction import AIInteraction
 from app.models.alert import Alert
 from app.models.alert_note import AlertNote
 from app.models.alert_request import AlertRequest
@@ -86,6 +88,11 @@ def _audit_event(row: AuditLog, names: dict[uuid.UUID, str]) -> tuple[str, str, 
         except ValueError:
             assignee = None
         return "assigned", f"Assigned to {assignee or 'a user'}", None
+    if "summary_review" in values:
+        review = values["summary_review"]
+        title = {"ACCEPTED": "Case summary checked against the records", "EDITED": "Case summary corrected and checked",
+                 "REJECTED": "Case summary rejected"}.get(review, "Case summary reviewed")
+        return "review", title, values.get("notes")
     if "qa_result" in values:
         passed = values["qa_result"] == "PASS"
         return "qa", f"Quality check {'passed' if passed else 'failed'}", values.get("qa_notes")
@@ -625,8 +632,18 @@ def _case_facts(db: Session, alert: Alert, customer: Customer) -> str:
 
 
 def _sensitive_names(db: Session, customer: Customer) -> dict[str, str]:
-    """Names that must not reach the model: the customer and the parties they dealt with."""
-    names = {customer.full_name: "PERSON"}
+    """
+    What must not reach the model: the customer's name, contact details, record and account IDs,
+    identifying metadata (addresses, ID and account numbers, references) and the parties they dealt with.
+    """
+    names = {customer.full_name: "PERSON", str(customer.id): "ID"}
+    names.update({v: c for v, c in ((customer.email, "EMAIL"), (customer.phone, "PHONE")) if v})
+    if customer.date_of_birth:
+        names[customer.date_of_birth.isoformat()] = "DATE"
+    names.update(identifying_values(customer.customer_metadata))
+    for account in db.query(Account).filter(Account.customer_id == customer.id):
+        names[str(account.id)] = "ACCOUNT"
+        names.update({v: "ACCOUNT" if c == "ID" else c for v, c in identifying_values(account.account_metadata).items()})
     for (counterparty,) in db.query(Transaction.meta_counterparty).filter(Transaction.customer_id == customer.id).distinct():
         if counterparty:
             names[counterparty] = "COUNTERPARTY"
@@ -639,6 +656,13 @@ def _sar_work_alert(db: Session, user: User, alert_id: uuid.UUID) -> Alert:
     if sar_confidentiality.restricted_for(user, alert):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "This case is with the MLRO; its narrative and summary are restricted")
     return alert
+
+
+def _record_decision(db: Session, interaction_id: uuid.UUID, decision: str, user: User) -> None:
+    """What the investigator did with an AI output, on the logged call that produced it (first decision only)."""
+    interaction = db.get(AIInteraction, interaction_id)
+    if interaction is not None and interaction.human_decision is None:
+        interaction.human_decision, interaction.decided_by, interaction.decided_at = decision, user.id, datetime.now(timezone.utc)
 
 
 def _next_version(db: Session, alert_id: uuid.UUID) -> int:
@@ -655,6 +679,7 @@ def _narrative_out(n: SarNarrative, names: dict[uuid.UUID, str]) -> dict[str, An
 
 class NarrativeIn(BaseModel):
     text: str = Field(min_length=1, max_length=20000)
+    confirmed: bool = False  # "I have checked this against the source records"
 
     @field_validator("text")
     @classmethod
@@ -681,8 +706,13 @@ def save_narrative(
     alert_id: uuid.UUID, data: NarrativeIn, db: Session = Depends(get_db),
     user: User = Depends(require_permission("alerts.escalate")),
 ) -> dict[str, Any]:
-    """Save the investigator's text as a new version. Earlier versions are kept."""
+    """Save the investigator's text as a new version, confirmed as checked against the records. Earlier versions are kept."""
     alert = _sar_work_alert(db, user, alert_id)
+    if not data.confirmed:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Confirm that you checked the narrative against the source records")
+    latest = db.query(SarNarrative).filter(SarNarrative.alert_id == alert.id).order_by(SarNarrative.version.desc()).first()
+    if latest is not None and latest.source == "AI_DRAFT" and latest.ai_interaction_id:
+        _record_decision(db, latest.ai_interaction_id, "ACCEPTED" if latest.text.strip() == data.text else "EDITED", user)
     row = SarNarrative(alert_id=alert.id, version=_next_version(db, alert.id), text=data.text, source="EDITED", created_by=user.id)
     db.add(row)
     db.commit()
@@ -745,11 +775,61 @@ def generate_summary(
     alert.summary_at = datetime.now(timezone.utc)
     alert.summary_by = user.id
     alert.summary_provider = result.provider
+    alert.summary_interaction_id = result.interaction_id
+    alert.summary_attested_by = alert.summary_attested_at = None  # a new summary has not been checked
     db.commit()
+    return _summary_out(alert, user)
+
+
+def _summary_out(alert: Alert, user: User) -> dict[str, Any]:
     return {
-        "summary": alert.summary, "summary_at": alert.summary_at.isoformat(), "summary_provider": alert.summary_provider,
-        "mock": result.provider == "mock", "by": user.full_name or user.username,
+        "summary": alert.summary, "summary_at": alert.summary_at.isoformat() if alert.summary_at else None,
+        "summary_provider": alert.summary_provider, "mock": alert.summary_provider == "mock", "by": user.full_name or user.username,
+        "summary_attested_at": alert.summary_attested_at.isoformat() if alert.summary_attested_at else None,
+        "summary_attested_by": str(alert.summary_attested_by) if alert.summary_attested_by else None,
     }
+
+
+class SummaryReview(BaseModel):
+    decision: Literal["ACCEPTED", "EDITED", "REJECTED"]
+    text: str | None = Field(default=None, max_length=4000)  # the corrected summary, when EDITED
+    confirmed: bool = False  # "I have checked this against the source records"
+    notes: str | None = Field(default=None, max_length=1000)
+
+    @model_validator(mode="after")
+    def _complete(self) -> "SummaryReview":
+        if self.decision != "REJECTED" and not self.confirmed:
+            raise ValueError("Confirm that you checked the summary against the source records")
+        if self.decision == "EDITED" and not (self.text or "").strip():
+            raise ValueError("Give the corrected summary")
+        return self
+
+
+@router.put("/alerts/{alert_id}/summary/review")
+def review_summary(
+    alert_id: uuid.UUID, data: SummaryReview, db: Session = Depends(get_db),
+    user: User = Depends(require_permission("alerts.escalate")),
+) -> dict[str, Any]:
+    """
+    Record that the investigator checked the AI summary against the transactions, screening and
+    documents: kept as written, corrected, or rejected (removed from the case).
+    """
+    alert = _sar_work_alert(db, user, alert_id)
+    if not alert.summary:
+        raise HTTPException(status.HTTP_409_CONFLICT, "There is no summary on this case to review")
+    if alert.summary_interaction_id:
+        _record_decision(db, alert.summary_interaction_id, data.decision, user)
+    if data.decision == "REJECTED":
+        alert.summary = alert.summary_at = alert.summary_by = alert.summary_provider = alert.summary_interaction_id = None
+        alert.summary_attested_by = alert.summary_attested_at = None
+    else:
+        if data.decision == "EDITED":
+            alert.summary = data.text.strip()
+        alert.summary_attested_by, alert.summary_attested_at = user.id, datetime.now(timezone.utc)
+    log_action(db, entity_type="ALERT", entity_id=alert.id, action="REVIEW", performed_by=user.id,
+               new_values={"summary_review": data.decision, "notes": data.notes})
+    db.commit()
+    return _summary_out(alert, user)
 
 
 # ── Accounts, with what has happened on each ─────────────────────────────

@@ -7,12 +7,14 @@ import secrets
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.ai import AIDisabledError, AIGateway, AIProviderError
 from app.ai.retrieval import search
 from app.database import get_db
 from app.deps import get_current_user, require_permission
+from app.models.ai_interaction import AIInteraction
 from app.models.user import User
 
 router = APIRouter(prefix="/api/v1/ai", tags=["ai"])
@@ -53,6 +55,31 @@ def knowledge_search(
             for h in hits
         ],
     }
+
+
+@router.get("/oversight")
+def oversight(db: Session = Depends(get_db), _: User = Depends(require_permission("ai.status"))) -> list[dict[str, Any]]:
+    """
+    For each prompt version: how many outputs were produced, and how many investigators accepted,
+    corrected or rejected, or have not yet reviewed. A rising correction or rejection rate is a
+    model-risk signal.
+    """
+    rows = (
+        db.query(AIInteraction.feature, AIInteraction.prompt_id, AIInteraction.prompt_version, AIInteraction.human_decision,
+                 func.count(AIInteraction.id))
+        .filter(AIInteraction.status == "SUCCESS")
+        .group_by(AIInteraction.feature, AIInteraction.prompt_id, AIInteraction.prompt_version, AIInteraction.human_decision)
+        .all()
+    )
+    out: dict[tuple, dict[str, Any]] = {}
+    for feature, prompt_id, version, decision, n in rows:
+        entry = out.setdefault((prompt_id, version), {
+            "feature": feature, "prompt_id": prompt_id, "prompt_version": version,
+            "outputs": 0, "accepted": 0, "edited": 0, "rejected": 0, "not_reviewed": 0,
+        })
+        entry["outputs"] += n
+        entry[{"ACCEPTED": "accepted", "EDITED": "edited", "REJECTED": "rejected"}.get(decision, "not_reviewed")] += n
+    return sorted(out.values(), key=lambda e: (e["prompt_id"], -e["prompt_version"]))
 
 
 @router.post("/check")

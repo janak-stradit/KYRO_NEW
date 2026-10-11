@@ -55,7 +55,7 @@ def mask_alert(item: dict[str, Any], alert: Alert, user: User) -> dict[str, Any]
                 item[field] = None
         since = alert.sar_candidate_at
         if alert.summary_at is not None and (since is None or alert.summary_at >= since) and "summary" in item:
-            item.update(summary=None, summary_at=None, summary_provider=None)
+            item.update(summary=None, summary_at=None, summary_provider=None, summary_attested_by=None, summary_attested_at=None)
     return item
 
 
