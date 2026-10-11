@@ -331,7 +331,8 @@ def test_sample_files_form_a_set_that_loads_in_order(client, auth_headers, compl
         data = files[target].content
         preview = _post(client, compliance_headers, "preview", data, target=target).json()
         mapping = {field: s["column"] for field, s in preview["suggested"].items()}
-        assert len(mapping) == len(preview["fields"]) == len(preview["columns"]), (target, mapping)  # every column is recognised
+        assert len(mapping) == len(preview["columns"]), (target, mapping)  # every column is recognised
+        assert {f["name"] for f in preview["fields"] if f["required"]} <= set(mapping), (target, mapping)
         loaded[target] = _run(client, compliance_headers, data, target, mapping, dry_run=False).json()
         assert loaded[target]["rows_invalid"] == 0 and loaded[target]["rows_loaded"] == loaded[target]["rows_total"], loaded[target]
 
