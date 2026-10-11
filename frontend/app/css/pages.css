@@ -1,0 +1,19 @@
+/* pages.css — page-specific styles, each scoped under .page-<name> */
+
+/* Review Cases */
+.page-cases .cases-views { margin-bottom: var(--s-4); }
+.page-cases .cases-filters { display: flex; flex-wrap: wrap; gap: var(--s-2); padding: 0 var(--s-4) var(--s-4); align-items: center; }
+.page-cases .cases-filters .search { flex: 1 1 220px; max-width: 320px; }
+.page-cases .cases-filters .form-select { width: auto; min-width: 130px; }
+.page-cases .tag--filter { cursor: pointer; background: var(--ink); color: #fff; border-color: var(--ink); }
+.page-cases .dt .person { min-width: 230px; }
+.page-cases .dt td:has(> input[type=checkbox]), .page-cases .dt th:has(> input[type=checkbox]) { width: 36px; }
+.page-cases .tags { max-width: 340px; }
+.page-cases .nowrap { white-space: nowrap; }
+@media (max-width: 1280px) { .page-cases .tags { max-width: 220px; } }
+
+/* Sign in */
+.page-login { min-height: 100vh; display: grid; place-items: center; background: var(--ink); }
+.login__card { width: min(380px, calc(100vw - 32px)); background: var(--surface); border-radius: var(--r-lg); padding: var(--s-8); box-shadow: var(--shadow-md); }
+.login__card h1 { font-size: var(--fs-xl); margin: var(--s-3) 0 var(--s-2); }
+.login__card .btn { margin-top: var(--s-5); padding: 9px 14px; }

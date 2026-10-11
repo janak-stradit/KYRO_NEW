@@ -44,6 +44,8 @@ class Settings(BaseSettings):
     # Path to frontend/phase3 to serve it from the API itself; empty in Docker,
     # where nginx serves the frontend.
     serve_frontend_dir: str = ""
+    # While the frontend is rewritten (docs/plans/FRONTEND_ARCHITECTURE.md): serve frontend/app at /next/
+    frontend_next_preview: bool = True
 
     # ── ML (Phase 2) ─────────────────────────────────────────────
     # True = start without /api/v1/ml endpoints if the ML stack can't import.
