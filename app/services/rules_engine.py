@@ -314,6 +314,9 @@ def apply_to_transaction(db: Session, txn: Transaction, customer: Customer) -> t
         from app.services import customer_risk_service, deadline_service  # imported here to avoid an import cycle
 
         deadline_service.start_case_clock(db, alert, customer)
+        from app.services import assignment_service  # imported here to avoid an import cycle
+
+        assignment_service.assign_new(db, alert, customer)
         # A new alert can change the customer's rating
 
         customer_risk_service.assess_customer(db, customer)
@@ -379,6 +382,9 @@ def open_sanctions_case(db: Session, customer: Customer, reason: str) -> Alert |
     from app.services import customer_risk_service, deadline_service  # imported here to avoid an import cycle
 
     deadline_service.start_case_clock(db, alert, customer)
+    from app.services import assignment_service  # imported here to avoid an import cycle
+
+    assignment_service.assign_new(db, alert, customer)
     customer_risk_service.assess_customer(db, customer)
     log_action(db, entity_type="ALERT", entity_id=alert.id, action="CREATE", new_values={"sanctions_case": reason})
     return alert

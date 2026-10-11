@@ -53,6 +53,7 @@ PERMISSIONS: dict[str, str] = {
     "audit.read": "Read the audit log",
     "emergency.request": "Ask for time-limited, read-only emergency access to one case",
     "sar.grant_access": "Approve emergency access to a case, or a role that can see SAR cases",
+    "assignment.manage": "Set up teams and the rules that assign new alerts to them",
     "users.manage": "Create users and assign roles",
 }
 
@@ -82,7 +83,7 @@ DECISION_PERMISSIONS = frozenset({
     "sar.view", "sar.approve", "alerts.assign", "alerts.escalate", "alerts.close_false_positive", "alerts.close", "alerts.qa",
     "rules.propose", "rules.approve", "rules.edit_direct", "obligations.manage", "mappings.manage", "changes.assess",
     "kyc.review", "screening.run", "customers.edit", "ubo.verify", "customers.assess_risk", "documents.manage",
-    "sar.grant_access",
+    "sar.grant_access", "assignment.manage",
 })
 
 ROLE_DEFINITIONS: tuple[RoleDefinition, ...] = (
@@ -105,14 +106,15 @@ ROLE_DEFINITIONS: tuple[RoleDefinition, ...] = (
         _VIEW | _ALL_RECORDS | {"sar.view", "sar.approve", "alerts.close", "alerts.close_false_positive", "alerts.escalate", "alerts.assign", "alerts.qa",
                  "alerts.baseline", "documents.manage", "kyc.review", "screening.run", "customers.edit", "ubo.verify", "customers.assess_risk",
                  "rules.propose", "rules.approve", "regulatory.ingest", "obligations.manage", "mappings.manage", "changes.assess",
-                 "audit.read", "ai.status", "sar.grant_access"},
+                 "audit.read", "ai.status", "sar.grant_access", "assignment.manage"},
     ),
     _role(
         "TEAM_LEAD", "Team Lead", "Runs the alert queue day to day.",
-        ["Assign alerts", "Close ordinary cases", "Escalate suspicion to the MLRO", "Complete KYC reviews"],
+        ["Assign alerts", "Close ordinary cases", "Escalate suspicion to the MLRO", "Complete KYC reviews",
+         "Set up teams and the rules that assign new alerts"],
         ["Cannot approve a SAR or see SAR-filed cases", "Cannot change rules"],
         _VIEW | _ALL_RECORDS | {"alerts.assign", "alerts.close", "alerts.close_false_positive", "alerts.escalate", "alerts.baseline",
-                 "documents.manage", "kyc.review", "screening.run", "customers.edit", "ubo.verify"},
+                 "documents.manage", "kyc.review", "screening.run", "customers.edit", "ubo.verify", "assignment.manage"},
     ),
     _role(
         "L2_INVESTIGATOR", "Level 2 Investigator", "Investigates escalated cases in depth.",

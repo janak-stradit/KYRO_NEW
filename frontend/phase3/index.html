@@ -35,7 +35,7 @@
     <link rel="stylesheet" href="css/kyrochat.css?v=3">
     <!-- Theme layer (template layout/cards/typography, KYRO colours) - keep last -->
     <link rel="stylesheet" href="css/theme.css?v=28">
-    <link rel="stylesheet" href="css/enterprise.css?v=45">
+    <link rel="stylesheet" href="css/enterprise.css?v=51">
     
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡️</text></svg>">
 </head>
@@ -87,6 +87,7 @@
                 <a class="nav-link" href="/regulations" data-page="regulations">Regulations</a>
                 <a class="nav-link" href="/rules" data-page="rules">Rules</a>
                 <a class="nav-link" href="/feeds" data-page="feeds">Data Feeds</a>
+                <a class="nav-link d-none" href="/process" data-page="process">How it works</a>
                 <a class="nav-link d-none" href="/admin" data-page="admin">Administration</a>
             </nav>
             
@@ -210,7 +211,7 @@
     
     <!-- KYRO Application Scripts -->
     <script src="js/api.js?v=20261010a"></script>
-    <script src="js/auth.js?v=20261012a"></script>
+    <script src="js/auth.js?v=20261012b"></script>
     <script src="js/utils.js?v=20261010b"></script>
     <script src="js/real-time.js?v=20261010c"></script>
     <script src="js/dashboard.js?v=20261011a"></script>
@@ -218,20 +219,21 @@
     <script src="js/transactions.js?v=2"></script>
     <script src="js/alerts.js?v=20261009b"></script>
     <script src="js/documents.js?v=20261010a"></script>
-    <script src="js/cases.js?v=20261012c"></script>
+    <script src="js/cases.js?v=20261012f"></script>
     <script src="js/case-detail.js?v=20261011c"></script>
     <script src="js/periodic-reviews.js?v=20261010b"></script>
     <script src="js/patterns.js?v=20261010a"></script>
     <script src="js/regulations.js?v=20261010d"></script>
     <script src="js/feeds.js?v=20261010d"></script>
     <script src="js/rules.js?v=20261012b"></script>
+    <script src="js/process.js?v=20261012b"></script>
     <script src="js/admin.js?v=20261011a"></script>
     <script src="js/reports.js?v=2"></script>
     <script src="js/kyroScripts.js?v=2"></script>
     <script src="js/kyrochat.js?v=20261010a"></script>
     <script src="js/profile.js?v=20261009c"></script>
     <script src="js/notifications.js?v=20261010a"></script>
-    <script src="js/app.js?v=20261012a"></script>
+    <script src="js/app.js?v=20261012b"></script>
     
     <!-- Mobile Hamburger Offcanvas Drawer -->
     <div class="kyro-mobile-drawer" id="kyroMobileDrawer">
@@ -262,6 +264,9 @@
             </a>
             <a class="nav-link py-2.5 px-3 rounded-3 text-dark fw-semibold d-flex align-items-center gap-3" href="/feeds" data-page="feeds">
                 <i class="fas fa-file-import text-secondary" style="width: 20px;"></i>Data Feeds
+            </a>
+            <a class="nav-link py-2.5 px-3 rounded-3 text-dark fw-semibold d-flex align-items-center gap-3 d-none" href="/process" data-page="process">
+                <i class="fas fa-diagram-project text-secondary" style="width: 20px;"></i>How KYRO works
             </a>
             <a class="nav-link py-2.5 px-3 rounded-3 text-dark fw-semibold d-flex align-items-center gap-3 d-none" href="/admin" data-page="admin">
                 <i class="fas fa-users-gear text-secondary" style="width: 20px;"></i>Administration

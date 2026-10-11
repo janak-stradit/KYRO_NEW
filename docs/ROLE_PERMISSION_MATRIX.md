@@ -22,6 +22,7 @@ Generated from `app/permissions.py` by `scripts/role_matrix.py`. Do not edit by 
 | `cases.view` — See the work queue, cases, customers and documents | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ |  | ✔ | ✔ |
 | `cases.view_all` — See every case, not only your own and the unassigned pool | ✔ | ✔ | ✔ |  |  |  | ✔ | ✔ | ✔ |  | ✔ |  |
 | `alerts.assign` — Assign alerts to a person |  | ✔ | ✔ |  |  |  |  |  |  |  | ✔ | ✔ |
+| `assignment.manage` — Set up teams and the rules that assign new alerts to them |  | ✔ | ✔ |  |  |  |  |  |  |  | ✔ |  |
 | `alerts.close_false_positive` — Close an alert as a false positive |  | ✔ | ✔ | ✔ | ✔ |  |  |  |  |  | ✔ |  |
 | `alerts.close` — Close an alert as reviewed with no suspicion |  | ✔ | ✔ | ✔ |  |  |  |  |  |  | ✔ |  |
 | `alerts.escalate` — Escalate an alert, or recommend a SAR, to the MLRO |  | ✔ | ✔ | ✔ | ✔ | ✔ |  |  |  |  | ✔ | ✔ |
@@ -118,6 +119,7 @@ Runs the alert queue day to day.
 - Close ordinary cases
 - Escalate suspicion to the MLRO
 - Complete KYC reviews
+- Set up teams and the rules that assign new alerts
 
 **Cannot:**
 - Cannot approve a SAR or see SAR-filed cases

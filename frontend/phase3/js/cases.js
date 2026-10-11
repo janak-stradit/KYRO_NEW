@@ -70,7 +70,7 @@ const Cases = {
                         <p class="kyro-page-sub">Your work queue: the highest-risk, longest-waiting alerts come first.</p>
                     </div>
                     <div class="kyro-page-actions">
-                        <button class="btn btn-primary px-4" id="refreshCasesBtn">
+                        <button class="btn btn-outline-secondary q-refresh" id="refreshCasesBtn" title="Refresh the queue">
                             <i class="fas fa-rotate-right me-2"></i>Refresh
                         </button>
                     </div>
@@ -324,22 +324,23 @@ const Cases = {
         }
         this.summary = s;
 
-        const tile = (key, label, value, note, alertClass = '') => `
-            <button type="button" class="rq-tile ${alertClass}" data-tile="${key}">
-                <span class="rq-tile__label">${label}</span>
-                <strong class="rq-tile__value">${value}</strong>
-                <span class="rq-tile__note">${note}</span>
+        // Saved views: each is a one-click filter, with its count
+        const view = (key, label, value, title, tone = '') => `
+            <button type="button" class="rq-tile q-view ${this.activeView === key ? 'is-active' : ''}" data-tile="${key}" role="tab"
+                aria-selected="${this.activeView === key}" title="${escapeHtml(title)}">
+                <span>${label}</span><b class="${tone && value ? `q-count--${tone}` : ''}">${Number(value).toLocaleString()}</b>
             </button>`;
-        $("#rqTiles").html(
-            tile('all', 'Unresolved', s.unresolved.toLocaleString(), `across ${s.customers_with_alerts.toLocaleString()} customers`)
-            + tile('high', 'High risk', s.high_risk.toLocaleString(), 'risk score 80 or more', s.high_risk ? 'rq-tile--alert' : '')
-            + tile('unassigned', 'Unassigned', s.unassigned.toLocaleString(), 'no owner yet', s.unassigned ? 'rq-tile--warn' : '')
-            + tile('mine', 'Assigned to me', s.assigned_to_me.toLocaleString(), 'in your name')
-            + tile('escalated', 'Escalated', s.escalated.toLocaleString(), 'awaiting a senior decision')
-            + tile('overdue', 'Overdue', s.overdue.toLocaleString(), `past the ${s.target_days.high}/${s.target_days.medium}/${s.target_days.low}-day target`, s.overdue ? 'rq-tile--alert' : '')
-            + tile('awaiting', 'Waiting on information', s.awaiting_information.toLocaleString(), 'an open request for information')
-            + tile('oldest', 'Longest waiting', s.oldest_created_at ? this.age(s.oldest_created_at) : '—', 'oldest unresolved alert')
-        );
+        $("#rqTiles").html(`
+            <div class="q-views" role="tablist" aria-label="Queue views">
+                ${view('all', 'All unresolved', s.unresolved, `${s.unresolved} unresolved alerts across ${s.customers_with_alerts} customers`)}
+                ${view('high', 'High risk', s.high_risk, 'Risk score 80 or more', 'risk')}
+                ${view('unassigned', 'Unassigned', s.unassigned, 'No owner yet')}
+                ${view('mine', 'Mine', s.assigned_to_me, 'Assigned to you')}
+                ${view('escalated', 'With the MLRO', s.escalated, 'Escalated, awaiting a senior decision')}
+                ${view('overdue', 'Overdue', s.overdue, `Past the ${s.target_days.high}/${s.target_days.medium}/${s.target_days.low}-day target`, 'risk')}
+                ${view('awaiting', 'Waiting on info', s.awaiting_information, 'An open request for information')}
+            </div>
+            <div class="q-views__meta">${s.customers_with_alerts.toLocaleString()} customers &middot; oldest ${s.oldest_created_at ? escapeHtml(this.age(s.oldest_created_at)) : '—'}</div>`);
 
         const bars = (items, attrs, label, value, max) => items.map(item => `
             <li>
@@ -368,6 +369,7 @@ const Cases = {
     },
 
     selected: new Set(),
+    activeView: 'all',
 
     updateBulkBar() {
         const n = this.selected.size;
@@ -447,11 +449,11 @@ const Cases = {
     ALERT_HEAD: `<tr>
         <th class="px-3 py-3 rq-check-col"><input type="checkbox" class="form-check-input" id="rqSelectAll" aria-label="Select every alert on this page"></th>
         <th class="px-3 py-3">Risk</th><th class="px-3 py-3">Customer</th><th class="px-3 py-3">Why it was flagged</th>
-        <th class="px-3 py-3">Status</th><th class="px-3 py-3">Waiting</th><th class="px-3 py-3">Owner</th>
+        <th class="px-3 py-3">Status</th><th class="px-3 py-3">Stage</th><th class="px-3 py-3">Waiting</th><th class="px-3 py-3">Owner</th>
         <th class="px-3 py-3"><span class="visually-hidden">Actions</span></th></tr>`,
     CUSTOMER_HEAD: `<tr>
-        <th class="rq-cell-score" title="Highest risk score among the customer's open alerts">Score</th><th>Customer</th><th>Open alerts</th>
-        <th>Why it was flagged</th><th>Waiting</th><th>Owner</th>
+        <th>Customer</th><th title="Highest risk score among the customer's open alerts">Risk</th><th class="q-num">Alerts</th>
+        <th>Why it was flagged</th><th>Stage</th><th class="q-num">Waiting</th><th>Owner</th>
         <th><span class="visually-hidden">Actions</span></th></tr>`,
 
     async fetchCustomerGroups() {
@@ -481,61 +483,54 @@ const Cases = {
             return;
         }
         const band = (score) => (score >= 80 ? 'high' : score >= 60 ? 'medium' : 'low');
-        const HOT = { R005: 'hot', R006: 'hot', R004: 'warm', R010: 'warm' };  // rules worth noticing first
+        const FLAG_RULES = new Set(['R005', 'R006', 'R004']);  // shown with a marker: they matter first
         const initialsOf = (text) => String(text).split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?';
+        const mayAssign = Auth.can('alerts.assign');
         $("#casesTableBody").html(data.items.map(g => {
             const name = g.customer_name;
             const code = this.customerCodes[g.customer_id] || '';
             const level = String(g.customer_risk_level || '').toLowerCase();
-            const highShare = g.open_alerts ? Math.round(100 * g.high_risk_alerts / g.open_alerts) : 0;
             const ruleName = (r) => (this.RULES[r.rule] || [r.rule])[0];
             const allRules = g.rules.map(r => `${ruleName(r)} (${r.alerts})`).join(', ');
-            const shown = g.rules.slice(0, 3);
+            const shown = g.rules.slice(0, 2);
             const owner = g.owners.length === 0
-                ? '<span class="rq-owner rq-owner--none">Unassigned</span>'
-                : `<span class="rq-owner"><span class="rq-owner__avatar" aria-hidden="true">${escapeHtml(g.owners.length === 1 ? initialsOf(g.owners[0]) : g.owners.length)}</span>
-                    <span>${escapeHtml(g.owners.length === 1 ? g.owners[0] : `${g.owners.length} people`)}${g.unassigned_alerts ? `<small>${g.unassigned_alerts} unassigned</small>` : ''}</span></span>`;
+                ? '<span class="q-muted">Unassigned</span>'
+                : `<span class="q-owner"><span class="q-avatar q-avatar--sm" aria-hidden="true">${escapeHtml(g.owners.length === 1 ? initialsOf(g.owners[0]) : g.owners.length)}</span>
+                    <span>${escapeHtml(g.owners.length === 1 ? g.owners[0] : `${g.owners.length} people`)}</span></span>`;
             return `
-                <tr class="rq-row rq-row--${band(g.max_risk_score)}" data-open="${escapeHtml(g.top_alert_id)}" tabindex="0"
+                <tr class="rq-row q-row" data-open="${escapeHtml(g.top_alert_id)}" tabindex="0"
                     aria-label="${escapeHtml(name)}: ${g.open_alerts} open alerts, top score ${g.max_risk_score}. Press Enter to review.">
-                    <td class="rq-cell-score"><span class="rq-score rq-score--${band(g.max_risk_score)}">${g.max_risk_score}</span></td>
                     <td>
-                        <div class="rc-customer">
-                            <span class="rc-customer__avatar" aria-hidden="true">${escapeHtml(initialsOf(name))}</span>
-                            <span class="rc-customer__text">
-                                <strong>${escapeHtml(name)}</strong>
-                                <small class="rq-meta">${escapeHtml(code)}
-                                    ${level ? `<span class="rq-rating rq-rating--${level}" title="Customer risk rating">${escapeHtml(this.human(level))} risk</span>` : ''}
-                                    ${g.customer_sanctions ? '<span class="cd-chip cd-chip--high">Sanctions</span>' : ''}
-                                    ${g.customer_pep ? '<span class="cd-chip cd-chip--medium">PEP</span>' : ''}</small>
+                        <div class="q-cust">
+                            <span class="q-avatar" aria-hidden="true">${escapeHtml(initialsOf(name))}</span>
+                            <span class="q-cust__text">
+                                <span class="q-cust__name">${escapeHtml(name)}</span>
+                                <span class="q-cust__meta">${escapeHtml(code)}
+                                    ${g.customer_sanctions ? '<span class="q-flag q-flag--red">Sanctions</span>' : ''}
+                                    ${g.customer_pep ? '<span class="q-flag">PEP</span>' : ''}
+                                    ${level === 'high' ? '<span class="q-flag q-flag--quiet" title="Customer risk rating">High-risk customer</span>' : ''}</span>
                             </span>
                         </div>
                     </td>
-                    <td class="rq-cell-alerts">
-                        <div class="rq-count"><strong>${g.open_alerts.toLocaleString()}</strong><span>open</span>
-                            <small>&middot; ${g.high_risk_alerts ? `${g.high_risk_alerts.toLocaleString()} high` : 'none high'}</small></div>
-                        <div class="rq-mix" title="${g.high_risk_alerts} of ${g.open_alerts} scored 80 or more"><span style="width:${highShare}%"></span></div>
-                    </td>
+                    <td><span class="q-score q-score--${band(g.max_risk_score)}" title="Highest score among open alerts">${g.max_risk_score}</span></td>
+                    <td class="q-num"><span class="q-strong">${g.open_alerts.toLocaleString()}</span><span class="q-sub">${g.high_risk_alerts ? `${g.high_risk_alerts.toLocaleString()} high` : 'none high'}</span></td>
                     <td>
-                        <div class="rq-rules rq-rules--line" title="${escapeHtml(allRules)}">
-                            ${shown.map(r => `<span class="rq-rule ${HOT[r.rule] ? `rq-rule--${HOT[r.rule]}` : ''}">${escapeHtml(ruleName(r))}${r.alerts > 1 ? ` <b>${r.alerts}</b>` : ''}</span>`).join('')}
-                            ${g.rules.length > shown.length ? `<span class="rq-rule rq-rule--more">+${g.rules.length - shown.length}</span>` : ''}
-                            ${g.rules.length ? '' : '<span class="text-muted">No rule recorded</span>'}
+                        <div class="q-tags" title="${escapeHtml(allRules)}">
+                            ${shown.map(r => `<span class="q-tag">${FLAG_RULES.has(r.rule) ? '<i class="q-tag__dot" aria-hidden="true"></i>' : ''}${escapeHtml(ruleName(r))}<b>${r.alerts}</b></span>`).join('')}
+                            ${g.rules.length > shown.length ? `<span class="q-tag q-tag--more">+${g.rules.length - shown.length}</span>` : ''}
+                            ${g.rules.length ? '' : '<span class="q-muted">No rule recorded</span>'}
                         </div>
                     </td>
-                    <td class="rq-cell-wait" title="Oldest unresolved alert created ${escapeHtml(new Date(g.oldest_created_at).toLocaleString())}">
-                        <strong>${escapeHtml(this.age(g.oldest_created_at))}</strong>${g.overdue_alerts ? `<span class="cd-chip cd-chip--high">${g.overdue_alerts} overdue</span>` : '<small class="text-muted">within target</small>'}
+                    <td>${this.stageCell(g.top_stages, g.top_stage)}</td>
+                    <td class="q-num" title="Oldest unresolved alert created ${escapeHtml(new Date(g.oldest_created_at).toLocaleString())}">
+                        <span class="q-strong">${escapeHtml(this.age(g.oldest_created_at))}</span>
+                        <span class="q-sub ${g.overdue_alerts ? 'q-sub--late' : ''}">${g.overdue_alerts ? `${g.overdue_alerts} overdue` : 'on time'}</span>
                     </td>
                     <td>${owner}</td>
-                    <td>
-                        <div class="rc-actions">
-                            <button type="button" class="btn btn-sm btn-primary rq-review view-case-btn" data-case="${escapeHtml(g.top_alert_id)}" title="Open this customer's highest-risk case">Review</button>
-                            <button type="button" class="btn btn-sm rc-actions__view rq-more" data-customer="${escapeHtml(g.customer_id)}" data-name="${escapeHtml(name)}" title="List all ${g.open_alerts} open alerts">All ${g.open_alerts.toLocaleString()}</button>
-                            ${Auth.can('alerts.assign') ? `
-                            <button type="button" class="btn btn-sm rc-actions__icon rq-assign-all" data-customer="${escapeHtml(g.customer_id)}" data-name="${escapeHtml(name)}" data-count="${g.open_alerts}" title="Assign all ${g.open_alerts} open alerts" aria-label="Assign all ${g.open_alerts} open alerts for ${escapeHtml(name)}">
-                                <i class="fas fa-user-plus"></i>
-                            </button>` : ''}
-                        </div>
+                    <td class="q-actions">
+                        <button type="button" class="q-link rq-more" data-customer="${escapeHtml(g.customer_id)}" data-name="${escapeHtml(name)}" title="List all ${g.open_alerts} open alerts">All ${g.open_alerts.toLocaleString()}</button>
+                        ${mayAssign ? `<button type="button" class="q-icon rq-assign-all" data-customer="${escapeHtml(g.customer_id)}" data-name="${escapeHtml(name)}" data-count="${g.open_alerts}" title="Assign all ${g.open_alerts} open alerts" aria-label="Assign all ${g.open_alerts} open alerts for ${escapeHtml(name)}"><i class="fas fa-user-plus"></i></button>` : ''}
+                        <button type="button" class="q-icon q-open view-case-btn" data-case="${escapeHtml(g.top_alert_id)}" title="Review the highest-risk case" aria-label="Review ${escapeHtml(name)}"><i class="fas fa-chevron-right"></i></button>
                     </td>
                 </tr>`;
         }).join(''));
@@ -630,10 +625,10 @@ const Cases = {
             const others = (a.customer_open_alerts || 0) - (canAct(c) ? 1 : 0);
 
             return `
-                <tr>
+                <tr class="q-row">
                     ${mayAssign ? `<td class="px-3 py-3 rq-check-col">${canAct(c) ? `<input type="checkbox" class="form-check-input rq-select" data-case="${escapeHtml(c.caseId)}" aria-label="Select the alert for ${escapeHtml(displayName)}">` : ''}</td>` : ''}
                     <td class="px-3 py-3">
-                        <span class="rq-score rq-score--${band}" title="${escapeHtml(this.human(c.riskLevel))} risk">${isFinite(Number(a.risk_score)) ? Number(a.risk_score) : '—'}</span>
+                        <span class="q-score q-score--${band}" title="${escapeHtml(this.human(c.riskLevel))} risk">${isFinite(Number(a.risk_score)) ? Number(a.risk_score) : '—'}</span>
                     </td>
                     <td class="px-3 py-3">
                         <div class="rc-customer">
@@ -652,7 +647,8 @@ const Cases = {
                             ${rules.length ? '' : '<span class="text-muted">No rule recorded</span>'}
                         </div>
                     </td>
-                    <td class="px-3 py-3"><span class="badge" style="background:${statusBg};color:${statusFg};font-size:11px;font-weight:600;padding:5px 10px;">${escapeHtml(this.human(c.status))}</span></td>
+                    <td class="px-3 py-3">${this.statusCell(c.status, a.status_label)}</td>
+                    <td class="px-3 py-3">${this.stageCell(a.stages, a.stage)}</td>
                     <td class="px-3 py-3 text-nowrap" title="Created ${escapeHtml(new Date(a.created_at).toLocaleString())}">${canAct(c) ? escapeHtml(this.age(a.created_at)) : '—'}${a.overdue ? ` <span class="cd-chip cd-chip--high" title="Target ${a.target_days} days for this risk level">Overdue</span>` : ''}${a.open_requests ? ` <span class="cd-chip cd-chip--${a.requests_overdue ? 'high' : 'medium'}" title="${a.open_requests} open request${a.open_requests === 1 ? '' : 's'} for information${a.requests_overdue ? ', past the due date' : ''}"><i class="fas fa-envelope" aria-hidden="true"></i><span class="visually-hidden">Waiting on information</span></span>` : ''}</td>
                     <td class="px-3 py-3 ${a.assigned_to ? '' : 'text-muted'}">${escapeHtml(c.assignedTo)}</td>
                     <td class="px-3 py-3">
@@ -675,6 +671,42 @@ const Cases = {
                     </td>
                 </tr>`;
         }).join(''));
+    },
+
+    /** Compact stage: one segment per stage, and where the case is now. */
+    stageCell(stages, label) {
+        if (!stages || !stages.length) return '<span class="q-muted">—</span>';
+        const title = stages.map(s => `${s.label}: ${({ done: 'done', current: 'now', skipped: 'skipped', todo: 'to come' })[s.state]}`).join(' · ');
+        return `<div class="q-stage" title="${escapeHtml(title)}">
+            <div class="q-stage__bar" aria-hidden="true">${stages.map(s => `<i class="q-seg q-seg--${s.state}"></i>`).join('')}</div>
+            <span class="q-stage__label">${escapeHtml(label || 'Complete')}</span>
+            <span class="visually-hidden">${escapeHtml(title)}</span></div>`;
+    },
+
+    /** Status as a dot and a word. */
+    statusCell(status, label) {
+        const tone = { OPEN: 'open', ASSIGNED: 'assigned', IN_REVIEW: 'review', ESCALATED: 'mlro', RESOLVED: 'closed' }[status] || 'open';
+        return `<span class="q-status q-status--${tone}"><i aria-hidden="true"></i>${escapeHtml(label || this.human(status))}</span>`;
+    },
+
+    /** The stage path of one case, shown under its row: done, current, still to come, or skipped. */
+    stagePath(stages, statusLabel, status, prefix = '', waiting = '') {
+        if (!stages || !stages.length) return '';
+        const tone = { OPEN: 'open', ASSIGNED: 'assigned', IN_REVIEW: 'review', ESCALATED: 'mlro', RESOLVED: 'closed' }[status] || 'open';
+        const when = (s) => s.at ? ` on ${new Date(s.at).toLocaleDateString()}` : '';
+        const title = (s) => ({ done: `${s.label}: done${when(s)}`, current: `${s.label}: current stage`,
+            skipped: `${s.label}: skipped (decided straight from the queue)`, todo: `${s.label}: not reached yet` })[s.state];
+        return `
+            <div class="rq-path">
+                ${prefix ? `<span class="rq-path__prefix">${escapeHtml(prefix)}</span>` : ''}
+                <span class="rq-status rq-status--${tone}">${escapeHtml(statusLabel || this.human(status))}</span>
+                <ol class="rq-steps" aria-label="Case stages">
+                    ${stages.map(s => `<li class="rq-step rq-step--${s.state}" title="${escapeHtml(title(s))}"${s.state === 'current' ? ' aria-current="step"' : ''}>
+                        <span class="rq-step__dot" aria-hidden="true">${s.state === 'done' ? '<i class="fas fa-check"></i>' : ''}</span>
+                        <span class="rq-step__label">${escapeHtml(s.label)}<span class="visually-hidden"> (${s.state})</span></span></li>`).join('')}
+                </ol>
+                ${waiting && waiting !== 'Complete' ? `<span class="rq-path__now">${escapeHtml(waiting)}</span>` : ''}
+            </div>`;
     },
 
     renderPaginationControls() {
@@ -912,6 +944,9 @@ const Cases = {
         $("#mainContent").off("click.cases")
             // Summary tiles are one-click filters
             .on("click.cases", ".rq-tile", function() {
+                self.activeView = $(this).data("tile");
+                $(".q-view").removeClass("is-active").attr("aria-selected", "false");
+                $(this).addClass("is-active").attr("aria-selected", "true");
                 const presets = {
                     all: {}, high: { risk: 'high' }, unassigned: { assignment: 'unassigned' }, mine: { assignment: 'mine' },
                     escalated: { status: 'ESCALATED' }, oldest: { sort: 'oldest' },
@@ -929,7 +964,7 @@ const Cases = {
             })
             .on("click.cases", ".view-case-btn", function() { App.navigateTo('case', { id: $(this).data("case") }); })
             // The whole customer row opens the top case; buttons inside it keep their own action
-            .on("click.cases", "tr.rq-row", function(e) {
+            .on("click.cases", "tr.rq-row, tr.rq-path-row", function(e) {
                 if ($(e.target).closest("button, a, input, label").length) return;
                 App.navigateTo('case', { id: $(this).data("open") });
             })

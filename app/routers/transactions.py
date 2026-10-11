@@ -26,7 +26,7 @@ from app.schemas.transaction import (
     TransactionOut,
     TransactionRiskOut,
 )
-from app.services import auto_scoring_service
+from app.services import auto_scoring_service, transaction_codes
 from app.services.audit_service import log_action
 from app.services.rules_engine import apply_to_transaction
 
@@ -63,7 +63,11 @@ def _ingest_one(db: Session, data: TransactionCreate, performed_by: uuid.UUID | 
     if account.customer_id != customer.id:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Account does not belong to customer")
 
-    txn = TransactionModel(**data.model_dump())
+    try:
+        values = transaction_codes.resolve(db, data.model_dump())  # source code → type, direction, channel
+    except transaction_codes.CodeMapError as exc:
+        raise HTTPException(exc.status_code, str(exc)) from None
+    txn = TransactionModel(**values)
     db.add(txn)
     db.flush()
 
