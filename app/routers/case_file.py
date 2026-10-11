@@ -87,6 +87,9 @@ def _audit_event(row: AuditLog, names: dict[uuid.UUID, str]) -> tuple[str, str, 
             assignee = names.get(uuid.UUID(str(values["assigned_to"])))
         except ValueError:
             assignee = None
+        if values.get("auto_assigned"):
+            return ("assigned", f"Assigned automatically to {assignee or 'a user'}",
+                    f"Team {values.get('team') or '—'}, rule \"{values.get('assignment_rule') or '—'}\"")
         return "assigned", f"Assigned to {assignee or 'a user'}", None
     if "summary_review" in values:
         review = values["summary_review"]

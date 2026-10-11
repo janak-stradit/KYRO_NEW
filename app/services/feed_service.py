@@ -13,6 +13,12 @@ transactions are run through the rules engine, and everything is audited.
 Files carry their own keys, not KYRO IDs: customers are matched by email,
 accounts by an account reference kept on the account, and transactions by
 their account reference.
+
+Rules engine R2: transaction files may give direction (debit/credit), channel,
+counterparty account and bank, branch, depositor, the source's own reference and
+its transaction code (mapped to a KYRO type in Data > Transaction codes). Rows are
+checked for data quality, and every load is reconciled: rows received = loaded +
+rejected + already present, and every loaded transaction was evaluated by the rules.
 """
 from __future__ import annotations
 
@@ -22,7 +28,7 @@ import io
 import re
 import uuid
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from dateutil import parser as date_parser
@@ -32,12 +38,14 @@ from sqlalchemy.orm import Session
 
 from app.models.account import Account
 from app.models.customer import Customer
+from app.models.data_foundation import DataReconciliation
 from app.models.feed import FeedRun
 from app.models.transaction import Transaction
 from app.schemas.account import AccountCreate
 from app.schemas.customer import CustomerCreate
 from app.schemas.transaction import TransactionCreate
 from app.services.audit_service import log_action
+from app.services import transaction_codes
 from app.services.customer_service import create_customer
 
 MAX_BYTES = 5 * 1024 * 1024
@@ -84,7 +92,18 @@ TARGETS: dict[str, tuple[Field, ...]] = {
     "TRANSACTIONS": (
         Field("account_ref", "Account reference", "text", True, ("account number", "account no", "account id", "acct", "iban")),
         Field("transaction_date", "Transaction date", "datetime", True, ("date", "value date", "booking date", "posted", "timestamp", "txn date")),
-        Field("transaction_type", "Transaction type", "choice", True, ("type", "txn type", "category"), ("DEPOSIT", "WITHDRAWAL", "TRANSFER", "FX", "TRADE")),
+        # Not required when the file gives the source's own transaction code instead
+        Field("transaction_type", "Transaction type", "choice", False, ("type", "txn type", "category"), ("DEPOSIT", "WITHDRAWAL", "TRANSFER", "FX", "TRADE")),
+        Field("source_code", "Transaction code", "text", False, ("transaction code", "txn code", "tran code", "code", "trans code")),
+        Field("direction", "Debit / credit", "choice", False, ("debit credit", "dr cr", "credit debit", "d c", "sign", "direction"), ("CREDIT", "DEBIT")),
+        Field("channel", "Channel", "choice", False, ("payment method", "method", "payment type", "instrument", "channel"),
+              ("CASH", "WIRE", "ACH", "CARD", "CHEQUE", "INTERNAL", "CRYPTO", "OTHER")),
+        Field("reference", "Transaction reference", "text", False, ("reference", "transaction id", "txn id", "transaction reference", "ref", "txn ref")),
+        Field("counterparty_account", "Counterparty account", "text", False, ("beneficiary account", "counterparty iban", "beneficiary iban", "payee account", "counterparty account")),
+        Field("counterparty_bank_bic", "Counterparty bank (BIC)", "text", False, ("bic", "swift", "swift code", "beneficiary bic", "bank bic", "counterparty bic")),
+        Field("counterparty_country", "Counterparty bank country", "text", False, ("beneficiary bank country", "counterparty bank country", "bank country")),
+        Field("branch_id", "Branch", "text", False, ("branch", "branch code", "branch id", "location code")),
+        Field("depositor_name", "Paid in by", "text", False, ("depositor", "paid in by", "deposited by", "depositor name")),
         Field("amount", "Amount", "number", True, ("value", "transaction amount", "txn amount", "gross amount")),
         Field("currency", "Currency", "text", False, ("ccy", "currency code")),
         Field("meta_counterparty", "Counterparty", "text", False, ("beneficiary", "payee", "counterparty name", "recipient", "sender")),
@@ -149,6 +168,31 @@ def _date(value: str, day_first: bool) -> datetime:
 _BOOL = {"true": True, "yes": True, "y": True, "1": True, "false": False, "no": False, "n": False, "0": False, "": False}
 
 
+# What client files write for KYRO's choices
+_CHOICE_SYNONYMS: dict[str, dict[str, str]] = {
+    "direction": {"DR": "DEBIT", "D": "DEBIT", "DB": "DEBIT", "OUT": "DEBIT", "OUTGOING": "DEBIT", "PAID_OUT": "DEBIT",
+                  "CR": "CREDIT", "C": "CREDIT", "IN": "CREDIT", "INCOMING": "CREDIT", "PAID_IN": "CREDIT"},
+    "channel": {"CHECK": "CHEQUE", "CHQ": "CHEQUE", "SWIFT": "WIRE", "WIRE_TRANSFER": "WIRE", "TT": "WIRE", "BACS": "ACH",
+                "FASTER_PAYMENT": "ACH", "SEPA": "ACH", "DIRECT_DEBIT": "ACH", "DEBIT_CARD": "CARD", "CREDIT_CARD": "CARD",
+                "POS": "CARD", "ATM": "CASH", "COUNTER": "CASH", "BOOK_TRANSFER": "INTERNAL", "OWN_ACCOUNT": "INTERNAL"},
+}
+
+
+def _quality_problems(values: dict[str, Any]) -> list[str]:
+    """Data-quality checks on one transaction row, beyond the field types."""
+    problems = []
+    when = values.get("transaction_date")
+    if when is not None and when > datetime.now(timezone.utc) + timedelta(days=1):
+        problems.append(f"Transaction date {when:%Y-%m-%d} is in the future")
+    currency = values.get("currency")
+    if currency is not None and not re.fullmatch(r"[A-Za-z]{3}", str(currency)):
+        problems.append(f"Currency {currency!r} is not a three-letter code")
+    expected = transaction_codes.DIRECTION_BY_TYPE.get(values.get("transaction_type") or "")
+    if expected and values.get("direction") and values["direction"] != expected:
+        problems.append(f"{values['transaction_type'].title()} marked as {values['direction'].lower()}")
+    return problems
+
+
 def _convert(field: Field, value: str, day_first: bool) -> Any:
     """Turn a cell into the field's type. Raises ValueError with a readable reason."""
     if field.kind == "number":
@@ -170,6 +214,7 @@ def _convert(field: Field, value: str, day_first: bool) -> Any:
         return _BOOL[value.casefold()]
     if field.kind == "choice":
         choice = _norm(value).upper().replace(" ", "_")
+        choice = _CHOICE_SYNONYMS.get(field.name, {}).get(choice, choice)
         if choice not in field.choices:
             raise ValueError(f"'{value}' is not one of {', '.join(field.choices)}")
         return choice
@@ -337,7 +382,24 @@ def run(
                 account = _account_by_ref(db, ref)
                 if account is None:
                     raise ValueError(f"No account with reference {ref}; load accounts first")
-                payload = TransactionCreate(customer_id=account.customer_id, account_id=account.id, source_system="feed", **values)
+                values["source_system"] = "feed"
+                if not values.get("transaction_type") and not values.get("source_code"):
+                    raise ValueError("Transaction type is empty, and there is no transaction code to map")
+                try:
+                    values = transaction_codes.resolve(db, values)
+                except transaction_codes.CodeMapError as exc:
+                    raise ValueError(str(exc)) from None
+                problems = _quality_problems(values)
+                if problems:
+                    raise ValueError("; ".join(problems))
+                if values.get("reference"):
+                    if ("ref", values["reference"]) in seen_keys:
+                        raise ValueError(f"Reference {values['reference']} appears more than once in the file")
+                    seen_keys.add(("ref", values["reference"]))
+                    if db.query(Transaction.id).filter(Transaction.source_system == "feed", Transaction.reference == values["reference"]).first():
+                        existing += 1
+                        continue
+                payload = TransactionCreate(customer_id=account.customer_id, account_id=account.id, **values)
                 key = (account.id, payload.transaction_date, payload.transaction_type, round(payload.amount, 2), payload.meta_counterparty)
                 duplicate = key in seen_keys or db.query(Transaction.id).filter(
                     Transaction.account_id == account.id, Transaction.transaction_date == payload.transaction_date,
@@ -354,6 +416,7 @@ def run(
             errors.append({"row": number, "message": str(exc)})
 
     loaded = 0
+    loaded_txns: list[Transaction] = []
     if not dry_run and prepared and (skip_invalid or not errors):
         if target == "CUSTOMERS":
             for _, payload in prepared:
@@ -371,7 +434,7 @@ def run(
             from app.routers.transactions import _ingest_one  # rules engine, flags, alerts, audit
 
             for _, payload in prepared:
-                _ingest_one(db, payload, user_id)
+                loaded_txns.append(_ingest_one(db, payload, user_id))
                 loaded += 1
             db.commit()
 
@@ -382,6 +445,32 @@ def run(
         errors=errors[:_ERRORS_KEPT] or None, run_by=user_id,
     )
     db.add(record)
+    db.flush()
+    if target == "TRANSACTIONS" and not dry_run:
+        db.add(_reconcile_load(record, prepared, loaded_txns))
     db.commit()
     db.refresh(record)
     return record
+
+
+def _reconcile_load(record: FeedRun, prepared: list[tuple[int, Any]], loaded: list[Transaction]) -> DataReconciliation:
+    """Does the load add up: received = loaded + rejected + already present, and was every loaded row evaluated?"""
+    evaluated = sum(1 for t in loaded if t.risk_flags is not None)
+    valid_amount = round(sum(float(p.amount) for _, p in prepared), 2)
+    stored_amount = round(sum(float(t.amount) for t in loaded), 2)
+    issues = []
+    accounted = record.rows_loaded + record.rows_invalid + record.rows_skipped_existing
+    if accounted != record.rows_total:
+        issues.append(f"{record.rows_total} rows received but {accounted} accounted for")
+    if evaluated != len(loaded):
+        issues.append(f"{len(loaded) - evaluated} loaded transactions were not evaluated by the rules engine")
+    if loaded and abs(valid_amount - stored_amount) > 0.005:
+        issues.append(f"valid rows total {valid_amount:,.2f} but {stored_amount:,.2f} was stored")
+    if record.rows_invalid and not loaded and record.rows_valid:
+        issues.append("nothing was loaded because some rows were invalid (all-or-nothing load)")
+    return DataReconciliation(
+        kind="FEED_LOAD", source=record.filename, business_date=datetime.now(timezone.utc).date(), feed_run_id=record.id,
+        received_count=record.rows_total, received_amount=valid_amount, stored_count=len(loaded), stored_amount=stored_amount,
+        evaluated_count=evaluated, rejected_count=record.rows_invalid, skipped_existing_count=record.rows_skipped_existing,
+        balanced=not issues, issues=issues or None,
+    )

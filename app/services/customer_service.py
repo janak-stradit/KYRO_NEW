@@ -15,8 +15,14 @@ from app.services.screening_service import screen_customer
 _SCREENING_TRIGGER_FIELDS = {"full_name", "date_of_birth", "country", "residency_country"}
 
 
+# A first segment from the customer type; KYC refines it (e.g. HNW, SME, MSB) at onboarding or review
+_SEGMENT_BY_TYPE = {"INDIVIDUAL": "RETAIL", "CORPORATE": "CORPORATE", "FUND": "FUND"}
+
+
 def create_customer(db: Session, data: CustomerCreate, performed_by: uuid.UUID | None = None) -> Customer:
     customer = Customer(**data.model_dump())
+    if customer.segment is None:
+        customer.segment = _SEGMENT_BY_TYPE.get(customer.customer_type or "")
     db.add(customer)
     db.flush()
     screen_customer(db, customer, triggered_by="SYSTEM")

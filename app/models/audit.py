@@ -17,7 +17,7 @@ class AuditLog(Base, UUIDPrimaryKeyMixin):
     __tablename__ = "audit_logs"
     __table_args__ = (
         CheckConstraint(
-            "entity_type IN ('CUSTOMER','ACCOUNT','TRANSACTION','ALERT','RULE_CONFIG','OBLIGATION','OBLIGATION_MAPPING','REGULATORY_CHANGE','RULE_CONFIG_CHANGE','DOCUMENT','USER','SAR','EMERGENCY_ACCESS')",
+            "entity_type IN ('CUSTOMER','ACCOUNT','TRANSACTION','ALERT','RULE_CONFIG','OBLIGATION','OBLIGATION_MAPPING','REGULATORY_CHANGE','RULE_CONFIG_CHANGE','DOCUMENT','USER','SAR','EMERGENCY_ACCESS','TEAM','ASSIGNMENT_RULE')",
             name="chk_audit_entity_type",
         ),
         CheckConstraint(

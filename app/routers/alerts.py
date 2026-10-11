@@ -36,7 +36,7 @@ from app.schemas.alert import (
     ResolutionOptions,
 )
 from app.schemas.common import Page
-from app.services import customer_risk_service, deadline_service, feedback_service, sar_confidentiality
+from app.services import case_stage, customer_risk_service, deadline_service, feedback_service, sar_confidentiality
 from app.services.audit_service import log_action
 from app.utils.security import decode_token
 
@@ -140,6 +140,9 @@ async def stream_alerts(
     user = _get_user_from_token(token, db)
     if not has_permission(user.role, "cases.view"):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Insufficient permissions")
+    # The stream can stay open for hours: end this session now, or its open transaction
+    # holds locks that block every schema change until the browser disconnects
+    db.close()
 
     async def event_generator():
         yield "event: heartbeat\ndata: {}\n\n"
@@ -307,6 +310,7 @@ def alert_queue(
         ).filter(AlertRequest.alert_id.in_(alert_ids), AlertRequest.status == "OPEN").group_by(AlertRequest.alert_id)
     } if alert_ids else {}
     now = datetime.now(timezone.utc)
+    paths = case_stage.stage_paths(db, [alert for alert, _ in rows])
 
     items = []
     for alert, customer in rows:
@@ -324,6 +328,9 @@ def alert_queue(
             customer_sanctions=customer.sanctions_flag,
             customer_open_alerts=open_per_customer.get(customer.id, 0),
             assigned_to_name=assignees.get(alert.assigned_to),
+            status_label=case_stage.STATUS_LABELS.get(alert.status, alert.status),
+            stages=paths.get(alert.id, []),
+            stage=case_stage.current_label(paths.get(alert.id, [])),
         )
         items.append(item)
     return {"items": items, "total": total, "page": pagination.page, "page_size": pagination.page_size}
@@ -380,6 +387,8 @@ def alert_queue_by_customer(
                 d["rules"][str(code)] = d["rules"].get(str(code), 0) + 1
             if alert.assigned_to:
                 d["owners"].add(alert.assigned_to)
+    top_alerts = {a.id: a for a in db.query(AlertModel).filter(AlertModel.id.in_([d["top"] for d in details.values() if d["top"]]))}
+    top_paths = case_stage.stage_paths(db, list(top_alerts.values()))
     owner_ids = {o for d in details.values() for o in d["owners"]}
     names = {u.id: u.full_name or u.username for u in db.query(User).filter(User.id.in_(owner_ids))} if owner_ids else {}
 
@@ -395,6 +404,11 @@ def alert_queue_by_customer(
             "unassigned_alerts": int(unassigned or 0), "max_risk_score": top, "oldest_created_at": oldest_at.isoformat(),
             "rules": [{"rule": r, "alerts": n} for r, n in sorted(d["rules"].items(), key=lambda kv: (-kv[1], kv[0]))],
             "owners": owners, "top_alert_id": str(d["top"]) if d["top"] else None,
+            # The case the row opens: its status and where it stands
+            "top_status": top_alerts[d["top"]].status if d["top"] in top_alerts else None,
+            "top_status_label": case_stage.STATUS_LABELS.get(top_alerts[d["top"]].status) if d["top"] in top_alerts else None,
+            "top_stages": top_paths.get(d["top"], []),
+            "top_stage": case_stage.current_label(top_paths.get(d["top"], [])),
         })
     return {"items": items, "total": total, "page": pagination.page, "page_size": pagination.page_size}
 
