@@ -156,6 +156,7 @@ const App = {
             case: CaseDetail,
             patterns: Patterns,
             regulations: Regulations,
+            rules: Rules,
             feeds: Feeds,
             admin: Admin,
             profile: Profile
@@ -373,7 +374,7 @@ const App = {
     
     PAGE_TITLES: {
         dashboard: 'Dashboard', 'periodic-reviews': 'Periodic Reviews', cases: 'Review Cases', case: 'Case', patterns: 'Behavior Patterns',
-        regulations: 'Regulations', feeds: 'Data Feeds', admin: 'Users and Access', profile: 'My Profile'
+        regulations: 'Regulations', rules: 'Rules', feeds: 'Data Feeds', admin: 'Users and Access', profile: 'My Profile'
     },
 
     // ── Header search: customers by name or CUST code ──────────────────────

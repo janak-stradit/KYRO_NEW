@@ -19,7 +19,7 @@ const Cases = {
     // Pagination settings
     pagination: {
         currentPage: 1,
-        pageSize: 10,
+        pageSize: 25,
         pageSizeOptions: [10, 25, 50, 100]
     },
 
@@ -450,9 +450,9 @@ const Cases = {
         <th class="px-3 py-3">Status</th><th class="px-3 py-3">Waiting</th><th class="px-3 py-3">Owner</th>
         <th class="px-3 py-3"><span class="visually-hidden">Actions</span></th></tr>`,
     CUSTOMER_HEAD: `<tr>
-        <th class="px-3 py-3">Top score</th><th class="px-3 py-3">Customer</th><th class="px-3 py-3">Open alerts</th>
-        <th class="px-3 py-3">Rules that fired</th><th class="px-3 py-3">Longest waiting</th><th class="px-3 py-3">Owner</th>
-        <th class="px-3 py-3"><span class="visually-hidden">Actions</span></th></tr>`,
+        <th class="rq-cell-score" title="Highest risk score among the customer's open alerts">Score</th><th>Customer</th><th>Open alerts</th>
+        <th>Why it was flagged</th><th>Waiting</th><th>Owner</th>
+        <th><span class="visually-hidden">Actions</span></th></tr>`,
 
     async fetchCustomerGroups() {
         const f = this.filters;
@@ -481,41 +481,56 @@ const Cases = {
             return;
         }
         const band = (score) => (score >= 80 ? 'high' : score >= 60 ? 'medium' : 'low');
+        const HOT = { R005: 'hot', R006: 'hot', R004: 'warm', R010: 'warm' };  // rules worth noticing first
+        const initialsOf = (text) => String(text).split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?';
         $("#casesTableBody").html(data.items.map(g => {
             const name = g.customer_name;
             const code = this.customerCodes[g.customer_id] || '';
-            const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?';
-            const owner = g.owners.length === 0 ? 'Unassigned' : g.owners.length === 1 ? g.owners[0] : `${g.owners.length} people`;
+            const level = String(g.customer_risk_level || '').toLowerCase();
+            const highShare = g.open_alerts ? Math.round(100 * g.high_risk_alerts / g.open_alerts) : 0;
+            const ruleName = (r) => (this.RULES[r.rule] || [r.rule])[0];
+            const allRules = g.rules.map(r => `${ruleName(r)} (${r.alerts})`).join(', ');
+            const shown = g.rules.slice(0, 3);
+            const owner = g.owners.length === 0
+                ? '<span class="rq-owner rq-owner--none">Unassigned</span>'
+                : `<span class="rq-owner"><span class="rq-owner__avatar" aria-hidden="true">${escapeHtml(g.owners.length === 1 ? initialsOf(g.owners[0]) : g.owners.length)}</span>
+                    <span>${escapeHtml(g.owners.length === 1 ? g.owners[0] : `${g.owners.length} people`)}${g.unassigned_alerts ? `<small>${g.unassigned_alerts} unassigned</small>` : ''}</span></span>`;
             return `
-                <tr>
-                    <td class="px-3 py-3"><span class="rq-score rq-score--${band(g.max_risk_score)}">${g.max_risk_score}</span></td>
-                    <td class="px-3 py-3">
+                <tr class="rq-row rq-row--${band(g.max_risk_score)}" data-open="${escapeHtml(g.top_alert_id)}" tabindex="0"
+                    aria-label="${escapeHtml(name)}: ${g.open_alerts} open alerts, top score ${g.max_risk_score}. Press Enter to review.">
+                    <td class="rq-cell-score"><span class="rq-score rq-score--${band(g.max_risk_score)}">${g.max_risk_score}</span></td>
+                    <td>
                         <div class="rc-customer">
-                            <span class="rc-customer__avatar" aria-hidden="true">${escapeHtml(initials)}</span>
+                            <span class="rc-customer__avatar" aria-hidden="true">${escapeHtml(initialsOf(name))}</span>
                             <span class="rc-customer__text">
                                 <strong>${escapeHtml(name)}</strong>
-                                <small>${escapeHtml(code)}${g.customer_sanctions ? ' <span class="cd-chip cd-chip--high">Sanctions</span>' : ''}${g.customer_pep ? ' <span class="cd-chip cd-chip--medium">PEP</span>' : ''}</small>
+                                <small class="rq-meta">${escapeHtml(code)}
+                                    ${level ? `<span class="rq-rating rq-rating--${level}" title="Customer risk rating">${escapeHtml(this.human(level))} risk</span>` : ''}
+                                    ${g.customer_sanctions ? '<span class="cd-chip cd-chip--high">Sanctions</span>' : ''}
+                                    ${g.customer_pep ? '<span class="cd-chip cd-chip--medium">PEP</span>' : ''}</small>
                             </span>
                         </div>
                     </td>
-                    <td class="px-3 py-3 text-nowrap"><strong>${g.open_alerts.toLocaleString()}</strong>${g.high_risk_alerts ? ` <small class="text-muted">${g.high_risk_alerts} high risk</small>` : ''}</td>
-                    <td class="px-3 py-3">
-                        <div class="rq-rules">
-                            ${g.rules.slice(0, 4).map(r => `<span class="rq-rule" title="${escapeHtml(r.rule)}">${escapeHtml((this.RULES[r.rule] || [r.rule])[0])}${r.alerts > 1 ? ` <b>${r.alerts}</b>` : ''}</span>`).join('')}
-                            ${g.rules.length > 4 ? `<span class="rq-rule rq-rule--more">+${g.rules.length - 4}</span>` : ''}
+                    <td class="rq-cell-alerts">
+                        <div class="rq-count"><strong>${g.open_alerts.toLocaleString()}</strong><span>open</span>
+                            <small>&middot; ${g.high_risk_alerts ? `${g.high_risk_alerts.toLocaleString()} high` : 'none high'}</small></div>
+                        <div class="rq-mix" title="${g.high_risk_alerts} of ${g.open_alerts} scored 80 or more"><span style="width:${highShare}%"></span></div>
+                    </td>
+                    <td>
+                        <div class="rq-rules rq-rules--line" title="${escapeHtml(allRules)}">
+                            ${shown.map(r => `<span class="rq-rule ${HOT[r.rule] ? `rq-rule--${HOT[r.rule]}` : ''}">${escapeHtml(ruleName(r))}${r.alerts > 1 ? ` <b>${r.alerts}</b>` : ''}</span>`).join('')}
+                            ${g.rules.length > shown.length ? `<span class="rq-rule rq-rule--more">+${g.rules.length - shown.length}</span>` : ''}
                             ${g.rules.length ? '' : '<span class="text-muted">No rule recorded</span>'}
                         </div>
                     </td>
-                    <td class="px-3 py-3 text-nowrap" title="Oldest unresolved alert created ${escapeHtml(new Date(g.oldest_created_at).toLocaleString())}">${escapeHtml(this.age(g.oldest_created_at))}${g.overdue_alerts ? ` <span class="cd-chip cd-chip--high">${g.overdue_alerts} overdue</span>` : ''}</td>
-                    <td class="px-3 py-3 ${g.owners.length ? '' : 'text-muted'}">${escapeHtml(owner)}${g.owners.length && g.unassigned_alerts ? `<br><small class="text-muted">${g.unassigned_alerts} unassigned</small>` : ''}</td>
-                    <td class="px-3 py-3">
+                    <td class="rq-cell-wait" title="Oldest unresolved alert created ${escapeHtml(new Date(g.oldest_created_at).toLocaleString())}">
+                        <strong>${escapeHtml(this.age(g.oldest_created_at))}</strong>${g.overdue_alerts ? `<span class="cd-chip cd-chip--high">${g.overdue_alerts} overdue</span>` : '<small class="text-muted">within target</small>'}
+                    </td>
+                    <td>${owner}</td>
+                    <td>
                         <div class="rc-actions">
-                            <button type="button" class="btn btn-sm rc-actions__view view-case-btn" data-case="${escapeHtml(g.top_alert_id)}" title="Open this customer's highest-risk case">
-                                <i class="far fa-eye me-1"></i>Open top case
-                            </button>
-                            <button type="button" class="btn btn-sm rc-actions__view rq-more" data-customer="${escapeHtml(g.customer_id)}" data-name="${escapeHtml(name)}">
-                                All ${g.open_alerts.toLocaleString()}
-                            </button>
+                            <button type="button" class="btn btn-sm btn-primary rq-review view-case-btn" data-case="${escapeHtml(g.top_alert_id)}" title="Open this customer's highest-risk case">Review</button>
+                            <button type="button" class="btn btn-sm rc-actions__view rq-more" data-customer="${escapeHtml(g.customer_id)}" data-name="${escapeHtml(name)}" title="List all ${g.open_alerts} open alerts">All ${g.open_alerts.toLocaleString()}</button>
                             ${Auth.can('alerts.assign') ? `
                             <button type="button" class="btn btn-sm rc-actions__icon rq-assign-all" data-customer="${escapeHtml(g.customer_id)}" data-name="${escapeHtml(name)}" data-count="${g.open_alerts}" title="Assign all ${g.open_alerts} open alerts" aria-label="Assign all ${g.open_alerts} open alerts for ${escapeHtml(name)}">
                                 <i class="fas fa-user-plus"></i>
@@ -913,6 +928,14 @@ const Cases = {
                 self.applyFilters();
             })
             .on("click.cases", ".view-case-btn", function() { App.navigateTo('case', { id: $(this).data("case") }); })
+            // The whole customer row opens the top case; buttons inside it keep their own action
+            .on("click.cases", "tr.rq-row", function(e) {
+                if ($(e.target).closest("button, a, input, label").length) return;
+                App.navigateTo('case', { id: $(this).data("open") });
+            })
+            .on("keydown.cases", "tr.rq-row", function(e) {
+                if (e.key === 'Enter' && e.target === this) App.navigateTo('case', { id: $(this).data("open") });
+            })
             .on("click.cases", ".assign-btn", function() { const c = find(this); if (c) self.showAssignModal(c); })
             .on("click.cases", ".resolve-btn", function() { const c = find(this); if (c) self.showResolveModal(c); })
             .on("click.cases", ".export-btn", function() { self.showExportModal($(this).data("case"), $(this).data("customer")); });
@@ -1134,7 +1157,7 @@ const Cases = {
         R001: ['Amount Threshold', 'Transaction amount above the reporting threshold', 'MEDIUM'],
         R002: ['Velocity (daily)', 'More transactions per day than the configured limit', 'MEDIUM'],
         R003: ['Velocity (hourly)', 'More transactions per hour than the configured limit', 'LOW'],
-        R004: ['High-Risk Country', 'Counterparty in a sanctioned or high-risk jurisdiction', 'HIGH'],
+        R004: ['High-Risk Country', 'Transaction country, origin or destination is a sanctioned or high-risk jurisdiction', 'HIGH'],
         R005: ['PEP Match', 'Customer is a Politically Exposed Person', 'HIGH'],
         R006: ['Sanctions Match', 'Customer matched on a sanctions list', 'CRITICAL'],
         R007: ['New Counterparty', 'First transaction with this counterparty', 'LOW'],
