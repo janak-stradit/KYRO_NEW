@@ -310,3 +310,31 @@ def test_a_failed_or_unavailable_ml_score_never_blocks_the_transaction(client, c
     monkeypatch.setattr(auto_scoring_service, "_scoring_module", False)  # ML libraries cannot be imported
     assert _ingest(client, compliance_headers, account, 55)["id"]
     assert "cannot be loaded" in auto_scoring_service.unavailable_reason()
+
+
+# ── Sample files ─────────────────────────────────────────────────────────
+
+def test_sample_files_form_a_set_that_loads_in_order(client, auth_headers, compliance_headers, db_session):
+    def sample(target, headers=compliance_headers, **params):
+        return client.get(f"/api/v1/feeds/sample/{target}", params={"seed": 4242, "customers": 6, **params}, headers=headers)
+
+    assert sample("CUSTOMERS", headers=auth_headers).status_code == 403
+    assert sample("CUSTOMERS", customers=999_999).status_code == 422
+    files = {target: sample(target) for target in ("CUSTOMERS", "ACCOUNTS", "TRANSACTIONS")}
+    assert all(r.status_code == 200 and r.headers["content-type"].startswith("text/csv") for r in files.values())
+    assert 'filename="sample_accounts_004242.csv"' in files["ACCOUNTS"].headers["content-disposition"]
+    assert sample("TRANSACTIONS").content == files["TRANSACTIONS"].content  # the same seed gives the same file
+    assert sample("CUSTOMERS", seed=4243).content != files["CUSTOMERS"].content
+
+    loaded = {}
+    for target in ("CUSTOMERS", "ACCOUNTS", "TRANSACTIONS"):
+        data = files[target].content
+        preview = _post(client, compliance_headers, "preview", data, target=target).json()
+        mapping = {field: s["column"] for field, s in preview["suggested"].items()}
+        assert len(mapping) == len(preview["fields"]) == len(preview["columns"]), (target, mapping)  # every column is recognised
+        loaded[target] = _run(client, compliance_headers, data, target, mapping, dry_run=False).json()
+        assert loaded[target]["rows_invalid"] == 0 and loaded[target]["rows_loaded"] == loaded[target]["rows_total"], loaded[target]
+
+    assert loaded["CUSTOMERS"]["rows_total"] == 6
+    assert 6 <= loaded["ACCOUNTS"]["rows_total"] <= 18 and loaded["TRANSACTIONS"]["rows_total"] == loaded["ACCOUNTS"]["rows_total"] * 10
+    assert db_session.query(Customer).filter(Customer.email.like("%.004242.%@sample.kyro.example")).count() == 6

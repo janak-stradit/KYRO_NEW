@@ -84,25 +84,25 @@ _lock = threading.Lock()
 _state = _State()
 
 
-def _amount() -> float:
+def _amount(rng: Any = random) -> float:
     # Mostly everyday amounts, with a tail large enough to trip the rules
-    r = random.random()
+    r = rng.random()
     if r < 0.60:
-        return round(random.uniform(10, 800), 2)
+        return round(rng.uniform(10, 800), 2)
     if r < 0.85:
-        return round(random.uniform(800, 8000), 2)
+        return round(rng.uniform(800, 8000), 2)
     if r < 0.96:
-        return round(random.uniform(8000, 25000), 2)
-    return round(random.uniform(25000, 150000), 2)
+        return round(rng.uniform(8000, 25000), 2)
+    return round(rng.uniform(25000, 150000), 2)
 
 
-def _country(home: str | None) -> str:
-    r = random.random()
+def _country(home: str | None, rng: Any = random) -> str:
+    r = rng.random()
     if r < 0.04:
-        return random.choice(sorted(HIGH_RISK_COUNTRIES))
+        return rng.choice(sorted(HIGH_RISK_COUNTRIES))
     if r < 0.70 and home:
         return home
-    return random.choice(_COUNTRIES)
+    return rng.choice(_COUNTRIES)
 
 
 def generate_one(db: Session, user_id: uuid.UUID | None) -> dict[str, Any]:
