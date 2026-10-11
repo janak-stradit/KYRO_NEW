@@ -17,12 +17,20 @@ from sqlalchemy.orm import Session
 from app.models.alert import Alert
 from app.models.customer import Customer
 from app.models.transaction import Transaction, TransactionRiskFlag
+from app.services.rule_config_service import get_effective_config
 
+# Hardcoded fallback values. These stay importable as module attributes
+# (app/ml/features/engineer.py and app/ml/training/trainer.py both import
+# HIGH_RISK_COUNTRIES / ALERT_THRESHOLD directly, as a static snapshot for
+# offline batch feature engineering / training) and double as the last-resort
+# defaults get_effective_config() falls back to when a key has no DB row —
+# e.g. against a fresh database before any RuleConfig has been seeded.
 AMOUNT_THRESHOLD = 10_000
 VELOCITY_DAILY_LIMIT = 5
 VELOCITY_HOURLY_LIMIT = 3
 RAPID_SUCCESSION_WINDOW_SECONDS = 60
 ALERT_THRESHOLD = 50
+EDD_THRESHOLD = 75
 
 # Illustrative FATF-style high-risk/sanctioned jurisdiction list; extend as needed.
 HIGH_RISK_COUNTRIES = {
@@ -31,6 +39,24 @@ HIGH_RISK_COUNTRIES = {
 }
 
 SEVERITY_WEIGHT = {"LOW": 10, "MEDIUM": 25, "HIGH": 50, "CRITICAL": 90}
+
+# Compliance-editable via /api/v1/rule-configs (see rule_config_service.py).
+# Keys here are exactly what a RuleConfig.key must match to take effect.
+DEFAULTS: dict = {
+    "AMOUNT_THRESHOLD": AMOUNT_THRESHOLD,
+    "VELOCITY_DAILY_LIMIT": VELOCITY_DAILY_LIMIT,
+    "VELOCITY_HOURLY_LIMIT": VELOCITY_HOURLY_LIMIT,
+    "RAPID_SUCCESSION_WINDOW_SECONDS": RAPID_SUCCESSION_WINDOW_SECONDS,
+    "ALERT_THRESHOLD": ALERT_THRESHOLD,
+    "EDD_THRESHOLD": EDD_THRESHOLD,
+    "HIGH_RISK_COUNTRIES": sorted(HIGH_RISK_COUNTRIES),
+    "SEVERITY_WEIGHT": dict(SEVERITY_WEIGHT),
+}
+
+
+def resolve_config(db: Session, customer: Customer) -> dict:
+    jurisdiction = customer.residency_country or customer.country
+    return get_effective_config(db, DEFAULTS, jurisdiction)
 
 
 @dataclass
@@ -41,16 +67,25 @@ class TriggeredRule:
     severity: str
 
 
-def _is_high_risk_country(*countries: str | None) -> bool:
-    return any(c and c.strip().upper() in HIGH_RISK_COUNTRIES for c in countries)
+def _is_high_risk_country(high_risk_countries: set[str], *countries: str | None) -> bool:
+    return any(c and c.strip().upper() in high_risk_countries for c in countries)
 
 
-def evaluate(db: Session, txn: Transaction, customer: Customer) -> list[TriggeredRule]:
+def evaluate(db: Session, txn: Transaction, customer: Customer, cfg: dict | None = None) -> list[TriggeredRule]:
+    if cfg is None:
+        cfg = resolve_config(db, customer)
+
+    amount_threshold = cfg["AMOUNT_THRESHOLD"]
+    velocity_daily_limit = cfg["VELOCITY_DAILY_LIMIT"]
+    velocity_hourly_limit = cfg["VELOCITY_HOURLY_LIMIT"]
+    rapid_succession_window_seconds = cfg["RAPID_SUCCESSION_WINDOW_SECONDS"]
+    high_risk_countries = set(cfg["HIGH_RISK_COUNTRIES"])
+
     triggered: list[TriggeredRule] = []
 
     # R001 — Amount Threshold
-    if txn.amount > AMOUNT_THRESHOLD:
-        triggered.append(TriggeredRule("R001", "Amount Threshold", f"Transaction {txn.amount} > {AMOUNT_THRESHOLD}", "MEDIUM"))
+    if txn.amount > amount_threshold:
+        triggered.append(TriggeredRule("R001", "Amount Threshold", f"Transaction {txn.amount} > {amount_threshold}", "MEDIUM"))
 
     # R002 — Velocity Daily
     daily_count = (
@@ -64,8 +99,8 @@ def evaluate(db: Session, txn: Transaction, customer: Customer) -> list[Triggere
         .scalar()
         or 0
     ) + 1
-    if daily_count > VELOCITY_DAILY_LIMIT:
-        triggered.append(TriggeredRule("R002", "Velocity Daily", f"{daily_count} transactions/day > {VELOCITY_DAILY_LIMIT}", "MEDIUM"))
+    if daily_count > velocity_daily_limit:
+        triggered.append(TriggeredRule("R002", "Velocity Daily", f"{daily_count} transactions/day > {velocity_daily_limit}", "MEDIUM"))
 
     # R003 — Velocity Hourly
     hourly_count = (
@@ -79,11 +114,11 @@ def evaluate(db: Session, txn: Transaction, customer: Customer) -> list[Triggere
         .scalar()
         or 0
     ) + 1
-    if hourly_count > VELOCITY_HOURLY_LIMIT:
-        triggered.append(TriggeredRule("R003", "Velocity Hourly", f"{hourly_count} transactions/hour > {VELOCITY_HOURLY_LIMIT}", "LOW"))
+    if hourly_count > velocity_hourly_limit:
+        triggered.append(TriggeredRule("R003", "Velocity Hourly", f"{hourly_count} transactions/hour > {velocity_hourly_limit}", "LOW"))
 
     # R004 — High Risk Country
-    if _is_high_risk_country(txn.meta_country, txn.meta_destination_country, txn.meta_origin_country):
+    if _is_high_risk_country(high_risk_countries, txn.meta_country, txn.meta_destination_country, txn.meta_origin_country):
         triggered.append(TriggeredRule("R004", "High Risk Country", "Counterparty in sanctioned/high-risk country", "HIGH"))
 
     # R005 — PEP Match
@@ -123,8 +158,8 @@ def evaluate(db: Session, txn: Transaction, customer: Customer) -> list[Triggere
         .filter(
             Transaction.customer_id == txn.customer_id,
             Transaction.id != txn.id,
-            Transaction.transaction_date >= txn.transaction_date - timedelta(seconds=RAPID_SUCCESSION_WINDOW_SECONDS),
-            Transaction.transaction_date <= txn.transaction_date + timedelta(seconds=RAPID_SUCCESSION_WINDOW_SECONDS),
+            Transaction.transaction_date >= txn.transaction_date - timedelta(seconds=rapid_succession_window_seconds),
+            Transaction.transaction_date <= txn.transaction_date + timedelta(seconds=rapid_succession_window_seconds),
         )
         .scalar()
         or 0
@@ -135,16 +170,24 @@ def evaluate(db: Session, txn: Transaction, customer: Customer) -> list[Triggere
     return triggered
 
 
-def score_from_rules(rules: list[TriggeredRule]) -> int:
-    return min(100, sum(SEVERITY_WEIGHT[r.severity] for r in rules))
+def score_from_rules(rules: list[TriggeredRule], severity_weights: dict[str, int] | None = None) -> int:
+    weights = severity_weights if severity_weights is not None else SEVERITY_WEIGHT
+    return min(100, sum(weights[r.severity] for r in rules))
 
 
-def recommended_action_for(rules: list[TriggeredRule], score: int) -> str | None:
+def recommended_action_for(
+    rules: list[TriggeredRule],
+    score: int,
+    alert_threshold: int | None = None,
+    edd_threshold: int | None = None,
+) -> str | None:
+    alert_threshold = ALERT_THRESHOLD if alert_threshold is None else alert_threshold
+    edd_threshold = EDD_THRESHOLD if edd_threshold is None else edd_threshold
     if any(r.severity == "CRITICAL" for r in rules):
         return "SAR"
-    if score >= 75:
+    if score >= edd_threshold:
         return "ENHANCED_DUE_DILIGENCE"
-    if score >= ALERT_THRESHOLD:
+    if score >= alert_threshold:
         return "REVIEW"
     return None
 
@@ -152,8 +195,9 @@ def recommended_action_for(rules: list[TriggeredRule], score: int) -> str | None
 def apply_to_transaction(db: Session, txn: Transaction, customer: Customer) -> tuple[list[TriggeredRule], int, Alert | None]:
     """Run all rules against a transaction, persist risk flags, update the
     transaction's risk_score/risk_flags, and open an Alert if warranted."""
-    rules = evaluate(db, txn, customer)
-    score = score_from_rules(rules)
+    cfg = resolve_config(db, customer)
+    rules = evaluate(db, txn, customer, cfg=cfg)
+    score = score_from_rules(rules, severity_weights=cfg["SEVERITY_WEIGHT"])
 
     txn.risk_score = score
     txn.risk_flags = {"triggered_rules": [r.rule_id for r in rules]}
@@ -169,7 +213,7 @@ def apply_to_transaction(db: Session, txn: Transaction, customer: Customer) -> t
         )
 
     alert: Alert | None = None
-    action = recommended_action_for(rules, score)
+    action = recommended_action_for(rules, score, alert_threshold=cfg["ALERT_THRESHOLD"], edd_threshold=cfg["EDD_THRESHOLD"])
     if action is not None:
         alert = Alert(
             customer_id=customer.id,
@@ -183,4 +227,11 @@ def apply_to_transaction(db: Session, txn: Transaction, customer: Customer) -> t
         db.add(alert)
 
     db.flush()
+    if alert is not None:
+        from app.services import customer_risk_service, deadline_service  # imported here to avoid an import cycle
+
+        deadline_service.start_case_clock(db, alert, customer)
+        # A new alert can change the customer's rating
+
+        customer_risk_service.assess_customer(db, customer)
     return rules, score, alert

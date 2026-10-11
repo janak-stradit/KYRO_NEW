@@ -28,6 +28,7 @@ from app.models.account import Account
 from app.models.customer import Customer
 from app.services.rules_engine import HIGH_RISK_COUNTRIES, apply_to_transaction
 from app.models.transaction import Transaction
+from scripts.sample_profiles import account_profile, customer_profile
 
 fake = Faker()
 
@@ -86,7 +87,9 @@ def seed(num_customers: int, min_txns: int, max_txns: int) -> None:
                 )
                 db.add(account)
                 db.flush()
+                account.account_metadata = account_profile(account.id, account.account_type)
                 accounts.append(account)
+            customer.customer_metadata = customer_profile(customer.id, customer.customer_type, customer.country, accounts[0].currency)
 
             num_txns = random.randint(min_txns, max_txns)
             base = datetime.now(timezone.utc) - timedelta(days=120)

@@ -6,9 +6,28 @@ from app.models.alert import Alert
 from app.models.audit import AuditLog
 from app.models.user import User
 from app.models.ml_score import MLScore
+from app.models.watchlist import WatchlistSource, WatchlistEntity, WatchlistIngestionRun
+from app.models.regulatory_notice import RegulatoryNotice
+from app.models.rule_config import RuleConfig
+from app.models.beneficial_ownership import BeneficialOwner
+from app.models.ai_interaction import AIInteraction
+from app.models.knowledge_chunk import KnowledgeChunk
+from app.models.obligation import Obligation
+from app.models.obligation_mapping import ObligationMapping
+from app.models.change_management import RegulatoryChange, RuleConfigChange
+from app.models.document import Document, DocumentExtraction, DocumentPage
+from app.models.feed import FeedMapping, FeedRun
+from app.models.alert_note import AlertNote
+from app.models.alert_request import AlertRequest
+from app.models.access_control import EmergencyAccessGrant, RoleGrantRequest
+from app.models.sar_narrative import SarNarrative
+from app.models.regulatory import RegulatoryIngestionRun, RegulatorySection, RegulatorySource
 
 __all__ = [
     "Base",
+    "EmergencyAccessGrant",
+    "RoleGrantRequest",
+    "SarNarrative",
     "SCHEMA",
     "Customer",
     "CustomerRiskProfile",
@@ -24,4 +43,24 @@ __all__ = [
     "AuditLog",
     "User",
     "MLScore",
+    "WatchlistSource",
+    "WatchlistEntity",
+    "WatchlistIngestionRun",
+    "RuleConfig",
+    "BeneficialOwner",
+    "AIInteraction",
+    "KnowledgeChunk",
+    "RegulatorySource",
+    "RegulatoryIngestionRun",
+    "RegulatorySection",
+    "Obligation",
+    "ObligationMapping",
+    "RegulatoryChange",
+    "RuleConfigChange",
+    "RegulatoryNotice",
+    "Document",
+    "DocumentPage",
+    "DocumentExtraction",
+    "FeedMapping",
+    "FeedRun",
 ]

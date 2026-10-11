@@ -89,18 +89,83 @@ function showToast(type, message, title = null, duration = 4000) {
 /**
  * Loading state management
  */
-function showLoading(selector, message = "Loading...") {
-    const loadingHtml = `
-        <div class="d-flex justify-content-center align-items-center py-5">
-            <div class="text-center">
-                <div class="spinner-border text-primary mb-3" role="status">
-                    <span class="visually-hidden">Loading...</span>
+/**
+ * Skeleton placeholders: grey blocks in the shape of the content that is on
+ * its way, with a light sweep across them. Screen readers hear "Loading".
+ */
+const Skeleton = {
+    line(width = '100%', height = 12) {
+        return `<span class="sk" style="width:${width};height:${height}px"></span>`;
+    },
+
+    /** A few lines of text. */
+    lines(count = 3) {
+        const widths = ['96%', '88%', '72%', '92%', '64%', '84%'];
+        return `<div class="sk-lines" aria-hidden="true">${Array.from({ length: count }, (_, i) => this.line(widths[i % widths.length])).join('')}</div>`;
+    },
+
+    /** Table rows, for a <tbody>. */
+    rows(columns = 5, count = 6) {
+        const widths = ['70%', '55%', '80%', '45%', '65%', '50%', '60%', '40%'];
+        return Array.from({ length: count }, (_, r) => `
+            <tr class="sk-row" aria-hidden="true">${Array.from({ length: columns }, (_, c) => `<td class="px-3 py-3">${this.line(widths[(r + c) % widths.length], 11)}</td>`).join('')}</tr>`).join('');
+    },
+
+    /** A row of summary tiles. */
+    tiles(count = 4) {
+        return `<div class="sk-tiles" aria-hidden="true">${Array.from({ length: count }, () => `
+            <div class="sk-card">${this.line('45%', 10)}${this.line('30%', 22)}${this.line('60%', 10)}</div>`).join('')}</div>`;
+    },
+
+    /** Tile placeholders for a grid that already exists. */
+    tileCards(count = 4) {
+        return Array.from({ length: count }, () => `<div class="sk-card" aria-hidden="true">${this.line('45%', 10)}${this.line('30%', 22)}${this.line('60%', 10)}</div>`).join('');
+    },
+
+    /** A panel with a heading and some lines. */
+    panel(lines = 5) {
+        return `<div class="sk-card sk-card--panel" aria-hidden="true">${this.line('32%', 14)}${this.line('48%', 10)}<div class="sk-gap"></div>${this.lines(lines)}</div>`;
+    },
+
+    /** A whole page: heading band, tiles, two panels and a table. */
+    page(label = 'Loading') {
+        return `
+            <div class="kyro-page sk-page" role="status" aria-busy="true">
+                <span class="visually-hidden">${escapeHtml(label)}</span>
+                <div class="kyro-page-head" aria-hidden="true"><div class="sk-head">${this.line('120px', 9)}${this.line('260px', 20)}${this.line('420px', 11)}</div></div>
+                ${this.tiles(4)}
+                <div class="sk-grid">${this.panel(5)}${this.panel(5)}</div>
+                <div class="sk-card sk-card--panel" aria-hidden="true">${this.line('24%', 14)}<div class="sk-gap"></div>
+                    <table class="table mb-0"><tbody>${this.rows(5, 5)}</tbody></table></div>
+            </div>`;
+    },
+
+    /** A case page: header with facts and tabs, then panels. */
+    casePage() {
+        return `
+            <div class="kyro-page cp sk-page" role="status" aria-busy="true">
+                <span class="visually-hidden">Loading the case</span>
+                <div class="cp-sticky" aria-hidden="true">
+                    ${this.line('220px', 10)}
+                    <div class="sk-casehead"><span class="sk sk--circle"></span><div>${this.line('240px', 20)}${this.line('120px', 12)}</div></div>
+                    <div class="sk-facts">${Array.from({ length: 6 }, () => `<div>${this.line('70px', 9)}${this.line('110px', 13)}</div>`).join('')}</div>
+                    ${this.line('100%', 34)}
+                    <div class="sk-tabs">${this.line('70px', 12)}${this.line('70px', 12)}${this.line('90px', 12)}${this.line('90px', 12)}</div>
                 </div>
-                <p class="text-muted">${message}</p>
-            </div>
-        </div>
-    `;
-    $(selector).html(loadingHtml);
+                ${this.tiles(5)}
+                ${this.panel(3)}
+                <div class="sk-grid">${this.panel(6)}${this.panel(6)}</div>
+            </div>`;
+    }
+};
+window.Skeleton = Skeleton;
+
+function showLoading(selector, message = "Loading...") {
+    // The whole content area gets a page-shaped skeleton; a smaller area gets a few lines
+    const html = selector === "#mainContent"
+        ? Skeleton.page(message)
+        : `<div role="status" aria-busy="true"><span class="visually-hidden">${escapeHtml(message)}</span>${Skeleton.lines(4)}</div>`;
+    $(selector).html(html);
 }
 
 function hideLoading() {
@@ -172,6 +237,13 @@ function formatDateTime(dateString, options = {}) {
         ...options
     };
     return date.toLocaleDateString('en-US', defaultOptions);
+}
+
+/**
+ * Escape text for safe insertion into HTML template strings.
+ */
+function escapeHtml(value) {
+    return String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
 function formatRelativeTime(dateString) {
@@ -483,3 +555,20 @@ const ThemeManager = {
 
 // Initialize Theme Manager to ensure light theme
 ThemeManager.init();
+/**
+ * Close a Bootstrap modal even if it is still animating open (Bootstrap
+ * ignores hide() during the show transition).
+ */
+function closeModalSafely(modalEl) {
+    const modal = bootstrap.Modal.getInstance(modalEl);
+    if (!modal) return;
+    if (modalEl.dataset.shown === "true") {
+        modal.hide();
+    } else {
+        modalEl.addEventListener("shown.bs.modal", () => modal.hide(), { once: true });
+    }
+}
+
+// Record when any modal has finished opening, for closeModalSafely()
+document.addEventListener("shown.bs.modal", (e) => { e.target.dataset.shown = "true"; });
+document.addEventListener("hidden.bs.modal", (e) => { e.target.dataset.shown = "false"; });

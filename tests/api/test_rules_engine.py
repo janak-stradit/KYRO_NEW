@@ -8,6 +8,7 @@ import pytest
 from app.models.account import Account
 from app.models.customer import Customer
 from app.models.transaction import Transaction
+from app.services import rule_config_service
 from app.services.rules_engine import evaluate, recommended_action_for, score_from_rules
 
 pytestmark = pytest.mark.db
@@ -94,3 +95,30 @@ def test_no_rules_triggered_for_ordinary_transaction(db_session):
     assert rules == []
     assert score_from_rules(rules) == 0
     assert recommended_action_for(rules, 0) is None
+
+
+def test_global_rule_config_override_changes_amount_threshold(db_session):
+    # Below the hardcoded default (10,000) but above a lowered GLOBAL override.
+    customer = _make_customer(db_session, email="global.override@example.com")
+    account = _make_account(db_session, customer)
+    txn = _make_txn(db_session, customer, account, amount=2000)
+
+    assert not any(r.rule_id == "R001" for r in evaluate(db_session, txn, customer))
+
+    rule_config_service.upsert_config(db_session, key="AMOUNT_THRESHOLD", value=1000)
+
+    assert any(r.rule_id == "R001" for r in evaluate(db_session, txn, customer))
+
+
+def test_jurisdiction_rule_config_override_only_applies_to_that_jurisdiction(db_session):
+    us_customer = _make_customer(db_session, email="us.override@example.com", residency_country="US")
+    de_customer = _make_customer(db_session, email="de.no-override@example.com", residency_country="DE")
+    us_account = _make_account(db_session, us_customer)
+    de_account = _make_account(db_session, de_customer)
+    us_txn = _make_txn(db_session, us_customer, us_account, amount=2000)
+    de_txn = _make_txn(db_session, de_customer, de_account, amount=2000)
+
+    rule_config_service.upsert_config(db_session, key="AMOUNT_THRESHOLD", value=1000, jurisdiction="US")
+
+    assert any(r.rule_id == "R001" for r in evaluate(db_session, us_txn, us_customer))
+    assert not any(r.rule_id == "R001" for r in evaluate(db_session, de_txn, de_customer))

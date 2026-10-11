@@ -1,5 +1,6 @@
 # ── Python ────────────────────────────────────────────────────
 venv/
+.venv/
 .venv-api/
 __pycache__/
 *.pyc
@@ -26,6 +27,7 @@ logs/
 output/
 *.xlsx
 .env
+local.env
 pyrightconfig.json
 
 # ── IDE ───────────────────────────────────────────────────────
@@ -98,3 +100,13 @@ start_server.sh
 CHANGES_SUMMARY.md
 E2E_TEST_REPORT.md
 GITHUB_STATUS.md
+
+# ── Editor/backup leftovers ─────────────────────────────────────
+*.backup
+*.bak
+
+# Uploaded KYC documents and other local runtime data
+var/
+
+# ── Database backups written by deploy/restore_data.sh ─────────
+backups/

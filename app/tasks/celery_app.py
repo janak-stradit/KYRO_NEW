@@ -14,7 +14,7 @@ celery_app = Celery(
     "kyro_api",
     broker=settings.redis_url,
     backend=settings.redis_url,
-    include=["app.tasks.etl_tasks", "app.tasks.ml_tasks"],
+    include=["app.tasks.etl_tasks", "app.tasks.ml_tasks", "app.tasks.watchlist_tasks", "app.tasks.regulatory_tasks"],
 )
 
 celery_app.conf.update(
@@ -27,9 +27,25 @@ celery_app.conf.update(
 )
 
 celery_app.conf.beat_schedule = {
+    "refresh-watchlists-daily": {
+        "task": "app.tasks.watchlist_tasks.run_watchlist_refresh_pipeline",
+        "schedule": crontab(hour=1, minute=0),
+    },
     "run-daily-etl-pipeline": {
         "task": "app.tasks.etl_tasks.run_daily_etl_pipeline",
         "schedule": crontab(hour=2, minute=0),
+    },
+    "refresh-regulatory-sources-daily": {
+        "task": "app.tasks.regulatory_tasks.ingest_regulatory_sources_task",
+        "schedule": crontab(hour=4, minute=0),
+    },
+    "sync-federal-register-daily": {
+        "task": "app.tasks.regulatory_tasks.sync_federal_register_task",
+        "schedule": crontab(hour=4, minute=30),
+    },
+    "activate-due-rule-changes-daily": {
+        "task": "app.tasks.regulatory_tasks.activate_due_rule_changes_task",
+        "schedule": crontab(hour=0, minute=5),
     },
     "check-ml-retraining-weekly": {
         "task": "app.tasks.ml_tasks.check_retraining_task",

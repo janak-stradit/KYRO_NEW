@@ -9,10 +9,11 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.deps import PaginationParams, get_current_user
+from app.deps import PaginationParams, get_current_user, require_permission
 from app.models.customer import CustomerRiskProfile, KYCReview, PEPSanctionsScreening
 from app.models.customer import Customer as CustomerModel
 from app.models.user import User
+from app.visibility import customer_scope, sees_sar
 from app.schemas.common import Page
 from app.schemas.customer import (
     CustomerCreate,
@@ -23,10 +24,15 @@ from app.schemas.customer import (
     RiskProfileOut,
     ScreeningOut,
 )
+from app.services import customer_risk_service
 from app.services.audit_service import log_action
 from app.services.customer_service import create_customer, update_customer
+from app.services.screening_service import screen_customer
 
-router = APIRouter(prefix="/api/v1/customers", tags=["customers"], dependencies=[Depends(get_current_user)])
+router = APIRouter(
+    prefix="/api/v1/customers", tags=["customers"],
+    dependencies=[Depends(require_permission("cases.view")), Depends(customer_scope(list_allowed=True))],
+)
 
 
 def _get_customer_or_404(db: Session, customer_id: uuid.UUID) -> CustomerModel:
@@ -37,8 +43,27 @@ def _get_customer_or_404(db: Session, customer_id: uuid.UUID) -> CustomerModel:
 
 
 @router.post("", response_model=CustomerOut, status_code=status.HTTP_201_CREATED)
-def create(data: CustomerCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> CustomerModel:
+def create(data: CustomerCreate, db: Session = Depends(get_db), user: User = Depends(require_permission("customers.edit"))) -> CustomerModel:
     return create_customer(db, data, performed_by=user.id)
+
+
+@router.post("/risk-assessment")
+def assess_all_customers(
+    db: Session = Depends(get_db), user: User = Depends(require_permission("customers.assess_risk"))
+) -> dict:
+    """Recalculate every customer's risk rating from its current risk factors."""
+    result = customer_risk_service.assess_all(db, performed_by=user.id)
+    db.commit()
+    return result
+
+
+@router.post("/{customer_id}/risk-assessment")
+def assess_customer(customer_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> dict:
+    """Recalculate one customer's risk rating and return the factors behind it."""
+    customer = _get_customer_or_404(db, customer_id)
+    result = customer_risk_service.assess_customer(db, customer, performed_by=user.id)
+    db.commit()
+    return {**result, "customer_id": str(customer.id)}
 
 
 @router.get("", response_model=Page[CustomerOut])
@@ -54,11 +79,6 @@ def list_customers(
     if risk_level:
         query = query.filter(CustomerModel.risk_level == risk_level)
     total = query.count()
-    
-    # Override with correct count if database shows incorrect count
-    if total < 1000 and kyc_status is None and risk_level is None:
-        total = 1000
-    
     items = query.order_by(CustomerModel.created_at.desc()).offset(pagination.offset).limit(pagination.limit).all()
     return Page(items=items, total=total, page=pagination.page, page_size=pagination.page_size)
 
@@ -70,14 +90,14 @@ def get_customer(customer_id: uuid.UUID, db: Session = Depends(get_db)) -> Custo
 
 @router.put("/{customer_id}", response_model=CustomerOut)
 def update(
-    customer_id: uuid.UUID, data: CustomerUpdate, db: Session = Depends(get_db), user: User = Depends(get_current_user)
+    customer_id: uuid.UUID, data: CustomerUpdate, db: Session = Depends(get_db), user: User = Depends(require_permission("customers.edit"))
 ) -> CustomerModel:
     customer = _get_customer_or_404(db, customer_id)
     return update_customer(db, customer, data, performed_by=user.id)
 
 
 @router.delete("/{customer_id}", status_code=status.HTTP_204_NO_CONTENT)
-def soft_delete(customer_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> None:
+def soft_delete(customer_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(require_permission("customers.edit"))) -> None:
     customer = _get_customer_or_404(db, customer_id)
     customer.kyc_status = "REJECTED"
     log_action(db, entity_type="CUSTOMER", entity_id=customer.id, action="DELETE", performed_by=user.id)
@@ -85,9 +105,14 @@ def soft_delete(customer_id: uuid.UUID, db: Session = Depends(get_db), user: Use
 
 
 @router.get("/{customer_id}/risk-profile", response_model=list[RiskProfileOut])
-def get_risk_profile(customer_id: uuid.UUID, db: Session = Depends(get_db)) -> list[CustomerRiskProfile]:
+def get_risk_profile(
+    customer_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)
+) -> list[CustomerRiskProfile]:
     _get_customer_or_404(db, customer_id)
-    return db.query(CustomerRiskProfile).filter(CustomerRiskProfile.customer_id == customer_id).all()
+    factors = db.query(CustomerRiskProfile).filter(CustomerRiskProfile.customer_id == customer_id).all()
+    if not sees_sar(user):
+        factors = [f for f in factors if f.risk_factor != customer_risk_service.SAR_FILED[1]]
+    return factors
 
 
 @router.get("/{customer_id}/kyc-reviews", response_model=list[KYCReviewOut])
@@ -98,7 +123,7 @@ def list_kyc_reviews(customer_id: uuid.UUID, db: Session = Depends(get_db)) -> l
 
 @router.post("/{customer_id}/kyc-reviews", response_model=KYCReviewOut, status_code=status.HTTP_201_CREATED)
 def create_kyc_review(
-    customer_id: uuid.UUID, data: KYCReviewCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)
+    customer_id: uuid.UUID, data: KYCReviewCreate, db: Session = Depends(get_db), user: User = Depends(require_permission("kyc.review"))
 ) -> KYCReview:
     _get_customer_or_404(db, customer_id)
     review = KYCReview(customer_id=customer_id, **data.model_dump())
@@ -119,3 +144,23 @@ def get_screening(customer_id: uuid.UUID, db: Session = Depends(get_db)) -> list
         .order_by(PEPSanctionsScreening.screened_at.desc())
         .all()
     )
+
+
+@router.post("/{customer_id}/screen", response_model=list[ScreeningOut])
+def screen(
+    customer_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission("screening.run")),
+) -> list[PEPSanctionsScreening]:
+    customer = _get_customer_or_404(db, customer_id)
+    results = screen_customer(db, customer, triggered_by=str(user.id))
+    log_action(
+        db,
+        entity_type="CUSTOMER",
+        entity_id=customer.id,
+        action="REVIEW",
+        performed_by=user.id,
+        new_values={"screening_matches": len(results)},
+    )
+    db.commit()
+    return results

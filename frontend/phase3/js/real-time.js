@@ -32,6 +32,8 @@ const RealTime = {
             console.warn("No auth token available for real-time connection");
             return;
         }
+        // Live alerts carry customer names, so they follow the same permission as the queue
+        if (!Auth.can('cases.view')) return;
         
         try {
             console.log("🔄 Connecting to real-time updates...");
@@ -201,13 +203,13 @@ const RealTime = {
         console.log("⚡ System status update:", status);
         
         // Update system health indicators
-        if (status.api_status !== "healthy") {
+        // This arrives every 20 seconds, so say it once when the state changes, not on every tick.
+        // The size of the queue is on the dashboard and the queue page; it is not announced here.
+        const healthy = status.api_status === "healthy";
+        if (!healthy && this._lastHealthy !== false) {
             showToast("warning", "System performance issues detected", "System Warning");
         }
-        
-        if (status.queue_size > 1000) {
-            showToast("warning", `Alert queue is growing: ${status.queue_size} pending`, "Queue Warning");
-        }
+        this._lastHealthy = healthy;
         
         // Update dashboard if visible
         const currentPage = App.getCurrentPage();

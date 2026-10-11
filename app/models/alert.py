@@ -26,6 +26,12 @@ class Alert(Base, UUIDPrimaryKeyMixin):
             "status IN ('OPEN','ASSIGNED','IN_REVIEW','RESOLVED','ESCALATED')",
             name="chk_alert_status",
         ),
+        CheckConstraint(
+            "resolution_outcome IS NULL OR resolution_outcome IN "
+            "('SAR_FILED','ESCALATED','TRUE_POSITIVE_NO_SAR','FALSE_POSITIVE')",
+            name="chk_alert_resolution_outcome",
+        ),
+        CheckConstraint("qa_result IS NULL OR qa_result IN ('PASS','FAIL')", name="chk_alert_qa_result"),
         {"schema": SCHEMA},
     )
 
@@ -45,4 +51,28 @@ class Alert(Base, UUIDPrimaryKeyMixin):
     resolved_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     resolution_notes: Mapped[str | None] = mapped_column(Text)
     is_false_positive: Mapped[bool | None] = mapped_column(Boolean)
+    # Disposition taxonomy (schemas/alert.py): one outcome, one or more reason codes
+    resolution_outcome: Mapped[str | None] = mapped_column(String(30), index=True)
+    resolution_reasons: Mapped[list | None] = mapped_column(JSONB)
+    sar_reference: Mapped[str | None] = mapped_column(String(100))
+    # Quality check on the resolved case (does not change the outcome)
+    qa_result: Mapped[str | None] = mapped_column(String(10))
+    qa_notes: Mapped[str | None] = mapped_column(Text)
+    qa_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    qa_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Generated case summary (routers/case_file.py); regenerated on request, never edited in place
+    summary: Mapped[str | None] = mapped_column(Text)
+    summary_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    summary_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    summary_provider: Mapped[str | None] = mapped_column(String(30))
+    # The AI call that wrote the summary, and the investigator who checked it against the records
+    summary_interaction_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    summary_attested_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    summary_attested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     ml_version: Mapped[str | None] = mapped_column(String(20))
+    # Deadlines (services/deadline_service.py); days are fixed when each clock starts
+    detected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))  # date of initial detection
+    sla_days: Mapped[int | None] = mapped_column()
+    sar_candidate_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))  # escalated as a potential SAR
+    sar_decision_days: Mapped[int | None] = mapped_column()
+    filing_due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

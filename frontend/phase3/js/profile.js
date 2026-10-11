@@ -1,143 +1,100 @@
 /**
- * KYRO Profile - User Profile Management Implementation
+ * My profile - who you are signed in as, what your role is responsible for,
+ * and changing your own password.
  */
 
 const Profile = {
     async init() {
-        await this.loadProfile();
-    },
-    
-    async loadProfile() {
-        showLoading("#mainContent", "Retrieving profile details...");
-        
+        showLoading("#mainContent", "Loading your profile...");
+        let user, roles;
         try {
-            // Get logged-in user profile from FastAPI backend
-            const user = await API.get("/auth/me");
-            
-            const joinDate = user.created_at ? formatDate(user.created_at) : "N/A";
-            const lastLogin = user.last_login ? formatDateTime(user.last_login) : "N/A";
-            
-            // Format name for initials
-            const name = user.full_name || user.username || "Analyst";
-            const initials = name.split(" ").map(n => n[0]).join("").toUpperCase().substring(0, 2);
-            
-            const html = `
-                <div class="dashboard-header mb-4">
-                    <div class="container-fluid">
-                        <h1 class="dashboard-title">User Account & Security</h1>
-                        <p class="dashboard-subtitle">Manage your credentials, view assigned roles, and inspect recent login sessions</p>
-                    </div>
-                </div>
-                
-                <div class="row">
-                    <!-- Left Column: User Card -->
-                    <div class="col-lg-4 mb-4">
-                        <div class="card border-0 shadow-sm text-center py-4 px-3" style="border-radius: 16px; background: linear-gradient(to bottom, #ffffff, #f9fafb);">
-                            <div class="d-flex justify-content-center mb-3">
-                                <div class="rounded-circle d-flex align-items-center justify-content-center text-white shadow-sm" style="width: 100px; height: 100px; font-size: 2.5rem; font-weight: 700; background: linear-gradient(135deg, #FF8C42, #ff6b35);">
-                                    ${initials}
-                                </div>
-                            </div>
-                            <h4 class="fw-bold mb-1 text-dark">${user.full_name || user.username}</h4>
-                            <p class="text-muted mb-3">@${user.username}</p>
-                            <div class="d-inline-block px-3 py-1 rounded-pill bg-light text-primary border mb-4" style="font-size: 0.85rem; font-weight: 600;">
-                                <i class="fas fa-shield-alt me-1"></i> ${user.role}
-                            </div>
-                            
-                            <div class="border-top pt-3 text-start small">
-                                <div class="d-flex justify-content-between mb-2">
-                                    <span class="text-muted">Account Status:</span>
-                                    <span class="badge bg-success-subtle text-success border border-success-subtle">Active</span>
-                                </div>
-                                <div class="d-flex justify-content-between mb-2">
-                                    <span class="text-muted">Member Since:</span>
-                                    <span class="fw-semibold text-dark">${joinDate}</span>
-                                </div>
-                                <div class="d-flex justify-content-between">
-                                    <span class="text-muted">Last Active:</span>
-                                    <span class="fw-semibold text-dark">${formatRelativeTime(user.last_login) || 'Just now'}</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Right Column: Profile details form -->
-                    <div class="col-lg-8 mb-4">
-                        <div class="card border-0 shadow-sm h-100" style="border-radius: 16px;">
-                            <div class="card-header bg-white py-3 border-0">
-                                <h5 class="card-title fw-bold mb-0 text-dark">Profile Details & Session Info</h5>
-                            </div>
-                            <div class="card-body">
-                                <div class="row g-3">
-                                    <div class="col-md-6">
-                                        <label class="form-label fw-semibold text-muted small">Full Name</label>
-                                        <div class="form-control bg-light border-0 py-2 fw-semibold text-dark">${user.full_name || 'N/A'}</div>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <label class="form-label fw-semibold text-muted small">Username</label>
-                                        <div class="form-control bg-light border-0 py-2 font-monospace text-dark">${user.username}</div>
-                                    </div>
-                                    <div class="col-md-12">
-                                        <label class="form-label fw-semibold text-muted small">Email Address</label>
-                                        <div class="form-control bg-light border-0 py-2 text-dark">${user.email}</div>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <label class="form-label fw-semibold text-muted small">Security Role</label>
-                                        <div class="form-control bg-light border-0 py-2 text-dark font-monospace">${user.role}</div>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <label class="form-label fw-semibold text-muted small">Last Login Timestamp</label>
-                                        <div class="form-control bg-light border-0 py-2 text-dark font-monospace">${lastLogin}</div>
-                                    </div>
-                                </div>
-                                
-                                <div class="mt-5 border-top pt-4">
-                                    <h6 class="fw-bold mb-3 text-dark"><i class="fas fa-lock me-2 text-warning"></i> Role Permissions Overview</h6>
-                                    <div class="row g-2">
-                                        <div class="col-md-6">
-                                            <div class="p-2 border rounded bg-light d-flex align-items-center gap-2 small">
-                                                <i class="fas fa-check-circle text-success"></i>
-                                                <span>Audit Risk Stream Logs</span>
-                                            </div>
-                                        </div>
-                                        <div class="col-md-6">
-                                            <div class="p-2 border rounded bg-light d-flex align-items-center gap-2 small">
-                                                <i class="fas fa-check-circle text-success"></i>
-                                                <span>Preview Anomaly Models</span>
-                                            </div>
-                                        </div>
-                                        <div class="col-md-6">
-                                            <div class="p-2 border rounded bg-light d-flex align-items-center gap-2 small">
-                                                ${user.role === 'COMPLIANCE_OFFICER' || user.role === 'ADMIN' ? 
-                                                    '<i class="fas fa-check-circle text-success"></i>' : 
-                                                    '<i class="fas fa-ban text-muted"></i>'}
-                                                <span class="${user.role === 'COMPLIANCE_OFFICER' || user.role === 'ADMIN' ? 'text-dark' : 'text-muted text-decoration-line-through'}">Resolve Compliance Alerts</span>
-                                            </div>
-                                        </div>
-                                        <div class="col-md-6">
-                                            <div class="p-2 border rounded bg-light d-flex align-items-center gap-2 small">
-                                                ${user.role === 'ADMIN' ? 
-                                                    '<i class="fas fa-check-circle text-success"></i>' : 
-                                                    '<i class="fas fa-ban text-muted"></i>'}
-                                                <span class="${user.role === 'ADMIN' ? 'text-dark' : 'text-muted text-decoration-line-through'}">Trigger ML Retraining Pipeline</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `;
-            
-            $("#mainContent").html(html);
-            
+            [user, roles] = await Promise.all([API.get("/auth/me"), API.get("/roles")]);
         } catch (error) {
-            console.error("Profile load error:", error);
-            showToast("error", "Failed to retrieve user profile data.");
+            $("#mainContent").html('<div class="kyro-page"><section class="card kd-panel"><p class="cp-empty mb-0">Could not load your profile.</p></section></div>');
+            return;
         }
+        const role = roles.roles.find(r => r.code === user.role) || { label: user.role, purpose: '', responsibilities: [], limits: [] };
+        const name = user.full_name || user.username;
+        const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?';
+        const list = (items, cls = '') => `<ul class="adm-list ${cls}">${items.map(x => `<li>${escapeHtml(x)}</li>`).join('')}</ul>`;
+        const row = (label, value) => `<div class="pf-row"><span>${label}</span><strong>${escapeHtml(value)}</strong></div>`;
+
+        $("#mainContent").html(`
+            <div class="kyro-page">
+                <div class="kyro-page-head">
+                    <div>
+                        <span class="kyro-kicker">Account</span>
+                        <h1 class="kyro-page-title">My Profile</h1>
+                        <p class="kyro-page-sub">Your account, what your role is responsible for, and your password.</p>
+                    </div>
+                </div>
+                <div class="pf-grid">
+                    <section class="card kd-panel">
+                        <div class="rc-customer mb-3">
+                            <span class="rc-customer__avatar cp-head__avatar" aria-hidden="true">${escapeHtml(initials)}</span>
+                            <div>
+                                <h2 class="pf-name">${escapeHtml(name)}</h2>
+                                <p class="aml-subtitle mb-0">${escapeHtml(role.label)}${role.read_only ? ' &middot; read-only' : ''}</p>
+                            </div>
+                        </div>
+                        ${row('Username', user.username)}
+                        ${row('Email', user.email)}
+                        ${row('Last sign-in', user.last_login ? formatDateTime(user.last_login) : 'Never')}
+                        ${row('Account created', user.created_at ? formatDate(user.created_at) : '—')}
+                        <p class="kx-note mt-3 mb-0">Your name, email and role are managed by an administrator.</p>
+                    </section>
+
+                    <section class="card kd-panel">
+                        <header class="kd-panel__head"><div><h2>Your role</h2><p class="aml-subtitle">${escapeHtml(role.purpose)}</p></div></header>
+                        <div class="kx-label">Responsible for</div>
+                        ${list(role.responsibilities)}
+                        <div class="kx-label">Limits</div>
+                        ${list(role.limits, 'adm-list--limits')}
+                    </section>
+
+                    <section class="card kd-panel">
+                        <header class="kd-panel__head"><div><h2>Change password</h2><p class="aml-subtitle">Use at least 10 characters. Change a temporary password as soon as you receive it.</p></div></header>
+                        <form id="pfPasswordForm" novalidate>
+                            <input type="text" class="visually-hidden" autocomplete="username" value="${escapeHtml(user.username)}" tabindex="-1" aria-hidden="true" readonly>
+                            <label class="kx-label" for="pfCurrent">Current password</label>
+                            <input type="password" class="form-control mb-3" id="pfCurrent" autocomplete="current-password" required>
+                            <label class="kx-label" for="pfNew">New password</label>
+                            <input type="password" class="form-control mb-3" id="pfNew" minlength="10" autocomplete="new-password" required>
+                            <label class="kx-label" for="pfConfirm">Confirm new password</label>
+                            <input type="password" class="form-control" id="pfConfirm" minlength="10" autocomplete="new-password" required>
+                            <p class="adm-error d-none" id="pfError" role="alert"></p>
+                            <button type="submit" class="btn btn-primary mt-3">Change password</button>
+                        </form>
+                    </section>
+                </div>
+            </div>
+        `);
+        $("#pfPasswordForm").on("submit", (e) => { e.preventDefault(); this.changePassword(); });
+    },
+
+    async changePassword() {
+        const current = $("#pfCurrent").val();
+        const next = $("#pfNew").val();
+        const fail = (message, focus) => { $("#pfError").text(message).removeClass("d-none"); if (focus) $(focus).trigger("focus"); };
+        if (!current) return fail('Enter your current password.', '#pfCurrent');
+        if (next.length < 10) return fail('The new password needs at least 10 characters.', '#pfNew');
+        if (next !== $("#pfConfirm").val()) return fail('The new password and its confirmation do not match.', '#pfConfirm');
+        if (next === current) return fail('Choose a password different from the current one.', '#pfNew');
+
+        const $submit = $("#pfPasswordForm button[type=submit]").prop("disabled", true);
+        try {
+            await API.post('/auth/change-password', { current_password: current, new_password: next });
+        } catch (xhr) {
+            const detail = xhr && xhr.responseJSON && xhr.responseJSON.detail;
+            fail(typeof detail === 'string' ? detail : 'Could not change the password. Try again.');
+            $submit.prop("disabled", false);
+            return;
+        }
+        $("#pfPasswordForm")[0].reset();
+        $("#pfError").addClass("d-none");
+        $submit.prop("disabled", false);
+        showToast("success", "Password changed.");
     }
 };
 
-// Export to window
 window.Profile = Profile;

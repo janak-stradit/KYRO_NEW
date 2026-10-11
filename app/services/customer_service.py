@@ -10,12 +10,16 @@ from sqlalchemy.orm import Session
 from app.models.customer import Customer
 from app.schemas.customer import CustomerCreate, CustomerUpdate
 from app.services.audit_service import log_action
+from app.services.screening_service import screen_customer
+
+_SCREENING_TRIGGER_FIELDS = {"full_name", "date_of_birth", "country", "residency_country"}
 
 
 def create_customer(db: Session, data: CustomerCreate, performed_by: uuid.UUID | None = None) -> Customer:
     customer = Customer(**data.model_dump())
     db.add(customer)
     db.flush()
+    screen_customer(db, customer, triggered_by="SYSTEM")
     log_action(
         db,
         entity_type="CUSTOMER",
@@ -37,6 +41,8 @@ def update_customer(
     for key, value in updates.items():
         setattr(customer, key, value)
     db.flush()
+    if _SCREENING_TRIGGER_FIELDS & updates.keys():
+        screen_customer(db, customer, triggered_by="SYSTEM")
     log_action(
         db,
         entity_type="CUSTOMER",

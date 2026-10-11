@@ -22,6 +22,12 @@ ANOMALY_PROBABILITY_THRESHOLD = 0.5
 HIGH_RISK_THRESHOLD = 71
 
 
+# Loaded model files, kept between calls: every ingested transaction is
+# scored, and unpickling three models each time would dominate the cost.
+# The file's modification time is in the key, so a rewritten file is reloaded.
+_artifacts: dict[tuple[str, float], dict] = {}
+
+
 class ScoringUnavailableError(RuntimeError):
     """Raised when no trained model exists yet — caller should return a
     clear 'train the models first' response rather than a 500."""
@@ -40,7 +46,13 @@ class RealTimeScorer:
 
     def _load(self, name: str) -> tuple[dict, int, bool]:
         version, is_candidate = self.registry.resolve_serving_version(name)
-        return self.registry.load_model(name, version), version, is_candidate
+        path = self.registry.models_dir / f"{name}_v{version}.pkl"
+        if not path.exists():
+            return self.registry.load_model(name, version), version, is_candidate  # raises ModelNotFoundError
+        key = (str(path.resolve()), path.stat().st_mtime)
+        if key not in _artifacts:
+            _artifacts[key] = self.registry.load_model(name, version)
+        return _artifacts[key], version, is_candidate
 
     def score_transaction(self, db: Session, txn: Transaction, customer: Customer, persist: bool = True) -> dict:
         try:
@@ -72,7 +84,9 @@ class RealTimeScorer:
         )
         anomaly_flag = anomaly_probability > ANOMALY_PROBABILITY_THRESHOLD or combined_score >= HIGH_RISK_THRESHOLD
 
-        explainer = ExplainabilityEngine(risk_scorer, list(X.columns))
+        explainer = risk_artifact.get("_explainer")
+        if explainer is None:
+            explainer = risk_artifact["_explainer"] = ExplainabilityEngine(risk_scorer, list(X.columns))
         explanation = explainer.explain(features)
 
         is_candidate = risk_candidate or anomaly_candidate or iso_candidate

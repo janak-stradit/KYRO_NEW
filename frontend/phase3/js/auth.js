@@ -71,10 +71,39 @@ const Auth = {
     storeAuthData(authResponse) {
         localStorage.setItem(this.tokenKey, authResponse.access_token);
         localStorage.setItem(this.refreshTokenKey, authResponse.refresh_token);
-        localStorage.setItem(this.userKey, JSON.stringify(authResponse.user));
-        
-        // Update UI
-        this.updateUserDisplay(authResponse.user);
+        // The login response carries tokens only; the profile is fetched
+        // separately by ensureUser() once the app loads.
+        if (authResponse.user) {
+            localStorage.setItem(this.userKey, JSON.stringify(authResponse.user));
+            this.updateUserDisplay(authResponse.user);
+        } else {
+            localStorage.removeItem(this.userKey);
+        }
+    },
+
+    /**
+     * Load the signed-in user's profile if it isn't stored yet, then update
+     * the header and notify listeners via the "kyro:user" event.
+     */
+    async ensureUser() {
+        // Ask the server once per page load: an administrator may have changed
+        // this user's role since the profile was stored.
+        const stored = this.getUser();
+        if (this._userFresh && stored && stored.username) return stored;
+        if (!window.API || !API.get) return stored;
+        try {
+            const user = await API.get("/auth/me");
+            if (user && user.username) {
+                this._userFresh = true;
+                localStorage.setItem(this.userKey, JSON.stringify(user));
+                this.updateUserDisplay(user);
+                $(document).trigger("kyro:user", [user]);
+                return user;
+            }
+        } catch (error) {
+            console.warn("Could not load user profile:", error);
+        }
+        return stored;
     },
     
     /**
@@ -218,8 +247,10 @@ const Auth = {
         
         if (this.isAuthenticated()) {
             const user = this.getUser();
-            if (user) {
+            if (user && user.username) {
                 this.updateUserDisplay(user);
+            } else {
+                this.ensureUser();
             }
             
             // Redirect to dashboard if on login page (but NOT landing page)
@@ -254,7 +285,8 @@ const Auth = {
             // Update user details if dropdown elements exist
             $("#userDropdownName").text(user.full_name || user.username || "Compliance Analyst");
             $("#userDropdownEmail").text(user.email || "analyst@kyro.com");
-            $("#userDropdownRole").text((user.role || "ANALYST").toUpperCase());
+            $("#userDropdownRole").text(user.role_label || user.role || "");
+            this.applyNavPermissions();
             
             // Set initials
             const name = user.full_name || user.username || "A";
@@ -276,14 +308,36 @@ const Auth = {
         return user ? user.role : null;
     },
     
-    /**
-     * Check if user has permission
-     */
-    hasPermission(permission) {
+    /** True when the signed-in user's role holds any one of the given permissions. */
+    can(...permissions) {
         const user = this.getUser();
-        if (!user || !user.permissions) return false;
-        
-        return user.permissions.includes(permission) || user.role === 'admin';
+        const held = (user && user.permissions) || [];
+        return permissions.some(p => held.includes(p));
+    },
+
+    hasPermission(permission) {
+        return this.can(permission);
+    },
+
+    // Navigation entries that need a permission; the server enforces the same rules
+    NAV_PERMISSIONS: {
+        cases: ['cases.view'],
+        'periodic-reviews': ['customers.view_all'],
+        patterns: ['cases.view'],
+        feeds: ['feeds.load'],
+        admin: ['users.manage', 'audit.read', 'sar.grant_access'],
+        case: ['cases.view']
+    },
+
+    canOpen(page) {
+        const needed = this.NAV_PERMISSIONS[page];
+        return !needed || this.can(...needed);
+    },
+
+    applyNavPermissions() {
+        Object.entries(this.NAV_PERMISSIONS).forEach(([page, permissions]) => {
+            $(`a.nav-link[data-page="${page}"], a.dropdown-item[data-page="${page}"]`).toggleClass("d-none", !this.can(...permissions));
+        });
     }
 };
 
@@ -313,10 +367,6 @@ const LoginForm = {
             this.togglePasswordVisibility();
         });
         
-        // Remember me checkbox
-        $("#rememberMe").on("change", (e) => {
-            // Could implement extended session logic here
-        });
     },
     
     setupValidation() {
@@ -364,7 +414,7 @@ const LoginForm = {
     async handleLogin() {
         const username = $("#username").val().trim();
         const password = $("#password").val();
-        const rememberMe = $("#rememberMe").is(":checked");
+        $("#loginError").removeClass("is-visible");
         
         // Validate form
         const isUsernameValid = this.validateField("username");
@@ -378,22 +428,14 @@ const LoginForm = {
         this.setFormEnabled(false);
         
         try {
-            await Auth.login({
-                username: username,
-                password: password,
-                remember_me: rememberMe
-            });
-            
-            showToast("success", "Login successful", "Welcome back!");
-            
-            // Redirect to dashboard
-            setTimeout(() => {
-                window.location.href = "/dashboard";
-            }, 1000);
+            await Auth.login({ username: username, password: password });
+            window.location.href = "/dashboard";
             
         } catch (error) {
             console.error("Login error:", error);
-            showToast("error", error.message, "Login Failed");
+            // The message is shown in the form, next to the fields it is about
+            $("#loginErrorText").text(error.message || "Sign-in failed. Please try again.");
+            $("#loginError").addClass("is-visible");
             this.setFormEnabled(true);
             $("#password").focus().select();
         }
@@ -413,12 +455,12 @@ const LoginForm = {
     },
     
     setFormEnabled(enabled) {
-        $("#username, #password, #rememberMe, #loginBtn").prop("disabled", !enabled);
+        $("#username, #password, #loginBtn").prop("disabled", !enabled);
         
         if (enabled) {
-            $("#loginBtn").html('<i class="fas fa-sign-in-alt me-2"></i>Sign In');
+            $("#loginBtn").text('Sign in');
         } else {
-            $("#loginBtn").html('<i class="fas fa-spinner fa-spin me-2"></i>Signing In...');
+            $("#loginBtn").html('<i class="fas fa-spinner fa-spin me-2"></i>Signing in...');
         }
     },
     

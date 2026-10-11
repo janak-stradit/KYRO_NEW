@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, shrink-to-fit=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="HandheldFriendly" content="true">
     <meta name="MobileOptimized" content="375">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
@@ -17,420 +17,351 @@
     
     <!-- Bootstrap 5.3 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Roboto (template typography) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
     <!-- Font Awesome 6 -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
     <!-- Custom KYRO Theme -->
     <link rel="stylesheet" href="css/custom.css">
     
     <style>
-        * {
-            -webkit-tap-highlight-color: transparent;
-            touch-action: manipulation;
+        /* Enterprise split-screen sign-in. Template typography and icons,
+           KYRO colours. */
+        :root {
+            --kt-accent: #F97316;
+            --kt-accent-strong: #EA580C;
+            --kt-ink: #1c2430;
+            --kt-body: #475467;
+            --kt-muted: #667085;
+            --kt-dark: #1C2430;
+            --kt-tint: #F2F4F7;
+            --kt-border: #E1E5EA;
+            --kt-field: #D0D5DD;
         }
-        
+        * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
+        html, body { height: 100%; }
         body {
-            background: #f8f9fa;
-            height: 100vh;
             margin: 0;
-            padding: 0;
-            overflow: hidden;
-            -webkit-text-size-adjust: 100%;
-            touch-action: manipulation;
+            font-family: "Roboto", system-ui, -apple-system, "Segoe UI", sans-serif;
+            color: var(--kt-body);
+            background: #fff;
+            -webkit-font-smoothing: antialiased;
         }
-        .login-container {
-            height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 0;
+        a { color: inherit; }
+
+        .auth { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); min-height: 100%; }
+
+        /* ── Brand panel ─────────────────────────────────────────────── */
+        .auth-brand {
+            position: relative;
             overflow: hidden;
-        }
-        .login-wrapper {
+            background-color: var(--kt-dark);
+            background-image: radial-gradient(rgba(255, 141, 40, 0.16) 1px, transparent 1px);
+            background-size: 22px 22px;
+            color: #d1d5db;
+            padding: 48px 64px;
             display: flex;
-            width: 100%;
-            max-width: 100%;
-            height: 100vh;
-            background: white;
+            flex-direction: column;
+        }
+        .auth-brand::after {
+            content: "";
+            position: absolute;
+            width: 520px; height: 520px;
+            right: -220px; bottom: -220px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(249, 115, 22, 0.35) 0%, rgba(249, 115, 22, 0) 70%);
+            pointer-events: none;
+        }
+        .auth-logo { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; }
+        .auth-logo__name { font-size: 24px; font-weight: 700; color: #fff; letter-spacing: -0.3px; }
+        .auth-brand__body { position: relative; z-index: 1; margin: auto 0; padding: 56px 0; max-width: 520px; }
+        .auth-kicker {
+            display: inline-flex; align-items: center; gap: 8px;
+            color: var(--kt-accent); font-size: 13px; font-weight: 700;
+            letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 18px;
+        }
+        .auth-brand h1 { color: #fff; font-size: 42px; line-height: 1.15; font-weight: 700; letter-spacing: -0.8px; margin: 0 0 18px; }
+        .auth-brand h1 span { color: var(--kt-accent); }
+        .auth-brand__lead { font-size: 17px; line-height: 1.6; margin: 0 0 40px; color: #b8bcc4; }
+        .auth-features { list-style: none; padding: 0; margin: 0; display: grid; gap: 22px; }
+        .auth-features li { display: flex; gap: 16px; align-items: flex-start; }
+        .auth-features__icon {
+            flex: 0 0 52px; height: 52px; border-radius: 12px;
+            background: rgba(255, 141, 40, 0.1);
+            border: 1px solid rgba(255, 141, 40, 0.25);
+            display: flex; align-items: center; justify-content: center;
+        }
+        .auth-features__icon img { width: 30px; height: 30px; }
+        .auth-features strong { display: block; color: #fff; font-size: 16px; font-weight: 600; margin-bottom: 2px; }
+        .auth-features span { font-size: 14px; line-height: 1.5; color: #9ca3af; }
+        .auth-brand__foot { position: relative; z-index: 1; font-size: 13px; color: #6b7280; display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+        .auth-brand__foot a { text-decoration: none; }
+        .auth-brand__foot a:hover { color: var(--kt-accent); }
+
+        /* ── Form panel ──────────────────────────────────────────────── */
+        .auth-main { display: flex; flex-direction: column; padding: 40px 48px; background: #fff; }
+        .auth-main__top { display: flex; justify-content: flex-end; font-size: 14px; }
+        .auth-main__top a { display: inline-flex; align-items: center; gap: 8px; color: var(--kt-muted); text-decoration: none; font-weight: 500; }
+        .auth-main__top a:hover { color: var(--kt-accent-strong); }
+        .auth-form-wrap { width: 100%; max-width: 420px; margin: auto; padding: 40px 0; }
+        .auth-form-wrap .auth-logo { display: none; margin-bottom: 32px; }
+        .auth-title { font-size: 32px; font-weight: 700; color: var(--kt-ink); letter-spacing: -0.5px; margin: 0 0 8px; }
+        .auth-sub { font-size: 15px; margin: 0 0 32px; }
+
+        .auth-error {
+            display: none;
+            align-items: flex-start; gap: 10px;
+            padding: 12px 14px; margin-bottom: 20px;
+            border: 1px solid #fecaca; border-left: 4px solid #dc2626;
+            border-radius: 6px; background: #fef2f2;
+            color: #991b1b; font-size: 14px;
+        }
+        .auth-error.is-visible { display: flex; }
+        .auth-error i { margin-top: 3px; }
+
+        .auth-field { margin-bottom: 20px; }
+        .auth-field label, .auth-label-row label { display: block; font-size: 14px; font-weight: 600; color: var(--kt-ink); margin-bottom: 8px; }
+        .auth-label-row { display: flex; justify-content: space-between; align-items: baseline; }
+        .auth-link-btn {
+            border: 0; background: transparent; padding: 0;
+            font-size: 13px; font-weight: 600; color: var(--kt-accent-strong); cursor: pointer;
+        }
+        .auth-link-btn:hover { text-decoration: underline; }
+        .auth-link-btn:focus-visible { outline: 3px solid rgba(255, 141, 40, 0.35); outline-offset: 2px; border-radius: 3px; }
+        .auth-input { position: relative; }
+        .auth-input__icon {
+            position: absolute; left: 16px; top: 25px; transform: translateY(-50%);
+            color: #9ca3af; font-size: 15px; pointer-events: none;
+        }
+        .auth-input .form-control {
+            height: 50px;
+            border: 1px solid var(--kt-field);
+            border-radius: 6px;
+            background: #fff;
+            padding: 0 46px 0 44px;
+            font-size: 15px;
+            color: var(--kt-ink);
             box-shadow: none;
-            overflow: hidden;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
         }
-        
-        /* Left Side - Character/Brand Section */
-        .login-left {
-            flex: 1;
-            height: 100vh;
-            background: linear-gradient(135deg, #FF8C42 0%, #ff6b35 100%);
-            padding: 2rem 3rem;
-            display: flex;
-            flex-direction: column;
-            justify-content: flex-start;
-            align-items: center;
-            position: relative;
-            overflow: hidden;
-        }
-        .login-left::before {
-            content: '';
-            position: absolute;
-            top: -50%;
-            right: -50%;
-            width: 200%;
-            height: 200%;
-            background: radial-gradient(circle, rgba(255,255,255,0.1) 1px, transparent 1px);
-            background-size: 50px 50px;
-            animation: float 20s linear infinite;
-        }
-        @keyframes float {
-            0% { transform: translate(0, 0); }
-            100% { transform: translate(50px, 50px); }
-        }
-        .character-image {
-            width: 100%;
-            max-width: 500px;
-            height: 600px; /* Fixed height to prevent size changes */
-            min-height: 600px;
-            border-radius: 24px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            position: relative;
-            z-index: 2;
-            /* animation: floatCharacter 3s ease-in-out infinite; */ /* REMOVED FLOAT ANIMATION */
-            object-fit: cover; /* Cover to maintain aspect ratio without distortion */
-            pointer-events: none; /* Disable all pointer events */
-            touch-action: none;
-            -webkit-user-select: none;
-            user-select: none;
-            transition: opacity 0.3s ease-in-out; /* Smooth fade only, no scale */
-            transform: scale(1); /* Fixed scale */
-            will-change: opacity; /* GPU acceleration for opacity only */
-        }
-        #characterVideo {
-            max-height: 600px;
-            min-height: 600px;
-            height: 600px; /* Same as image */
-            max-width: 500px;
-            width: 100%;
-            pointer-events: none; /* Completely disable interaction */
-            touch-action: none;
-            cursor: default;
-            transition: opacity 0.3s ease-in-out;
-            transform: scale(1);
-            will-change: opacity;
-            object-fit: cover; /* Same as image */
-        }
-        
-        /* Prevent zoom on video and image interaction */
-        video, img {
-            touch-action: none !important;
-            -webkit-user-select: none;
-            user-select: none;
-            pointer-events: none;
-        }
-        
-        /* Float animation - DISABLED
-        @keyframes floatCharacter {
-            0%, 100% { transform: translateY(0px); }
-            50% { transform: translateY(-20px); }
-        }
-        */
-        
-        /* Add overlay to prevent video clicks */
-        .login-left {
-            position: relative;
-        }
-        .login-left::after {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            z-index: 3;
-            pointer-events: auto;
-        }
-        /* Float animation - DISABLED
-        @keyframes floatCharacter {
-            0%, 100% { transform: translateY(0px); }
-            50% { transform: translateY(-20px); }
-        }
-        */
-        .brand-section {
-            text-align: center;
-            color: white;
-            margin-bottom: 1.5rem;
-            margin-top: 0.5rem;
-            position: relative;
-            z-index: 2;
-        }
-        .brand-logo-large {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin-bottom: 1.5rem;
-            animation: pulse 2s ease-in-out infinite;
-        }
-        @keyframes pulse {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.05); }
-        }
-        .brand-title-large {
-            font-size: 3rem;
-            font-weight: 800;
-            margin-bottom: 0.5rem;
-            letter-spacing: -0.02em;
-            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
-        }
-        .brand-subtitle-large {
-            font-size: 1.1rem;
-            opacity: 0.95;
-            font-weight: 400;
-            letter-spacing: 0.5px;
-        }
-        .features-list {
-            list-style: none;
-            padding: 0;
-            margin: 2rem 0 0 0;
-            text-align: left;
-            max-width: 400px;
-            display: none !important;
-        }
-        .features-list li {
-            color: white;
-            padding: 0.75rem 0;
-            font-size: 1rem;
-            opacity: 0.9;
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-        }
-        .features-list li i {
-            color: #4caf50;
-            font-size: 1.2rem;
-        }
-        
-        /* Right Side - Login Form Section */
-        .login-right {
-            flex: 0 0 600px;
-            height: 100vh;
-            overflow-y: auto;
-            padding: 4rem 3rem;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            background: white;
-        }
-        .login-header {
-            margin-bottom: 2.5rem;
-        }
-        .login-header h2 {
-            font-size: 2.5rem;
-            font-weight: 700;
-            color: #FF8C42;
-            letter-spacing: -0.02em;
-        }
-        .login-logo-container {
-            animation: fadeInScale 0.6s ease-out;
-        }
-        @keyframes fadeInScale {
-            from {
-                opacity: 0;
-                transform: scale(0.8);
-            }
-            to {
-                opacity: 1;
-                transform: scale(1);
-            }
-        }
-        .login-header p {
-            font-size: 1rem;
-            color: #6c757d;
-            margin: 0;
-        }
-        .form-floating {
-            margin-bottom: 1.5rem;
-        }
-        .form-floating .form-control {
-            border-radius: 12px;
-            border: 2px solid #e9ecef;
-            padding: 1rem 0.75rem;
-            height: auto;
-            min-height: 58px;
-            font-size: 16px !important; /* Prevent iOS zoom - must be 16px or larger */
-            -webkit-text-size-adjust: 100%;
-            touch-action: manipulation;
-            -webkit-tap-highlight-color: transparent;
-        }
-        .form-floating .form-control:focus {
-            border-color: #FF8C42;
-            box-shadow: 0 0 0 0.2rem rgba(255, 140, 66, 0.15);
-            outline: none;
-        }
-        .form-floating label {
-            padding: 1rem 0.75rem;
-            color: #6c757d;
-            font-size: 16px !important; /* Label also 16px to prevent zoom */
-            pointer-events: none;
-        }
-        /* Additional zoom prevention for all inputs */
-        input, select, textarea {
-            font-size: 16px !important;
-            touch-action: manipulation;
-        }
-        .form-floating label {
-            padding: 1rem 0.75rem;
-            color: #6c757d;
-        }
-        .btn-login {
-            border-radius: 12px;
-            padding: 16px 24px;
-            font-weight: 600;
-            font-size: 1.1rem;
-            background: linear-gradient(135deg, #FF8C42, #ff6b35);
-            border: none;
-            transition: all 0.3s ease;
-        }
-        .btn-login:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(255, 140, 66, 0.4);
-            background: linear-gradient(135deg, #ff7a2e, #ff5722);
-        }
+        .auth-input .form-control::placeholder { color: #a3a8b0; }
+        .auth-input .form-control:hover { border-color: #cfc8c1; }
+        .auth-input .form-control:focus { border-color: var(--kt-accent); box-shadow: 0 0 0 3px rgba(255, 141, 40, 0.15); }
+        .auth-input .form-control.is-invalid { border-color: #dc2626; background-image: none; }
+        .auth-input .form-control.is-valid { border-color: var(--kt-field); background-image: none; }
+        .auth-input .invalid-feedback { font-size: 13px; margin-top: 6px; }
         .password-toggle {
-            cursor: pointer;
-            position: absolute;
-            right: 16px;
-            top: 50%;
-            transform: translateY(-50%);
-            z-index: 10;
-            color: #6c757d;
-            transition: color 0.2s ease;
+            position: absolute; right: 6px; top: 25px; transform: translateY(-50%);
+            width: 38px; height: 38px;
+            border: 0; background: transparent; border-radius: 6px;
+            color: #9ca3af; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
         }
-        .password-toggle:hover {
-            color: #FF8C42;
+        .password-toggle:hover { color: var(--kt-accent-strong); }
+        .password-toggle:focus-visible { outline: 3px solid rgba(255, 141, 40, 0.35); }
+        .auth-hint { display: none; align-items: center; gap: 6px; margin-top: 8px; font-size: 13px; color: #b45309; }
+        .auth-hint.is-visible { display: flex; }
+        .auth-help {
+            display: none; margin: -8px 0 20px; padding: 12px 14px;
+            border-radius: 6px; background: var(--kt-tint); border: 1px solid var(--kt-border);
+            font-size: 13px; line-height: 1.5; color: var(--kt-ink);
         }
-        .form-check-input:checked {
-            background-color: #FF8C42;
-            border-color: #FF8C42;
+        .auth-help.is-visible { display: block; }
+
+        .btn-login { margin-top: 12px; }
+
+        .btn-login {
+            height: 52px;
+            border: 0 !important;
+            border-radius: 6px !important;
+            background: var(--kt-accent) !important;
+            color: #fff !important;
+            font-size: 16px; font-weight: 700;
+            display: flex; align-items: center; justify-content: center; gap: 10px;
+            transition: background 0.25s ease;
         }
-        .security-notice {
-            text-align: center;
-            margin-top: 2rem;
-            padding: 1rem;
-            background: rgba(255, 140, 66, 0.05);
-            border-radius: 12px;
-            border: 1px solid rgba(255, 140, 66, 0.1);
+        .btn-login:hover, .btn-login:focus-visible { background: var(--kt-accent-strong) !important; }
+        .btn-login:focus-visible { box-shadow: 0 0 0 3px rgba(255, 141, 40, 0.35) !important; }
+        .btn-login:disabled { opacity: 0.75; }
+
+        .auth-secure {
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+            margin-top: 22px; font-size: 13px; color: var(--kt-muted);
         }
-        
-        /* Responsive */
-        @media (max-width: 992px) {
-            .login-wrapper {
-                flex-direction: column;
-            }
-            .login-left {
-                min-height: 40vh;
-                padding: 2rem 1.5rem;
-            }
-            .character-image {
-                max-width: 250px;
-            }
-            .brand-title-large {
-                font-size: 2rem;
-            }
-            .login-right {
-                padding: 2rem 1.5rem;
-            }
-            .features-list {
-                display: none;
-            }
+        .auth-secure i { color: #16a34a; }
+        .auth-notice {
+            margin-top: 36px; padding-top: 20px;
+            border-top: 1px solid #EFEAE6;
+            font-size: 12px; line-height: 1.6; color: #9ca3af; text-align: center;
+        }
+
+        .loading-overlay {
+            position: fixed; inset: 0; z-index: 2000;
+            background: rgba(28, 36, 48, 0.45);
+            display: flex; align-items: center; justify-content: center;
+        }
+        .loading-overlay.d-none { display: none !important; }
+
+        @media (max-width: 1099.98px) {
+            .auth-brand { padding: 40px; }
+            .auth-brand h1 { font-size: 34px; }
+        }
+        @media (max-width: 899.98px) {
+            .auth { grid-template-columns: 1fr; }
+            .auth-brand { display: none; }
+            .auth-main { padding: 24px 20px; }
+            .auth-form-wrap .auth-logo { display: inline-flex; }
+            .auth-form-wrap .auth-logo__name { color: var(--kt-ink); }
         }
     </style>
-    
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡️</text></svg>">
 </head>
 <body>
-    <div class="login-container">
-        <div class="login-wrapper">
-            <!-- Left Side - Character & Branding -->
-            <div class="login-left">
-                <div class="brand-section">
-                    <div class="brand-logo-large">
-                        <svg width="44" height="52" viewBox="0 0 22 26" fill="none" xmlns="http://www.w3.org/2000/svg" style="filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.3));">
-                            <path d="M17.3573 25.4845C20.1188 25.4845 22.4006 23.2307 21.9439 20.5073C21.6589 18.808 21.228 17.142 20.6555 15.5347C19.5319 12.3802 17.8851 9.51402 15.809 7.0997C13.733 4.68537 11.2683 2.77023 8.55578 1.46361C7.38388 0.899101 6.17563 0.452955 4.94442 0.128265C2.27429 -0.575893 0 1.72305 0 4.48447V20.4845C0 23.2459 2.23858 25.4845 5 25.4845H17.3573Z" fill="white" fill-opacity="0.9"/>
-                        </svg>
-                        <svg width="44" height="52" viewBox="0 0 22 26" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin-left: -24px; filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.3));">
-                            <path d="M4.64504 25.4845C1.88362 25.4845 -0.39823 23.2307 0.0585117 20.5073C0.343506 18.808 0.774422 17.142 1.3469 15.5347C2.47046 12.3802 4.11729 9.51402 6.19336 7.0997C8.26943 4.68537 10.7341 2.77023 13.4466 1.46361C14.6185 0.899101 15.8267 0.452955 17.058 0.128265C19.7281 -0.575893 22.0024 1.72305 22.0024 4.48447V20.4845C22.0024 23.2459 19.7638 25.4845 17.0024 25.4845H4.64504Z" fill="white" fill-opacity="0.95"/>
-                        </svg>
-                    </div>
-                    <h1 class="brand-title-large">KYRO</h1>
-                    <p class="brand-subtitle-large">AI-Powered Risk Assessment Specialist</p>
-                </div>
-                
-                <!-- Media Container - Just static image -->
-                <div class="media-container" style="position: relative; width: 100%; max-width: 500px; height: 600px; margin: 0 auto;">
-                    <img src="../assets/Character 01.webp" alt="KYRO Character" class="character-image" id="characterImage">
-                </div>       
+    <div class="auth">
+        <!-- Brand panel -->
+        <aside class="auth-brand" aria-label="About KYRO">
+            <a class="auth-logo" href="landing.html" aria-label="KYRO home">
+                <span style="display: inline-flex; align-items: center;" aria-hidden="true">
+                    <svg width="26" height="30" viewBox="0 0 22 26" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M17.3573 25.4845C20.1188 25.4845 22.4006 23.2307 21.9439 20.5073C21.6589 18.808 21.228 17.142 20.6555 15.5347C19.5319 12.3802 17.8851 9.51402 15.809 7.0997C13.733 4.68537 11.2683 2.77023 8.55578 1.46361C7.38388 0.899101 6.17563 0.452955 4.94442 0.128265C2.27429 -0.575893 0 1.72305 0 4.48447V20.4845C0 23.2459 2.23858 25.4845 5 25.4845H17.3573Z" fill="white" fill-opacity="0.85"/>
+                    </svg>
+                    <svg width="26" height="30" viewBox="0 0 22 26" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin-left: -13px;">
+                        <path d="M4.64504 25.4845C1.88362 25.4845 -0.39823 23.2307 0.0585117 20.5073C0.343506 18.808 0.774422 17.142 1.3469 15.5347C2.47046 12.3802 4.11729 9.51402 6.19336 7.0997C8.26943 4.68537 10.7341 2.77023 13.4466 1.46361C14.6185 0.899101 15.8267 0.452955 17.058 0.128265C19.7281 -0.575893 22.0024 1.72305 22.0024 4.48447V20.4845C22.0024 23.2459 19.7638 25.4845 17.0024 25.4845H4.64504Z" fill="#FF6A00" fill-opacity="0.9"/>
+                    </svg>
+                </span>
+                <span class="auth-logo__name">KYRO</span>
+            </a>
+
+            <div class="auth-brand__body">
+                <span class="auth-kicker"><i class="fas fa-shield-halved"></i> AML Risk Assessment Platform</span>
+                <h1>Defensible AML decisions, <span>powered by AI</span>.</h1>
+                <p class="auth-brand__lead">Monitor transactions, screen customers and run periodic reviews from one workspace, with an explanation behind every alert.</p>
+
+                <ul class="auth-features">
+                    <li>
+                        <span class="auth-features__icon"><img src="assets/template/icons/sanctions-shield.svg" alt=""></span>
+                        <span><strong>Sanctions &amp; PEP screening</strong><span>Fuzzy matching against OFAC, UN and UK OFSI lists, re-screened when lists update.</span></span>
+                    </li>
+                    <li>
+                        <span class="auth-features__icon"><img src="assets/template/icons/realtime-247.svg" alt=""></span>
+                        <span><strong>Real-time transaction monitoring</strong><span>Rules and ML risk scoring with live alerts for your analysts.</span></span>
+                    </li>
+                    <li>
+                        <span class="auth-features__icon"><img src="assets/template/icons/investigation.svg" alt=""></span>
+                        <span><strong>Audit-ready investigations</strong><span>Role-based access and a full audit trail of every review decision.</span></span>
+                    </li>
+                </ul>
             </div>
-            
-            <!-- Right Side - Login Form -->
-            <div class="login-right">
-                <div class="login-header">
-                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 0.5rem;">
-                        <!-- Logo SVG - Same as Dashboard -->
-                        <div class="login-logo-container" style="display: flex; align-items: center; margin-left: -8px;">
-                            <!-- Left Dark Shape -->
-                            <svg width="22" height="26" viewBox="0 0 22 26" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M17.3573 25.4845C20.1188 25.4845 22.4006 23.2307 21.9439 20.5073C21.6589 18.808 21.228 17.142 20.6555 15.5347C19.5319 12.3802 17.8851 9.51402 15.809 7.0997C13.733 4.68537 11.2683 2.77023 8.55578 1.46361C7.38388 0.899101 6.17563 0.452955 4.94442 0.128265C2.27429 -0.575893 0 1.72305 0 4.48447V20.4845C0 23.2459 2.23858 25.4845 5 25.4845H17.3573Z" fill="black" fill-opacity="0.75"/>
-                            </svg>
-                            <!-- Right Orange Overlapping Shape -->
-                            <svg width="22" height="26" viewBox="0 0 22 26" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin-left: -12px;">
-                                <path d="M4.64504 25.4845C1.88362 25.4845 -0.39823 23.2307 0.0585117 20.5073C0.343506 18.808 0.774422 17.142 1.3469 15.5347C2.47046 12.3802 4.11729 9.51402 6.19336 7.0997C8.26943 4.68537 10.7341 2.77023 13.4466 1.46361C14.6185 0.899101 15.8267 0.452955 17.058 0.128265C19.7281 -0.575893 22.0024 1.72305 22.0024 4.48447V20.4845C22.0024 23.2459 19.7638 25.4845 17.0024 25.4845H4.64504Z" fill="#FF6A00" fill-opacity="0.75"/>
-                            </svg>
+
+            <div class="auth-brand__foot">
+                <span>&copy; <span class="js-year">2026</span> KYRO</span>
+                <a href="landing.html">About the platform</a>
+            </div>
+        </aside>
+
+        <!-- Sign-in form -->
+        <main class="auth-main">
+            <div class="auth-main__top">
+                <a href="landing.html"><i class="fas fa-arrow-left"></i> Back to home</a>
+            </div>
+
+            <div class="auth-form-wrap">
+                <a class="auth-logo" href="landing.html" aria-label="KYRO home">
+                    <span style="display: inline-flex; align-items: center;" aria-hidden="true">
+                        <svg width="26" height="30" viewBox="0 0 22 26" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M17.3573 25.4845C20.1188 25.4845 22.4006 23.2307 21.9439 20.5073C21.6589 18.808 21.228 17.142 20.6555 15.5347C19.5319 12.3802 17.8851 9.51402 15.809 7.0997C13.733 4.68537 11.2683 2.77023 8.55578 1.46361C7.38388 0.899101 6.17563 0.452955 4.94442 0.128265C2.27429 -0.575893 0 1.72305 0 4.48447V20.4845C0 23.2459 2.23858 25.4845 5 25.4845H17.3573Z" fill="black" fill-opacity="0.75"/>
+                        </svg>
+                        <svg width="26" height="30" viewBox="0 0 22 26" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin-left: -13px;">
+                            <path d="M4.64504 25.4845C1.88362 25.4845 -0.39823 23.2307 0.0585117 20.5073C0.343506 18.808 0.774422 17.142 1.3469 15.5347C2.47046 12.3802 4.11729 9.51402 6.19336 7.0997C8.26943 4.68537 10.7341 2.77023 13.4466 1.46361C14.6185 0.899101 15.8267 0.452955 17.058 0.128265C19.7281 -0.575893 22.0024 1.72305 22.0024 4.48447V20.4845C22.0024 23.2459 19.7638 25.4845 17.0024 25.4845H4.64504Z" fill="#FF6A00" fill-opacity="0.75"/>
+                        </svg>
+                    </span>
+                    <span class="auth-logo__name">KYRO</span>
+                </a>
+
+                <h2 class="auth-title">Sign in to KYRO</h2>
+                <p class="auth-sub">Use the credentials provided by your KYRO administrator.</p>
+
+                <div class="auth-error" id="loginError" role="alert">
+                    <i class="fas fa-circle-exclamation"></i>
+                    <span id="loginErrorText"></span>
+                </div>
+
+                <form id="loginForm" autocomplete="on" novalidate>
+                    <div class="auth-field">
+                        <label for="username">Username</label>
+                        <div class="auth-input">
+                            <i class="fas fa-user auth-input__icon" aria-hidden="true"></i>
+                            <input type="text" class="form-control" id="username" name="username" placeholder="Enter your username" required autocomplete="username" autofocus>
                         </div>
-                        <h2 style="margin: 0;">Welcome Back</h2>
                     </div>
-                    <p>Sign in to access your AML dashboard</p>
-                </div>
-                
-                <form id="loginForm" autocomplete="on">
-                    <div class="form-floating">
-                        <input type="text" class="form-control" id="username" name="username" placeholder="Username" required autocomplete="username">
-                        <label for="username">
-                            <i class="fas fa-user me-2"></i>Username
-                        </label>
+
+                    <div class="auth-field">
+                        <div class="auth-label-row">
+                            <label for="password">Password</label>
+                            <button type="button" class="auth-link-btn" id="forgotPasswordBtn" aria-expanded="false" aria-controls="forgotPasswordHelp">Forgot password?</button>
+                        </div>
+                        <div class="auth-input">
+                            <i class="fas fa-lock auth-input__icon" aria-hidden="true"></i>
+                            <input type="password" class="form-control" id="password" name="password" placeholder="Enter your password" required autocomplete="current-password" aria-describedby="capsLockHint">
+                            <button type="button" class="password-toggle" id="togglePassword" aria-label="Show password">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
+                        <div class="auth-hint" id="capsLockHint" aria-live="polite"><i class="fas fa-triangle-exclamation"></i> Caps Lock is on</div>
                     </div>
-                    
-                    <div class="form-floating position-relative">
-                        <input type="password" class="form-control" id="password" name="password" placeholder="Password" required autocomplete="current-password">
-                        <label for="password">
-                            <i class="fas fa-lock me-2"></i>Password
-                        </label>
-                        <span class="password-toggle" id="togglePassword">
-                            <i class="fas fa-eye"></i>
-                        </span>
+
+                    <div class="auth-help" id="forgotPasswordHelp">
+                        Passwords are managed by your organization. Contact your KYRO administrator to have your password reset.
                     </div>
-                    
-                    <div class="form-check mb-4">
-                        <input class="form-check-input" type="checkbox" id="rememberMe" name="rememberMe">
-                        <label class="form-check-label" for="rememberMe">
-                            Remember me for 30 days
-                        </label>
-                    </div>
-                    
-                    <button type="submit" class="btn btn-primary w-100 btn-login" id="loginBtn">
-                        <i class="fas fa-sign-in-alt me-2"></i>Sign In Securely
-                    </button>
+
+
+                    <button type="submit" class="btn btn-primary w-100 btn-login" id="loginBtn">Sign in</button>
+
+                    <p class="auth-secure"><i class="fas fa-lock"></i> Secure, encrypted session with role-based access</p>
                 </form>
+
+                <p class="auth-notice">
+                    This system is for authorized users only. Activity is logged and may be monitored for compliance purposes.
+                </p>
             </div>
-        </div>
+        </main>
     </div>
-    
+
     <!-- Toast Container -->
     <div class="toast-container position-fixed top-0 end-0 p-3" id="toastContainer"></div>
-    
+
     <!-- Loading Overlay -->
     <div class="loading-overlay d-none" id="loadingOverlay">
-        <div class="text-center">
-            <div class="spinner-border text-light mb-3" style="width: 3rem; height: 3rem;"></div>
+        <div class="spinner-border text-light" style="width: 3rem; height: 3rem;" role="status">
+            <span class="visually-hidden">Signing in...</span>
         </div>
     </div>
-    
+
+    <script>
+        // Page-only helpers: year, "Forgot password?" help, Caps Lock warning.
+        document.querySelectorAll(".js-year").forEach(function (el) { el.textContent = new Date().getFullYear(); });
+
+        (function () {
+            var btn = document.getElementById("forgotPasswordBtn");
+            var help = document.getElementById("forgotPasswordHelp");
+            btn.addEventListener("click", function () {
+                var open = !help.classList.contains("is-visible");
+                help.classList.toggle("is-visible", open);
+                btn.setAttribute("aria-expanded", String(open));
+            });
+
+            var pwd = document.getElementById("password");
+            var hint = document.getElementById("capsLockHint");
+            function checkCaps(e) {
+                if (e.getModifierState) hint.classList.toggle("is-visible", e.getModifierState("CapsLock"));
+            }
+            pwd.addEventListener("keydown", checkCaps);
+            pwd.addEventListener("keyup", checkCaps);
+            pwd.addEventListener("blur", function () { hint.classList.remove("is-visible"); });
+        })();
+    </script>
+
     <!-- jQuery 3.7 -->
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <!-- Bootstrap 5.3 JS -->
@@ -438,7 +369,7 @@
     
     <!-- KYRO Application Scripts -->
     <script src="js/utils.js?v=9999"></script>
-    <script src="js/auth.js?v=9999999999"></script>
+    <script src="js/auth.js?v=20261010c"></script>
     
     <script>
         $(document).ready(function() {
@@ -466,29 +397,11 @@
                     $("#loginForm").submit();
                 }, 500);
             }
-            
+
             // Initialize login form
             LoginForm.init();
             
-            // Add some interactive effects
-            $(".form-control").on("focus", function() {
-                $(this).closest(".form-floating").addClass("focused");
-            }).on("blur", function() {
-                $(this).closest(".form-floating").removeClass("focused");
-            });
             
-            // Prevent desktop zoom with Ctrl+Scroll and trackpad pinch
-            document.addEventListener('wheel', function(e) {
-                if (e.ctrlKey) {
-                    e.preventDefault();
-                }
-            }, { passive: false });
-            
-            document.addEventListener('keydown', function(e) {
-                if ((e.ctrlKey || e.metaKey) && (e.key === '+' || e.key === '-' || e.key === '=')) {
-                    e.preventDefault();
-                }
-            });
         });
     </script>
 </body>

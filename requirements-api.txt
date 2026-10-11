@@ -6,6 +6,7 @@
 fastapi>=0.115.0
 uvicorn[standard]>=0.32.0
 python-multipart>=0.0.12
+slowapi>=0.1.9
 
 # ── Database ──────────────────────────────────────────────────
 sqlalchemy>=2.0.30
@@ -35,3 +36,14 @@ httpx>=0.27.0
 
 # ── TTS (Text-to-Speech) ──────────────────────────────────────
 elevenlabs>=1.0.0
+
+# ── Watchlist screening (Phase 4.1) ────────────────────────────
+rapidfuzz>=3.9.0
+jellyfish>=1.1.0      # phonetic codes for watchlist name matching
+anyascii>=0.3.2       # transliteration of non-Latin names before matching
+
+# ── Compliance AI (Phase 11) ──────────────────────────────────
+# HTTP client for the OpenAI-compatible LLM endpoint (also used by tests)
+httpx>=0.27.0
+# Text from digital PDFs for the document review copilot (pure Python)
+pypdf>=4.0

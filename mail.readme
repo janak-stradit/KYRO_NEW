@@ -1,0 +1,119 @@
+Subject: KYRO AML – new version ready for your review
+
+Hi [Name],
+
+A new version of KYRO is ready, and I would value your review as our AML subject-matter expert before we take it further. The main changes are below. All data in this environment is synthetic.
+
+
+1. Roles and access
+-------------------
+Access now follows the three-lines-of-defence model, with ten roles: Administrator, MLRO / AML Officer, Team Lead, Level 2 Investigator, Level 1 Analyst, KYC Analyst, QA Reviewer, Rules Owner, Auditor and Executive Viewer.
+
+- Each role is defined by its responsibilities and its limits. For example, a Level 1 Analyst can clear an obvious false positive or escalate, but cannot close a true positive or recommend a SAR.
+- SAR filing is reserved: only the MLRO (or an Administrator) can record a SAR.
+- Four-eyes controls: nobody approves a rule change they proposed, or quality-checks a case they resolved.
+- Auditor and Executive Viewer are read-only.
+
+The roles in detail:
+
+MLRO / AML Officer – the accountable AML officer: final say on suspicion and on the programme's rules.
+  Responsible for: approving SAR filings; closing or returning escalated cases; approving rule changes and confirming obligations; assessing regulatory changes; assigning work and quality-checking cases.
+  Limits: cannot approve a rule change they proposed; cannot manage users or system settings.
+
+Team Lead – runs the alert queue day to day.
+  Responsible for: assigning alerts; closing ordinary cases; escalating suspicion to the MLRO; completing KYC reviews.
+  Limits: cannot approve a SAR or see SAR-filed cases; cannot change rules.
+
+Level 2 Investigator – investigates escalated cases in depth.
+  Responsible for: investigating and documenting findings; closing a case with no suspicion; recommending a SAR by escalating to the MLRO; uploading and reviewing documents; correcting customer details from documents.
+  Limits: sees only cases assigned to them and the unassigned pool; cannot approve a SAR or see SAR-filed cases; cannot assign work or change rules.
+
+Level 1 Analyst – first look at every alert.
+  Responsible for: closing an obvious false positive, with a reason; escalating anything else.
+  Limits: sees only cases assigned to them and the unassigned pool; cannot close a true positive or recommend a SAR; cannot see SAR-filed cases; cannot change customer records, documents or rules.
+
+KYC Analyst – keeps customer due diligence current.
+  Responsible for: completing periodic reviews and setting the rating after review; running screening and reviewing matches; collecting and checking customer documents; escalating concerns found during a review.
+  Limits: sees only cases assigned to them and the unassigned pool, but every customer; cannot resolve transaction alerts; cannot see SAR-filed cases; cannot change rules.
+
+QA Reviewer – checks that closed cases followed policy.
+  Responsible for: sampling resolved cases and recording pass or fail with notes; reading the audit trail.
+  Limits: cannot change a case's outcome; cannot check a case they resolved; cannot see SAR-filed cases.
+
+Rules Owner – maintains detection rules and their link to regulation.
+  Responsible for: proposing threshold changes with a backtest; extracting and confirming obligations; mapping obligations to controls; refreshing regulatory sources.
+  Limits: cannot approve their own rule changes; cannot resolve cases; cannot see SAR-filed cases.
+
+Auditor (read-only) – independent testing of the AML programme.
+  Responsible for: reading everything, including the audit log.
+  Limits: cannot change any record.
+
+Executive Viewer (read-only) – senior management oversight.
+  Responsible for: seeing dashboards and summary figures.
+  Limits: cannot open cases, customers or documents; cannot change any record.
+
+
+2. Who sees which records
+-------------------------
+- By assignment: analysts and investigators see only cases assigned to them and the unassigned pool. Team Leads, the MLRO, QA and Audit see all cases.
+- By sensitivity: SAR-filed cases, their documents and the fact that a SAR was filed are visible only to the MLRO, Administrators and Audit.
+
+
+3. Case detail view
+-------------------
+Each case is now a working file on one page:
+
+- A stage tracker (Opened, Assigned, Investigation, Escalated, Decision, Quality check) and case age against a target.
+- The rules that fired, the customer profile and risk rating, and how the customer's other alerts ended.
+- Activity against the customer's own baseline (last 30 days versus the previous 90), counterparties and countries, accounts, and transactions with filters and export.
+- Investigation notes and a full timeline, requests for information with due dates, documents, beneficial owners, and watchlist matches shown beside the customer with a recorded decision.
+
+
+4. AI-generated case summary and draft narrative
+------------------------------------------------
+- A short summary is written for each case from the facts on file. A fuller draft narrative (who, what, when, where, why, what was done) is available for the analyst to edit.
+- Customer and counterparty names are removed before anything is sent to the model, and every AI call is logged.
+- The AI does not decide or recommend an outcome; the analyst does.
+
+
+5. Regulations
+--------------
+- Regulation text (31 CFR Parts 1010 and 1023, 17 CFR 240.17a-8) is loaded with version history, and Federal Register notices are tracked.
+- Obligations are extracted from the text for a reviewer to confirm, then mapped to the controls that meet them, with a traceability matrix.
+- Rule threshold changes need a backtest and a second person's approval.
+
+
+6. Data mapping
+---------------
+- A client's customer, account and transaction files can be loaded from CSV. KYRO suggests which column maps to which field, runs a check-only pass that reports errors row by row, and keeps a record of every load.
+
+
+7. Other additions
+------------------
+- Quality-check workflow for resolved cases, with queue filters for cases awaiting or failing a check.
+- Sanctions screening against the OFAC and UN lists, with whole-name matching to cut false matches.
+- Document review: fields read from uploaded KYC documents and checked against the customer record.
+- A work queue showing overdue cases and cases waiting on information, and a dashboard showing each user their own cases and, for leads, team workload.
+- User administration and a searchable audit log.
+- An exportable case report (PDF and CSV).
+
+
+Where I would most like your view
+---------------------------------
+1. Do the role definitions and their limits match how an AML team should operate? Is anything missing or too permissive?
+2. Is the SAR visibility restriction right, or should Team Leads also see SAR-filed cases?
+3. Are the case stages and the information on the case page what an investigator needs?
+4. Are the AI summary and narrative acceptable in wording and scope for a case file?
+5. The case-age targets (5, 10 and 20 days by risk level) are placeholders. What should they be?
+
+
+Known limits in this version
+----------------------------
+- Obligation extraction and rule mapping still use a simple keyword method, not the AI model, so most obligations are unconfirmed.
+- The UK sanctions list is not loaded yet, and scanned documents cannot be read.
+- Customer profile and account details are sample data.
+
+I can walk you through it whenever suits you.
+
+Regards,
+[Your name]

@@ -9,18 +9,32 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.deps import PaginationParams, get_current_user
+from app.deps import PaginationParams, get_current_user, require_permission
 from app.models.account import Account as AccountModel
 from app.models.account import AccountBalance
 from app.models.customer import Customer
 from app.models.transaction import Transaction
 from app.models.user import User
+from app.visibility import customer_scope
 from app.schemas.account import AccountBalanceOut, AccountCreate, AccountOut, AccountStatusUpdate
 from app.schemas.common import Page
 from app.schemas.transaction import TransactionOut
 from app.services.audit_service import log_action
 
-router = APIRouter(prefix="/api/v1/accounts", tags=["accounts"], dependencies=[Depends(get_current_user)])
+from app.models.account import Account as _ScopedAccount
+
+
+def _customer_of(db, path_params):
+    """The customer a account_id in the path belongs to, for the visibility check."""
+    row_id = path_params.get("account_id")
+    try:
+        row = db.get(_ScopedAccount, uuid.UUID(str(row_id))) if row_id else None
+    except ValueError:
+        return None
+    return row.customer_id if row else None
+
+
+router = APIRouter(prefix="/api/v1/accounts", tags=["accounts"], dependencies=[Depends(require_permission("cases.view")), Depends(customer_scope(_customer_of))])
 
 
 def _get_account_or_404(db: Session, account_id: uuid.UUID) -> AccountModel:
@@ -31,7 +45,7 @@ def _get_account_or_404(db: Session, account_id: uuid.UUID) -> AccountModel:
 
 
 @router.post("", response_model=AccountOut, status_code=status.HTTP_201_CREATED)
-def create(data: AccountCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> AccountModel:
+def create(data: AccountCreate, db: Session = Depends(get_db), user: User = Depends(require_permission("customers.edit"))) -> AccountModel:
     if db.get(Customer, data.customer_id) is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Customer not found")
 
@@ -90,7 +104,7 @@ def get_balance_history(account_id: uuid.UUID, db: Session = Depends(get_db)) ->
 
 @router.put("/{account_id}/status", response_model=AccountOut)
 def update_status(
-    account_id: uuid.UUID, data: AccountStatusUpdate, db: Session = Depends(get_db), user: User = Depends(get_current_user)
+    account_id: uuid.UUID, data: AccountStatusUpdate, db: Session = Depends(get_db), user: User = Depends(require_permission("customers.edit"))
 ) -> AccountModel:
     account = _get_account_or_404(db, account_id)
     old_status = account.account_status
