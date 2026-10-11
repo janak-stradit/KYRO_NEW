@@ -7,7 +7,8 @@ Two rules:
    to it and the unassigned pool; a role without "customers.view_all" sees
    only customers that have such a case.
 2. Sensitivity. A SAR-filed case, the documents attached to it, and the fact
-   that a SAR was filed are visible only to roles with "sar.view".
+   that a SAR was filed are visible only to roles with "sar.view". Each time
+   such a case is opened, a SAR / VIEW entry is written to the audit log.
 
 A record a user may not see is reported as not found, so its existence is
 not revealed.
@@ -28,6 +29,7 @@ from app.models.customer import Customer
 from app.models.document import Document
 from app.models.user import User
 from app.permissions import has_permission
+from app.services.audit_service import log_action
 
 SAR_OUTCOME = "SAR_FILED"
 
@@ -65,6 +67,13 @@ def visible_alert_or_404(db: Session, user: User, alert_id: uuid.UUID) -> Alert:
     if alert is None or not alert_visible(user, alert):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Alert not found")
     return alert
+
+
+def record_sar_view(db: Session, user: User, alert: Alert) -> None:
+    """Note in the audit log that this user opened a SAR-filed case."""
+    if alert.resolution_outcome == SAR_OUTCOME:
+        log_action(db, entity_type="SAR", entity_id=alert.id, action="VIEW", performed_by=user.id)
+        db.commit()
 
 
 def customer_visible(db: Session, user: User, customer_id: uuid.UUID) -> bool:

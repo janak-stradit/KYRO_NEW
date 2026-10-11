@@ -8,6 +8,7 @@ import pytest
 
 from app.models.account import Account
 from app.models.alert import Alert
+from app.models.audit import AuditLog
 from app.models.document import Document
 from tests.api.conftest import _login, _make_user
 from tests.api.test_alerts import _create_alert_via_sanctions_hit
@@ -90,8 +91,8 @@ def test_customer_records_follow_the_cases_an_investigator_can_see(client, auth_
 
 # ── By sensitivity ───────────────────────────────────────────────────────
 
-def test_sar_filed_cases_are_seen_only_by_mlro_admin_and_auditor(client, auth_headers, admin_headers, db_session):
-    mlro, _ = _user(client, db_session, "MLRO", "sar.mlro")
+def test_sar_filed_cases_are_seen_only_by_mlro_and_auditor(client, auth_headers, admin_headers, db_session):
+    mlro, mlro_user = _user(client, db_session, "MLRO", "sar.mlro")
     lead, _ = _user(client, db_session, "TEAM_LEAD", "sar.lead")
     qa, _ = _user(client, db_session, "QA_REVIEWER", "sar.qa")
     auditor, _ = _user(client, db_session, "AUDITOR", "sar.auditor")
@@ -103,15 +104,20 @@ def test_sar_filed_cases_are_seen_only_by_mlro_admin_and_auditor(client, auth_he
     url = f"/api/v1/alerts/{filed['id']}"
     assert client.put(f"{url}/resolve", json=_SAR, headers=mlro).status_code == 200
 
-    for headers in (mlro, admin_headers, auditor):
+    for headers in (mlro, auditor):
         assert client.get(url, headers=headers).status_code == 200
         assert filed["id"] in _queue_ids(client, headers)
-    for headers in (lead, qa, auth_headers):
+    for headers in (lead, qa, auth_headers, admin_headers):
         assert client.get(url, headers=headers).status_code == 404
         assert client.get(f"{url}/timeline", headers=headers).status_code == 404
         assert filed["id"] not in _queue_ids(client, headers)
         assert filed["id"] not in _queue_ids(client, headers, status_filter="RESOLVED")
     assert client.put(f"{url}/qa", json={"result": "PASS"}, headers=qa).status_code == 404
+
+    # Every opening of the SAR-filed case is in the audit log, with who opened it
+    views = db_session.query(AuditLog).filter(AuditLog.entity_type == "SAR", AuditLog.entity_id == uuid.UUID(filed["id"])).all()
+    assert len(views) == 2 and {v.action for v in views} == {"VIEW"}
+    assert mlro_user.id in {v.performed_by for v in views}
 
     # Nothing about the customer's other case gives the filing away
     history = lambda headers: client.get(

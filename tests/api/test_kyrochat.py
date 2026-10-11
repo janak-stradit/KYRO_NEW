@@ -5,6 +5,20 @@ import pytest
 
 pytestmark = pytest.mark.db
 
+
+@pytest.fixture(autouse=True)
+def _signed_in(client, auth_headers):
+    client.headers.update(auth_headers)
+
+
+def test_chat_agent_and_streaming_need_a_signed_in_user(client):
+    client.headers.pop("Authorization")
+    assert client.get("/api/v1/chat/welcome").status_code == 401
+    assert client.post("/api/v1/chat/message", json={"messages": [{"role": "user", "content": "backlog"}]}).status_code == 401
+    assert client.get("/api/v1/agent/autonomous/cases/processing").status_code == 401
+    assert client.post("/api/v1/streaming/start", json={}).status_code == 401
+    assert client.post("/api/v1/tts/speak", json={"text": "hello"}).status_code == 401
+
 def test_chat_welcome_endpoint(client):
     resp = client.get("/api/v1/chat/welcome")
     assert resp.status_code == 200

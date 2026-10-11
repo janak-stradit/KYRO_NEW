@@ -16,8 +16,11 @@ from app.deps import get_current_user
 from app.models.alert import Alert
 from app.models.customer import Customer
 from app.models.transaction import Transaction
+from app.models.user import User
+from app.visibility import alert_conditions
 
-router = APIRouter(tags=["kyrochat"])
+# Every endpoint needs a signed-in user; alert lists show only cases that user may see (app/visibility.py)
+router = APIRouter(tags=["kyrochat"], dependencies=[Depends(get_current_user)])
 
 # In-memory agent & streaming state
 class AgentState:
@@ -94,7 +97,7 @@ def get_welcome() -> dict[str, Any]:
 
 # Message endpoint
 @router.post("/api/v1/chat/message", response_model=ChatResponse)
-def send_message(req: ChatRequest, db: Session = Depends(get_db)) -> ChatResponse:
+def send_message(req: ChatRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> ChatResponse:
     if not req.messages:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "No messages provided")
     
@@ -121,7 +124,7 @@ def send_message(req: ChatRequest, db: Session = Depends(get_db)) -> ChatRespons
         suggestions = ["What is the status of the backlog?", "Explain risk for case C-102"]
         
     elif "anomaly" in user_msg or "transaction" in user_msg:
-        high_alerts = db.query(Alert).filter(Alert.risk_score >= 80).limit(3).all()
+        high_alerts = db.query(Alert).filter(Alert.risk_score >= 80, *alert_conditions(user)).limit(3).all()
         if high_alerts:
             details = "\n".join([f"• Alert ID: {a.id} | Score: {a.risk_score} | Rec: {a.recommended_action}" for a in high_alerts])
             response_text = f"Found high-risk alerts that require human verification:\n{details}"
@@ -289,12 +292,12 @@ def handoff_agent(req: HandoffRequest) -> dict[str, Any]:
 
 # Processing Cases endpoint
 @router.get("/api/v1/agent/autonomous/cases/processing")
-def get_processing_cases(db: Session = Depends(get_db)) -> list[dict[str, Any]]:
+def get_processing_cases(db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> list[dict[str, Any]]:
     # Get active/open alerts to show real processing cases in the UI
     open_alerts = (
         db.query(Alert, Customer.full_name)
         .join(Customer, Alert.customer_id == Customer.id)
-        .filter(Alert.status == "OPEN")
+        .filter(Alert.status == "OPEN", *alert_conditions(user))
         .limit(5)
         .all()
     )
@@ -389,7 +392,7 @@ def _derive_failure_reason(alert_type: str | None, triggered_rules: dict | None,
 def get_real_failed_cases(
     limit: int = 8,
     db: Session = Depends(get_db),
-    user=Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ) -> list[dict[str, Any]]:
     """Return real high-risk alerts as failed cases for Kyro Chat display.
     Selects OPEN or ESCALATED alerts ordered by risk score descending.
@@ -398,7 +401,7 @@ def get_real_failed_cases(
     alerts = (
         db.query(Alert, Customer.full_name, Customer)
         .join(Customer, Alert.customer_id == Customer.id)
-        .filter(Alert.status.in_(["OPEN", "ESCALATED"]))
+        .filter(Alert.status.in_(["OPEN", "ESCALATED"]), *alert_conditions(user))
         .order_by(Alert.risk_score.desc())
         .limit(limit)
         .all()

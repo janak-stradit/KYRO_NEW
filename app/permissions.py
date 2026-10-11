@@ -4,7 +4,11 @@ permissions.py — Who may do what in KYRO.
 Endpoints ask for a *permission* ("sar.approve"), never for a role name. A
 role is a named set of permissions plus a written description of what the
 role is for, so roles can be added or adjusted here without touching the
-endpoints. ADMIN holds every permission.
+endpoints.
+
+The Administrator runs the system (users, data loads, models, audit) but holds
+no case-decision or SAR permission: those sit with the roles accountable for
+them, so the most powerful technical account cannot read or decide a SAR.
 
 The role set follows the usual AML operating model (analysts, team lead, QA,
 MLRO, rules owner, independent audit, oversight). It is a starting point for
@@ -71,13 +75,21 @@ def _role(code, label, purpose, responsibilities, limits, permissions, **flags) 
 
 _VIEW = {"cases.view"}
 _ALL_RECORDS = {"cases.view_all", "customers.view_all"}
+# Deciding a case, filing a SAR or changing a rule: never part of the system administrator's role
+DECISION_PERMISSIONS = frozenset({
+    "sar.view", "sar.approve", "alerts.assign", "alerts.escalate", "alerts.close_false_positive", "alerts.close", "alerts.qa",
+    "rules.propose", "rules.approve", "rules.edit_direct", "obligations.manage", "mappings.manage", "changes.assess",
+    "kyc.review", "screening.run", "customers.edit", "ubo.verify", "customers.assess_risk", "documents.manage",
+})
 
 ROLE_DEFINITIONS: tuple[RoleDefinition, ...] = (
     _role(
-        "ADMIN", "Administrator", "Full control of KYRO.",
-        ["Create users and assign roles", "Every action available to any other role", "System configuration, data feeds and model training"],
-        ["Cannot approve a rule change or quality-check a case that they themselves prepared"],
-        set(PERMISSIONS),
+        "ADMIN", "Administrator", "Runs the system: users, data loads, models and the audit log.",
+        ["Create users and assign roles", "Load data feeds, transactions, watchlists and regulations",
+         "Retrain models and check the AI connection", "Read the audit log"],
+        ["Cannot see SAR-filed cases or approve a SAR", "Cannot resolve, escalate, assign or quality-check cases",
+         "Cannot change customer records, documents or rules"],
+        set(PERMISSIONS) - DECISION_PERMISSIONS,
     ),
     _role(
         "MLRO", "MLRO / AML Officer", "The accountable AML officer: final say on suspicion and on the programme's rules.",

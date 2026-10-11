@@ -9,13 +9,15 @@ import hashlib
 import logging
 import os
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
+from app.deps import get_current_user
+
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/v1/tts", tags=["tts"])
+router = APIRouter(prefix="/api/v1/tts", tags=["tts"], dependencies=[Depends(get_current_user)])
 
 # ── Config ─────────────────────────────────────────────────────────────────────
 TTS_PROVIDER          = os.getenv("TTS_PROVIDER", "elevenlabs").lower()

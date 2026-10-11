@@ -5,7 +5,7 @@ audit log and the case quality check.
 import pytest
 
 from app.models.audit import AuditLog
-from app.permissions import PERMISSIONS, ROLES, has_permission, is_read_only
+from app.permissions import DECISION_PERMISSIONS, PERMISSIONS, ROLES, has_permission, is_read_only
 from tests.api.conftest import _login, _make_user
 from tests.api.test_alerts import _FP_RESOLUTION, _create_alert_via_sanctions_hit
 from tests.api.test_change_management import _propose
@@ -28,15 +28,18 @@ def _headers(client, db_session, role, username=None):
 
 # ── The model itself ─────────────────────────────────────────────────────
 
-def test_admin_holds_every_permission_and_roles_keep_duties_apart():
-    assert ROLES["ADMIN"].permissions == frozenset(PERMISSIONS)
+def test_admin_runs_the_system_but_decides_nothing_and_roles_keep_duties_apart():
+    admin = ROLES["ADMIN"].permissions
+    assert admin.isdisjoint(DECISION_PERMISSIONS)
+    assert {"users.manage", "audit.read", "feeds.load", "ml.train", "ai.admin"} <= admin
     for role in ROLES.values():
         assert role.permissions <= set(PERMISSIONS)
         assert role.purpose and role.responsibilities and role.limits
-    # Only the MLRO and the two all-round roles may approve a SAR or a rule change
+    # Only the MLRO and the legacy all-round role may see or approve a SAR, or approve a rule change
     for permission in ("sar.approve", "rules.approve"):
         holders = {code for code in ROLES if has_permission(code, permission)}
-        assert holders == {"ADMIN", "MLRO", "COMPLIANCE_OFFICER"}
+        assert holders == {"MLRO", "COMPLIANCE_OFFICER"}
+    assert {code for code in ROLES if has_permission(code, "sar.view")} == {"MLRO", "AUDITOR", "COMPLIANCE_OFFICER"}
     assert {code for code in ROLES if has_permission(code, "users.manage")} == {"ADMIN"}
     assert is_read_only("AUDITOR") and is_read_only("EXECUTIVE_VIEWER") and not is_read_only("L1_ANALYST")
     assert is_read_only("NO_SUCH_ROLE") and not has_permission("NO_SUCH_ROLE", "cases.view")
@@ -72,7 +75,7 @@ def test_level_one_analyst_clears_false_positives_only(client, auth_headers, db_
     assert cleared.status_code == 200 and cleared.json()["resolution_outcome"] == "FALSE_POSITIVE"
 
 
-def test_investigator_recommends_and_only_mlro_approves_a_sar(client, auth_headers, db_session):
+def test_investigator_recommends_and_only_mlro_approves_a_sar(client, auth_headers, admin_headers, db_session):
     l2, _ = _headers(client, db_session, "L2_INVESTIGATOR")
     lead, _ = _headers(client, db_session, "TEAM_LEAD")
     mlro, _ = _headers(client, db_session, "MLRO")
@@ -81,6 +84,8 @@ def test_investigator_recommends_and_only_mlro_approves_a_sar(client, auth_heade
 
     assert client.put(f"{url}/resolve", json=_SAR, headers=l2).status_code == 403
     assert client.put(f"{url}/resolve", json=_SAR, headers=lead).status_code == 403
+    assert client.put(f"{url}/resolve", json=_SAR, headers=admin_headers).status_code == 403
+    assert client.put(f"{url}/escalate", json={"reasons": ["SANCTIONS_EXPOSURE"]}, headers=admin_headers).status_code == 403
     escalated = client.put(f"{url}/escalate", json={"reasons": ["SANCTIONS_EXPOSURE"], "resolution_notes": "Recommend SAR"}, headers=l2)
     assert escalated.status_code == 200 and escalated.json()["status"] == "ESCALATED"
 

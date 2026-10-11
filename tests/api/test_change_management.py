@@ -97,7 +97,7 @@ def test_amended_section_creates_a_change_with_its_impact(client, auth_headers, 
 
 # ── Maker-checker rule changes ───────────────────────────────────────────
 
-def test_proposer_cannot_approve_their_own_change(client, compliance_headers, admin_headers, auth_headers):
+def test_proposer_cannot_approve_their_own_change(client, compliance_headers, mlro_headers, auth_headers):
     before = _effective_amount(client, compliance_headers)
     assert _propose(client, auth_headers).status_code == 403  # analysts cannot propose
 
@@ -113,34 +113,34 @@ def test_proposer_cannot_approve_their_own_change(client, compliance_headers, ad
     assert _effective_amount(client, compliance_headers) == before  # nothing changed yet
 
     # A second change to the same setting has to wait
-    assert _propose(client, admin_headers, value=20000).status_code == 409
+    assert _propose(client, mlro_headers, value=20000).status_code == 409
 
-    approved = client.put(url, json={"decision": "APPROVED", "notes": "Agreed"}, headers=admin_headers)
+    approved = client.put(url, json={"decision": "APPROVED", "notes": "Agreed"}, headers=mlro_headers)
     assert approved.status_code == 200
     body = approved.json()
     assert body["status"] == "ACTIVE" and body["activated_at"] and body["reviewed_by_name"]
     assert _effective_amount(client, compliance_headers) == 12345
 
     # Decided changes are final
-    assert client.put(url, json={"decision": "REJECTED", "notes": "Too late"}, headers=admin_headers).status_code == 409
+    assert client.put(url, json={"decision": "REJECTED", "notes": "Too late"}, headers=mlro_headers).status_code == 409
 
 
-def test_rejection_needs_a_reason_and_leaves_the_rule_alone(client, compliance_headers, admin_headers):
+def test_rejection_needs_a_reason_and_leaves_the_rule_alone(client, compliance_headers, mlro_headers):
     before = _effective_amount(client, compliance_headers)
     change = _propose(client, compliance_headers).json()
     url = f"/api/v1/changes/rules/{change['id']}/review"
 
-    assert client.put(url, json={"decision": "REJECTED"}, headers=admin_headers).status_code == 422
-    rejected = client.put(url, json={"decision": "REJECTED", "notes": "Backtest loses true positives"}, headers=admin_headers)
+    assert client.put(url, json={"decision": "REJECTED"}, headers=mlro_headers).status_code == 422
+    rejected = client.put(url, json={"decision": "REJECTED", "notes": "Backtest loses true positives"}, headers=mlro_headers)
     assert rejected.status_code == 200 and rejected.json()["status"] == "REJECTED"
     assert rejected.json()["review_notes"] == "Backtest loses true positives"
     assert _effective_amount(client, compliance_headers) == before
 
 
-def test_future_dated_change_waits_for_its_effective_date(client, compliance_headers, admin_headers, db_session):
+def test_future_dated_change_waits_for_its_effective_date(client, compliance_headers, mlro_headers, db_session):
     before = _effective_amount(client, compliance_headers)
     change = _propose(client, compliance_headers, effective_from=(TODAY + timedelta(days=30)).isoformat()).json()
-    approved = client.put(f"/api/v1/changes/rules/{change['id']}/review", json={"decision": "APPROVED"}, headers=admin_headers)
+    approved = client.put(f"/api/v1/changes/rules/{change['id']}/review", json={"decision": "APPROVED"}, headers=mlro_headers)
     assert approved.json()["status"] == "APPROVED" and approved.json()["activated_at"] is None
     assert _effective_amount(client, compliance_headers) == before
     assert change_service.activate_due(db_session) == 0
@@ -155,7 +155,7 @@ def test_future_dated_change_waits_for_its_effective_date(client, compliance_hea
     assert _effective_amount(client, compliance_headers) == 12345
 
 
-def test_proposer_can_withdraw_and_invalid_changes_are_refused(client, compliance_headers, admin_headers):
+def test_proposer_can_withdraw_and_invalid_changes_are_refused(client, compliance_headers, mlro_headers):
     current = _effective_amount(client, compliance_headers)
     assert _propose(client, compliance_headers, value=current).status_code == 409  # no-op
     assert _propose(client, compliance_headers, key="NOT_A_KEY").status_code == 400
@@ -164,7 +164,7 @@ def test_proposer_can_withdraw_and_invalid_changes_are_refused(client, complianc
 
     change = _propose(client, compliance_headers).json()
     url = f"/api/v1/changes/rules/{change['id']}/review"
-    assert client.put(url, json={"decision": "CANCELLED"}, headers=admin_headers).status_code == 403
+    assert client.put(url, json={"decision": "CANCELLED"}, headers=mlro_headers).status_code == 403
     assert client.put(url, json={"decision": "CANCELLED"}, headers=compliance_headers).json()["status"] == "CANCELLED"
     assert _propose(client, compliance_headers).status_code == 201  # the setting is free again
 

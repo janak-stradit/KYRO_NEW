@@ -1,7 +1,7 @@
 """
 routers/rule_configs.py — view and edit the rules engine's DB-backed
 threshold overrides (Phase 4.4). Any authenticated user can read; only
-ADMIN/COMPLIANCE_OFFICER can write, and every write is audit-logged via
+roles holding "rules.edit_direct" can write, and every write is audit-logged via
 rule_config_service.
 """
 from __future__ import annotations

@@ -17,11 +17,11 @@ class AuditLog(Base, UUIDPrimaryKeyMixin):
     __tablename__ = "audit_logs"
     __table_args__ = (
         CheckConstraint(
-            "entity_type IN ('CUSTOMER','ACCOUNT','TRANSACTION','ALERT','RULE_CONFIG','OBLIGATION','OBLIGATION_MAPPING','REGULATORY_CHANGE','RULE_CONFIG_CHANGE','DOCUMENT','USER')",
+            "entity_type IN ('CUSTOMER','ACCOUNT','TRANSACTION','ALERT','RULE_CONFIG','OBLIGATION','OBLIGATION_MAPPING','REGULATORY_CHANGE','RULE_CONFIG_CHANGE','DOCUMENT','USER','SAR','EMERGENCY_ACCESS')",
             name="chk_audit_entity_type",
         ),
         CheckConstraint(
-            "action IN ('CREATE','UPDATE','DELETE','REVIEW','APPROVE','REJECT')", name="chk_audit_action"
+            "action IN ('CREATE','UPDATE','DELETE','REVIEW','APPROVE','REJECT','VIEW')", name="chk_audit_action"
         ),
         Index("ix_app_audit_entity", "entity_type", "entity_id"),
         Index("ix_app_audit_ts_brin", "performed_at", postgresql_using="brin"),

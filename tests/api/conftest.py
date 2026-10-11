@@ -177,3 +177,8 @@ def compliance_headers(client, compliance_user) -> dict[str, str]:
 @pytest.fixture
 def admin_headers(client, admin_user) -> dict[str, str]:
     return _login(client, admin_user.username)
+
+
+@pytest.fixture
+def mlro_headers(client, db_session) -> dict[str, str]:
+    return _login(client, _make_user(db_session, username="mlro1", role="MLRO").username)

@@ -22,7 +22,7 @@ from app.models.customer import Customer
 from app.models.alert_request import AlertRequest
 from app.models.user import User
 from app.permissions import has_permission, is_read_only
-from app.visibility import alert_conditions, alert_visible, visible_alert_or_404
+from app.visibility import alert_conditions, alert_visible, record_sar_view, visible_alert_or_404
 from app.schemas.alert import (
     OUTCOME_REASONS,
     RESOLUTION_OUTCOMES,
@@ -488,7 +488,9 @@ def disposition_baseline(
 
 @router.get("/{alert_id}", response_model=AlertOut)
 def get_alert(alert_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> AlertModel:
-    return visible_alert_or_404(db, user, alert_id)
+    alert = visible_alert_or_404(db, user, alert_id)
+    record_sar_view(db, user, alert)
+    return alert
 
 
 def _assignee_or_422(db: Session, user_id: uuid.UUID) -> User:
