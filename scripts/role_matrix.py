@@ -24,7 +24,7 @@ MATRIX_PATH = Path(__file__).resolve().parent.parent / "docs" / "ROLE_PERMISSION
 GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("Cases and alerts", ("cases.view", "cases.view_all", "alerts.assign", "assignment.manage", "alerts.close_false_positive",
                           "alerts.close", "alerts.escalate", "alerts.qa", "alerts.baseline")),
-    ("SAR", ("sar.view", "sar.approve", "sar.grant_access", "emergency.request")),
+    ("SAR", ("sar.view", "sar.approve", "sar.grant_access", "roles.approve_sar", "emergency.request")),
     ("Customers and KYC", ("customers.view_all", "customers.edit", "customers.assess_risk", "kyc.review", "screening.run",
                            "ubo.verify", "documents.manage")),
     ("Rules and regulation", ("rules.propose", "rules.approve", "rules.edit_direct", "regulatory.ingest", "obligations.manage",

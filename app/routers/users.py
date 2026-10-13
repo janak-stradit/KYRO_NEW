@@ -129,10 +129,10 @@ def create_user(
         raise HTTPException(status.HTTP_409_CONFLICT, "That username is already taken")
     if db.query(User).filter(User.email.ilike(data.email)).first() is not None:
         raise HTTPException(status.HTTP_409_CONFLICT, "That email is already registered")
-    if access_control_service.needs_approval(db, data.role):
+    if access_control_service.needs_approval(db, data.role, admin):
         raise HTTPException(
             status.HTTP_409_CONFLICT,
-            f"{ROLES[data.role].label} can see SAR cases, so it needs the MLRO's approval. "
+            f"{ROLES[data.role].label} can see SAR cases, so it needs a second person's approval (another administrator or the MLRO). "
             "Create the user with another role first, then change the role.",
         )
     user = User(
@@ -156,7 +156,7 @@ def update_user(
     db: Session = Depends(get_db),
     admin: User = Depends(require_permission("users.manage")),
 ) -> UserAdminOut:
-    """Update a user. A role that can see SAR cases is not applied here: it goes to the MLRO for approval (202)."""
+    """Update a user. A role that can see SAR cases is not applied here: it waits for a second person's approval (202)."""
     user = _user_or_404(db, user_id)
     changes = data.model_dump(exclude_none=True)
     loses_admin = user.role == "ADMIN" and user.is_active and (
@@ -169,7 +169,7 @@ def update_user(
         if _other_active_admins(db, user) == 0:
             raise HTTPException(status.HTTP_409_CONFLICT, "At least one active administrator is required")
 
-    if changes.get("role", user.role) != user.role and access_control_service.needs_approval(db, changes["role"]):
+    if changes.get("role", user.role) != user.role and access_control_service.needs_approval(db, changes["role"], admin):
         try:
             access_control_service.request_role(db, admin, user, changes.pop("role"), None)
         except access_control_service.AccessError as exc:

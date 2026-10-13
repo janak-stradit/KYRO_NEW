@@ -496,7 +496,10 @@ def disposition_baseline(
 def get_alert(alert_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> dict:
     alert = visible_alert_or_404(db, user, alert_id, emergency_read=True)
     record_sar_view(db, user, alert)
-    return _out(alert, user)
+    out = _out(alert, user)
+    owner = db.get(User, alert.assigned_to) if alert.assigned_to else None
+    out["assigned_to_name"] = (owner.full_name or owner.username) if owner else None
+    return out
 
 
 @router.get("/{alert_id}/deadlines")
