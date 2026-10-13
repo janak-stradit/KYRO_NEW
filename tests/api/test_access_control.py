@@ -152,10 +152,34 @@ def test_the_person_receiving_a_role_cannot_approve_it(client, admin_headers, db
     assert db_session.get(User, mlro_user.id).role == "MLRO"
 
 
-def test_first_sar_role_on_a_new_installation_is_granted_directly(client, admin_headers, db_session):
-    # Nobody can approve yet (the demo users are seeded at start-up, so stand them down), so the first MLRO is created directly
-    approvers = [code for code in ROLES if has_permission(code, "sar.grant_access")]
-    db_session.query(User).filter(User.role.in_(approvers)).update({"is_active": False})
+def test_an_administrator_approves_a_sar_role_another_administrator_asked_for(client, admin_headers, admin_user, db_session):
+    second_admin, second_admin_user = _user(client, db_session, "ADMIN", "rg3.admin")
+    _, lead_user = _user(client, db_session, "TEAM_LEAD", "rg3.lead")
+    assert client.put(f"/api/v1/users/{lead_user.id}", json={"role": "MLRO"}, headers=admin_headers).status_code == 202
+    request_id = next(r["id"] for r in client.get("/api/v1/access/role-requests", headers=second_admin).json()
+                      if r["user_id"] == str(lead_user.id) and r["status"] == "REQUESTED")
+    decision = f"/api/v1/access/role-requests/{request_id}/decision"
+
+    # The administrator who asked cannot approve their own request; a second administrator can
+    assert client.put(decision, json={"decision": "APPROVED"}, headers=admin_headers).status_code == 403
+    approved = client.put(decision, json={"decision": "APPROVED"}, headers=second_admin)
+    assert approved.status_code == 200 and approved.json()["status"] == "APPROVED"
+    db_session.refresh(lead_user)
+    assert lead_user.role == "MLRO"
+    assert db_session.query(AuditLog).filter(AuditLog.entity_id == lead_user.id, AuditLog.action == "APPROVE",
+                                             AuditLog.performed_by == second_admin_user.id).count() == 1
+
+
+def test_an_administrator_still_cannot_approve_emergency_access(client, admin_headers, db_session):
+    assert has_permission("ADMIN", "roles.approve_sar") and not has_permission("ADMIN", "sar.grant_access")
+    assert not has_permission("ADMIN", "sar.view")  # approving a role does not let the administrator see SAR cases
+
+
+def test_first_sar_role_on_a_new_installation_is_granted_directly(client, admin_headers, admin_user, db_session):
+    # Nobody but the administrator asking can approve yet (the demo users are seeded at start-up, so stand them down),
+    # so the first MLRO is created directly
+    approvers = [code for code in ROLES if has_permission(code, "sar.grant_access") or has_permission(code, "roles.approve_sar")]
+    db_session.query(User).filter(User.role.in_(approvers), User.id != admin_user.id).update({"is_active": False})
     db_session.commit()
     created = client.post("/api/v1/users", json={"username": "first.mlro", "email": "first.mlro@example.com", "full_name": "First MLRO",
                                                  "password": "Str0ngPass!123", "role": "MLRO"}, headers=admin_headers)

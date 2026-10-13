@@ -327,7 +327,7 @@ const Auth = {
         rules: ['rules.propose', 'rules.approve', 'alerts.baseline'],
         process: ['users.manage'],
         feeds: ['feeds.load'],
-        admin: ['users.manage', 'audit.read', 'sar.grant_access'],
+        admin: ['users.manage', 'audit.read', 'sar.grant_access', 'roles.approve_sar'],
         case: ['cases.view']
     },
 

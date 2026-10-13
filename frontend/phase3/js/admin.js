@@ -27,7 +27,7 @@ const Admin = {
         const tabs = [];
         if (Auth.can('users.manage')) tabs.push(['users', 'Users']);
         tabs.push(['roles', 'Roles and permissions']);
-        if (Auth.can('emergency.request', 'sar.grant_access', 'users.manage')) tabs.push(['access', 'Access requests']);
+        if (Auth.can('emergency.request', 'sar.grant_access', 'roles.approve_sar', 'users.manage')) tabs.push(['access', 'Access requests']);
         if (Auth.can('audit.read')) tabs.push(['audit', 'Audit log']);
         if (!tabs.some(([key]) => key === this.tab)) this.tab = tabs[0][0];
 
@@ -294,7 +294,9 @@ const Admin = {
 
     // ── Access requests (emergency access, roles that can see SAR cases) ──
     async renderAccess() {
-        const approver = Auth.can('sar.grant_access');
+        const approver = Auth.can('sar.grant_access');                         // emergency access: the MLRO
+        const roleApprover = Auth.can('sar.grant_access', 'roles.approve_sar');  // roles that see SAR cases: also administrators
+        const me = (Auth.getUser() || {}).id;
         const requester = Auth.can('emergency.request');
         const manager = Auth.can('users.manage');
         $("#admBody").html(`
@@ -320,9 +322,10 @@ const Admin = {
                     <tbody id="admEmBody"><tr><td colspan="6" class="rc-empty">Loading…</td></tr></tbody>
                 </table></div>
             </section>
-            ${approver || manager ? `
+            ${roleApprover || manager ? `
             <section class="card border-0 rc-table-card">
                 <h3 class="adm-section-title px-3 pt-3">Roles that can see SAR cases</h3>
+                <p class="kx-note px-3 mb-2">Approved by someone other than the person who asked: another administrator or the MLRO.</p>
                 <div class="table-responsive"><table class="table mb-0">
                     <thead><tr><th class="px-3">Person</th><th>Change</th><th>Asked by</th><th>Status</th><th class="text-end px-3"></th></tr></thead>
                     <tbody id="admRoleReqBody"><tr><td colspan="5" class="rc-empty">Loading…</td></tr></tbody>
@@ -388,7 +391,7 @@ const Admin = {
             $("#admEmBody").html('<tr><td colspan="6" class="rc-empty">Could not load emergency access requests.</td></tr>');
         }
 
-        if (!approver && !manager) return;
+        if (!roleApprover && !manager) return;
         try {
             const requests = await API.get('/access/role-requests');
             $("#admRoleReqBody").html(requests.map(r => `
@@ -398,7 +401,8 @@ const Admin = {
                     <td>${escapeHtml(r.requested_by_name || '')}</td>
                     <td>${statusChip(r.status, false)}</td>
                     <td class="text-end px-3 text-nowrap">
-                        ${r.status === 'REQUESTED' && approver ? `
+                        ${r.status === 'REQUESTED' && roleApprover && r.requested_by === me ? '<small class="text-muted me-2">Waiting for a second person</small>' : ''}
+                        ${r.status === 'REQUESTED' && roleApprover && r.requested_by !== me && r.user_id !== me ? `
                             <button type="button" class="btn btn-sm btn-primary adm-role-approve" data-id="${escapeHtml(r.id)}">Approve</button>
                             <button type="button" class="btn btn-sm rc-actions__view adm-role-reject" data-id="${escapeHtml(r.id)}">Reject</button>` : ''}
                         ${r.status === 'REQUESTED' && manager ? `<button type="button" class="btn btn-sm rc-actions__view adm-role-cancel" data-id="${escapeHtml(r.id)}">Cancel</button>` : ''}

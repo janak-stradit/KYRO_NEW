@@ -61,7 +61,8 @@ def _role_out(r: RoleGrantRequest, names: dict[uuid.UUID, str]) -> dict[str, Any
     return {
         "id": str(r.id), "user_id": str(r.user_id), "user_name": names.get(r.user_id),
         "from_role": r.from_role, "to_role": r.to_role, "to_role_label": ROLES[r.to_role].label if r.to_role in ROLES else r.to_role,
-        "reason": r.reason, "status": r.status, "requested_by_name": names.get(r.requested_by), "requested_at": _iso(r.requested_at),
+        "reason": r.reason, "status": r.status, "requested_by": str(r.requested_by) if r.requested_by else None,
+        "requested_by_name": names.get(r.requested_by), "requested_at": _iso(r.requested_at),
         "decided_by_name": names.get(r.decided_by), "decided_at": _iso(r.decided_at), "decision_notes": r.decision_notes,
     }
 
@@ -113,7 +114,7 @@ def revoke_emergency(
 
 @router.get("/role-requests")
 def list_role_requests(
-    db: Session = Depends(get_db), _: User = Depends(require_permission("users.manage", svc.GRANT_PERMISSION)),
+    db: Session = Depends(get_db), _: User = Depends(require_permission("users.manage", *svc.ROLE_APPROVE_PERMISSIONS)),
 ) -> list[dict[str, Any]]:
     rows = db.query(RoleGrantRequest).order_by(RoleGrantRequest.requested_at.desc()).limit(200).all()
     names = _names(db, {r.user_id for r in rows} | {r.requested_by for r in rows} | {r.decided_by for r in rows})
@@ -123,7 +124,7 @@ def list_role_requests(
 @router.put("/role-requests/{request_id}/decision")
 def decide_role_request(
     request_id: uuid.UUID, data: Decision, db: Session = Depends(get_db),
-    user: User = Depends(require_permission(svc.GRANT_PERMISSION)),
+    user: User = Depends(require_permission(*svc.ROLE_APPROVE_PERMISSIONS)),
 ) -> dict[str, Any]:
     row = _call(svc.decide_role, db, user, request_id, data.decision == "APPROVED", data.notes)
     return _role_out(row, _names(db, {row.user_id, row.requested_by, row.decided_by}))

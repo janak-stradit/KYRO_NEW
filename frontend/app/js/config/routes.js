@@ -12,7 +12,9 @@ export const ROUTES = [
     { name: 'cases', path: '/cases', title: 'Review Cases', nav: 'Review Cases', permission: ['cases.view'],
         load: () => import('../pages/cases/cases.js') },
     { name: 'case', path: '/cases/:id', title: 'Case', permission: ['cases.view'], navParent: 'cases',
-        load: placeholder('/case') },
+        load: () => import('../pages/case/case.js') },
+    { name: 'case-report', path: '/cases/:id/report', title: 'Case report', permission: ['cases.view'], navParent: 'cases',
+        load: () => import('../pages/case/case-report.js') },
     { name: 'patterns', path: '/patterns', title: 'Patterns', nav: 'Patterns', permission: ['cases.view'], load: placeholder('/patterns') },
     { name: 'regulations', path: '/regulations', title: 'Regulations', nav: 'Regulations', load: placeholder('/regulations') },
     { name: 'rules', path: '/rules', title: 'Rules', nav: 'Rules', permission: ['rules.propose', 'rules.approve', 'alerts.baseline'],
@@ -21,6 +23,6 @@ export const ROUTES = [
     { name: 'process', path: '/process', title: 'How KYRO works', nav: 'How it works', permission: ['users.manage'],
         load: placeholder('/process') },
     { name: 'admin', path: '/admin', title: 'Administration', nav: 'Administration',
-        permission: ['users.manage', 'audit.read', 'sar.grant_access', 'assignment.manage'], load: placeholder('/admin') },
+        permission: ['users.manage', 'audit.read', 'sar.grant_access', 'roles.approve_sar', 'assignment.manage'], load: placeholder('/admin') },
     { name: 'profile', path: '/profile', title: 'My profile', load: placeholder('/profile') },
 ];

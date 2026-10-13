@@ -53,6 +53,7 @@ PERMISSIONS: dict[str, str] = {
     "audit.read": "Read the audit log",
     "emergency.request": "Ask for time-limited, read-only emergency access to one case",
     "sar.grant_access": "Approve emergency access to a case, or a role that can see SAR cases",
+    "roles.approve_sar": "Approve a role that can see SAR cases, asked for by someone else",
     "assignment.manage": "Set up teams and the rules that assign new alerts to them",
     "users.manage": "Create users and assign roles",
 }
@@ -94,7 +95,8 @@ ROLE_DEFINITIONS: tuple[RoleDefinition, ...] = (
          "Ask for time-limited, read-only emergency access to a case, approved by the MLRO"],
         ["Cannot see SAR-filed cases or approve a SAR", "Cannot resolve, escalate, assign or quality-check cases",
          "Cannot change customer records, documents or rules",
-         "Cannot give anyone a role that sees SAR cases without the MLRO's approval"],
+         "Cannot give anyone a role that sees SAR cases without a second person's approval",
+         "Can approve such a role when another administrator asked for it, never their own request"],
         set(PERMISSIONS) - DECISION_PERMISSIONS,
     ),
     _role(
@@ -106,7 +108,7 @@ ROLE_DEFINITIONS: tuple[RoleDefinition, ...] = (
         _VIEW | _ALL_RECORDS | {"sar.view", "sar.approve", "alerts.close", "alerts.close_false_positive", "alerts.escalate", "alerts.assign", "alerts.qa",
                  "alerts.baseline", "documents.manage", "kyc.review", "screening.run", "customers.edit", "ubo.verify", "customers.assess_risk",
                  "rules.propose", "rules.approve", "regulatory.ingest", "obligations.manage", "mappings.manage", "changes.assess",
-                 "audit.read", "ai.status", "sar.grant_access", "assignment.manage"},
+                 "audit.read", "ai.status", "sar.grant_access", "roles.approve_sar", "assignment.manage"},
     ),
     _role(
         "TEAM_LEAD", "Team Lead", "Runs the alert queue day to day.",

@@ -3,12 +3,14 @@
  */
 import { can } from '../../core/auth.js';
 import { html, list } from '../../core/dom.js';
-import { age, dateTime, human, number } from '../../core/format.js';
+import { age, dateTime, number } from '../../core/format.js';
 import { href } from '../../core/router.js';
 import { owner, score, stage, status, tags } from '../../components/cells.js';
 import { head } from '../../components/table.js';
 import { tabs } from '../../components/tabs.js';
 import { MARKED_RULES, RULES, ruleName } from '../../config/rules.js';
+
+export { assignForm } from '../../components/assign-form.js';
 
 export const VIEWS = [
     { key: 'all', label: 'All unresolved', count: (s) => s.unresolved, filters: {} },
@@ -153,14 +155,3 @@ export const bulkBar = (count) => (count ? html`
     <div class="bulkbar" role="status"><strong>${number(count)}</strong> selected
         <button type="button" class="btn btn-primary" data-action="assign-selected"><i class="fas fa-user-plus me-1" aria-hidden="true"></i>Assign</button>
         <button type="button" class="btn btn-quiet" data-action="clear-selection">Clear</button></div>` : '');
-
-export function assignForm(people, subject, meId) {
-    const me = people.find((p) => p.id === meId);
-    return html`
-        <p class="muted">${subject}</p>
-        <label class="field-label" for="assignee">Assign to</label>
-        <select class="form-select" id="assignee" name="assignee" required>
-            <option value="">Choose a person…</option>
-            ${list(people, (p) => html`<option value="${p.id}">${p.name}${p === me ? ' (you)' : ''} · ${human(p.role)}</option>`)}
-        </select>`;
-}

@@ -29,7 +29,17 @@
     --success-text: #15803D;
     --success-soft: #F0FDF4;
     --info: #0EA5E9;
+    --info-soft: #EFF6FF;
     --violet: #8B5CF6;
+
+    /* Borders that go with the soft backgrounds, charts, highlights */
+    --brand-line: #FED7AA;
+    --danger-line: #FECACA;
+    --warning-line: #FDE68A;
+    --success-line: #BBF7D0;
+    --chart-base: #98A2B3;
+    --highlight: #FDE68A;
+    --evidence: #F5F8FF;
 
     /* Type */
     --font: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
