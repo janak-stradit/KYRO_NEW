@@ -1,5 +1,6 @@
 /* layout.css — app shell, page header */
-.topbar { position: sticky; top: 0; z-index: 50; height: var(--topbar-h); display: flex; align-items: center; gap: var(--s-6);
+#shell { position: sticky; top: 0; z-index: 50; }  /* the top bar stays in view; sticky page headers sit under it */
+.topbar { height: var(--topbar-h); display: flex; align-items: center; gap: var(--s-6);
     padding: 0 var(--s-6); background: var(--ink); color: #fff; }
 .topbar__brand { display: inline-flex; align-items: center; gap: 8px; color: #fff; font-weight: 700; font-size: 15px; letter-spacing: .02em; }
 .topbar__brand:hover { text-decoration: none; }

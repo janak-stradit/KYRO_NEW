@@ -36,6 +36,7 @@ Generated from `app/permissions.py` by `scripts/role_matrix.py`. Do not edit by 
 | `sar.view` — See SAR-filed cases, their documents and the fact a SAR was filed |  | ✔ |  |  |  |  |  |  | ✔ |  | ✔ |  |
 | `sar.approve` — Approve a SAR filing |  | ✔ |  |  |  |  |  |  |  |  | ✔ |  |
 | `sar.grant_access` — Approve emergency access to a case, or a role that can see SAR cases |  | ✔ |  |  |  |  |  |  |  |  | ✔ |  |
+| `roles.approve_sar` — Approve a role that can see SAR cases, asked for by someone else | ✔ | ✔ |  |  |  |  |  |  |  |  | ✔ |  |
 | `emergency.request` — Ask for time-limited, read-only emergency access to one case | ✔ |  |  |  |  |  |  |  |  |  | ✔ |  |
 
 ### Customers and KYC
@@ -92,7 +93,8 @@ Runs the system: users, data loads, models and the audit log.
 - Cannot see SAR-filed cases or approve a SAR
 - Cannot resolve, escalate, assign or quality-check cases
 - Cannot change customer records, documents or rules
-- Cannot give anyone a role that sees SAR cases without the MLRO's approval
+- Cannot give anyone a role that sees SAR cases without a second person's approval
+- Can approve such a role when another administrator asked for it, never their own request
 
 ### MLRO / AML Officer (`MLRO`)
 

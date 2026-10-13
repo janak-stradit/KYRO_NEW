@@ -2,8 +2,10 @@
 services/access_control_service.py — Emergency access to a case, and approval
 of roles that can see SAR cases (models/access_control.py).
 
-Both are four-eyes decisions: the approver must hold "sar.grant_access" and
-must not be the person asking or the person who would receive the access.
+Both are four-eyes decisions: the approver must not be the person asking or the
+person who would receive the access. Emergency access is approved by holders of
+"sar.grant_access" (the MLRO); a role that can see SAR cases also by holders of
+"roles.approve_sar" (administrators and the MLRO).
 """
 from __future__ import annotations
 
@@ -20,6 +22,7 @@ from app.permissions import ROLES, has_permission
 from app.services.audit_service import log_action
 
 GRANT_PERMISSION = "sar.grant_access"
+ROLE_APPROVE_PERMISSIONS = (GRANT_PERMISSION, "roles.approve_sar")
 
 
 class AccessError(Exception):
@@ -32,8 +35,8 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def _approver_check(approver: User, *others: uuid.UUID) -> None:
-    if not has_permission(approver.role, GRANT_PERMISSION):
+def _approver_check(approver: User, *others: uuid.UUID, permissions: tuple[str, ...] = (GRANT_PERMISSION,)) -> None:
+    if not any(has_permission(approver.role, p) for p in permissions):
         raise AccessError("Your role cannot approve access to SAR cases", 403)
     if approver.id in others:
         raise AccessError("This must be decided by someone other than the person who asked or who would receive the access", 403)
@@ -124,16 +127,22 @@ def record_use(db: Session, user: User, grant: EmergencyAccessGrant) -> None:
 
 # ── Roles that can see SAR cases ─────────────────────────────────────────
 
-def needs_approval(db: Session, role: str) -> bool:
+def can_approve_roles(role: str) -> bool:
+    return any(has_permission(role, p) for p in ROLE_APPROVE_PERMISSIONS)
+
+
+def needs_approval(db: Session, role: str, requester: User) -> bool:
     """
     A role that can see SAR cases is granted only with a second person's approval.
-    Until anyone holds "sar.grant_access" (a new installation), there is nobody
-    to ask, so the first such role is granted directly and audited.
+    When nobody other than the person asking could approve it (a new installation
+    with one administrator), there is nobody to ask, so it is granted directly and audited.
     """
     if not has_permission(role, "sar.view"):
         return False
-    approver_roles = [code for code in ROLES if has_permission(code, GRANT_PERMISSION)]
-    return db.query(User.id).filter(User.role.in_(approver_roles), User.is_active.is_(True)).first() is not None
+    approver_roles = [code for code in ROLES if can_approve_roles(code)]
+    return db.query(User.id).filter(
+        User.role.in_(approver_roles), User.is_active.is_(True), User.id != requester.id,
+    ).first() is not None
 
 
 def request_role(db: Session, requester: User, user: User, to_role: str, reason: str | None) -> RoleGrantRequest:
@@ -153,7 +162,7 @@ def decide_role(db: Session, approver: User, request_id: uuid.UUID, approve: boo
     grant = db.get(RoleGrantRequest, request_id)
     if grant is None:
         raise AccessError("Request not found", 404)
-    _approver_check(approver, grant.requested_by, grant.user_id)
+    _approver_check(approver, grant.requested_by, grant.user_id, permissions=ROLE_APPROVE_PERMISSIONS)
     if grant.status != "REQUESTED":
         raise AccessError("This request has already been decided")
     user = db.get(User, grant.user_id)

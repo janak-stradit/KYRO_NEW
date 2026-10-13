@@ -122,3 +122,15 @@
 /* Dialogs */
 .modal-title { font-size: var(--fs-lg); }
 .modal-content { border-radius: var(--r-lg); border: 0; box-shadow: var(--shadow-md); }
+
+/* Chips: a short coloured label */
+.chip { display: inline-flex; align-items: center; gap: 5px; font-size: var(--fs-xs); font-weight: 600; line-height: 18px; padding: 0 8px;
+    border-radius: var(--r-full); white-space: nowrap; background: var(--line-soft); color: var(--text-2); }
+.chip--high { background: var(--danger-soft); color: var(--danger-text); }
+.chip--medium { background: var(--warning-soft); color: var(--warning-text); }
+.chip--low { background: var(--success-soft); color: var(--success-text); }
+.chip--info { background: var(--info-soft); color: var(--link); }
+.chip--muted { background: var(--line-soft); color: var(--muted); }
+
+.avatar--lg { width: 44px; height: 44px; font-size: 14px; background: var(--ink); color: #fff; }
+.btn-sm { font-size: var(--fs-sm); padding: 4px 10px; }

@@ -76,6 +76,7 @@ class AlertOut(BaseModel):
     recommended_action: RecommendedAction | None = None
     status: AlertStatus
     assigned_to: uuid.UUID | None = None
+    assigned_to_name: str | None = None  # filled for a single alert (GET /alerts/{id})
     created_at: datetime
     resolved_at: datetime | None = None
     resolved_by: uuid.UUID | None = None

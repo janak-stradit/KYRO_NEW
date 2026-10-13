@@ -57,7 +57,7 @@ frontend/app/
 │   │   └── cells.js           score, status, stage, person, owner, tags
 │   └── pages/
 │       ├── cases/             cases.js (page and handlers), cases.views.js (markup), cases.api.js (calls)
-│       ├── case/              case page
+│       ├── case/              case.js (frame and tabs), case.views.js, case.api.js, case.dialogs.js, case-report.js, sections/
 │       ├── dashboard/  rules/  process/  admin/  regulations/  feeds/  patterns/  periodic-reviews/  profile/
 │       └── login/
 └── assets/                    logo, favicon
@@ -128,7 +128,9 @@ export function bind(root, handlers) { /* delegated events */ }
 | 1. Core, tokens, components, shell, sign-in, routing | Done: `/next/` serves the new app; one sign-in works for both apps |
 | 2. Review Cases | Done: views with counts, by customer / by alert, filters, search, pagination, stage, assign one / all for a customer / selected |
 | | Not yet: resolve and export from the list (both move to the case page, where the decision is taken) |
-| 3–7 | To do; pages not rebuilt yet show a placeholder linking to the current app |
+| 3. Case page | Done: header with key facts, SAR deadlines and stage tracker (sticky, condensed on scroll); tabs Overview, Activity, Investigation, Customer file (`?tab=` in the address); assign; record decision (outcome, reasons, what happens next, potential SAR); AI summary check; QA; notes, requests, narrative versions; documents with page citations; screening decisions; printable report at `/cases/:id/report` (print or save as PDF, or JSON) replacing the jsPDF export |
+| | Each tab is filled by sections (`pages/case/sections/*.js`): a section renders its markup, loads its own data and declares its handlers; the page binds them under one namespace |
+| 4–7 | To do; pages not rebuilt yet show a placeholder linking to the current app |
 
 Customer codes such as "CUST-152" are not shown: the previous frontend invented them by numbering up to 10,000
 customers in load order, which was slow and not stable between days.
